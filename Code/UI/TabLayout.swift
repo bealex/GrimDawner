@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
+import GrimDawnerEngine
 import SwiftUI
 
 /// The shape every tab takes: what you browse on the left, what you clicked on the right.

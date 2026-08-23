@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
+import GrimDawnerEngine
 import SwiftUI
 
 /// What a skill does for pets: what it adds to the ones already out, and what it puts on the field.

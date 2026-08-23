@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
+import GrimDawnerEngine
 import SwiftUI
 
 /// The awakened item an epic piece becomes, and where to find it.

@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
+import GrimDawnerEngine
 import SwiftUI
 
 /// Every number the character sheet knows, grouped the way the game groups them.

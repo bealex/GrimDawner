@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# format.sh — reformat (or check) the app sources (Code/) to the project code style.
+# format.sh — reformat (or check) the sources (Code/ and Engine/) to the project code style.
 #
 # Two passes per file:
 #   1. swift-format   — layout (4-space indent, 120 cols, indented switch cases, spaced ranges `0 ..< n`,
@@ -64,7 +64,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ ${#PATHS[@]} -eq 0 ]; then
-  PATHS=("$REPO/Code")
+  PATHS=("$REPO/Code" "$REPO/Engine/Sources" "$REPO/Engine/Tests")
   [ -d "$REPO/Frameworks" ] && PATHS+=("$REPO/Frameworks")
 fi
 

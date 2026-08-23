@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
+import GrimDawnerEngine
 import SwiftUI
 
 /// The devotion window: the whole sky, the affinity it has earned, and whatever star you click.

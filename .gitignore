@@ -1,6 +1,7 @@
 .DS_Store
 build/
 .build/
+Engine/.build/
 DerivedData/
 *.xcodeproj
 Local.xcconfig

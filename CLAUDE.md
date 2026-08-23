@@ -75,12 +75,20 @@ loudly, and re-read a file after formatting it.
 ## Layout
 
 ```
-Code/Save       player.gdc reader and parser
-Code/Database   .arz / .arc / .tex readers, LZ4, memory-mapped byte access, folder bookmarks
-Code/Domain     save records -> named items, masteries, constellations, factions
-Code/Stats      stat catalogue, accumulator, formula evaluator, engine
+Engine/Sources/GrimDawnerEngine/
+    Save        player.gdc reader and parser
+    Database    .arz / .arc / .tex readers, LZ4, memory-mapped byte access, folder bookmarks
+    Domain      save records -> named items, masteries, constellations, factions
+    Stats       stat catalogue, accumulator, formula evaluator, engine
+Engine/Tests    the suite, and any temporary probe
 Code/UI         SwiftUI views
+Code/App        the app itself
 ```
+
+The engine is a Swift package the app depends on. Its tests run with `swift test` — no app is built and
+none is launched — so a probe belongs in `Engine/Tests`, where it reads the game folder directly rather
+than through the app's sandbox. Everything the views touch is `public`; a new type the UI reads needs
+that too.
 
 `StatCatalog` is the whitelist of `.dbr` fields the app understands; a stat that does not appear there is
 read from no record and shown nowhere. Adding a stat means adding its definition.

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #
-# test.sh — run the test suite.
+# test.sh — run the engine's test suite.
+#
+# The tests live with the engine package, so they run on their own: no app is built and none is
+# launched.
 #
 # Usage:
 #   _scripts/test.sh
@@ -27,11 +30,11 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-cd "$REPO"
-command -v xcodegen >/dev/null 2>&1 && xcodegen generate --quiet
+cd "$REPO/Engine"
 
 set +e
-xcodebuild -project GrimDawner.xcodeproj -scheme GrimDawner -configuration "$CONFIG" test |
+swift test $([ "$CONFIG" = "Release" ] && echo "-c release") 2>&1 |
+  sed 's/\x1b\[[0-9;]*m//g' |
   grep -E "error:|Test run with|failed|✘"
 STATUS=${PIPESTATUS[0]}
 set -e

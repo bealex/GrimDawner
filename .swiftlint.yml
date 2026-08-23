@@ -9,6 +9,8 @@
 
 included:
   - Code
+  - Engine/Sources
+  - Engine/Tests
   - Tests
 
 excluded:

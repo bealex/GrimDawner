@@ -77,12 +77,15 @@ constellation behind it.
 
 ## How it works
 
+The engine — everything that is not a view — is a Swift package under `Engine/`, so its tests run on
+their own without an app to host them. The app is that package plus `Code/UI` and `Code/App`.
+
 | Layer | What it does |
 | --- | --- |
-| `Code/Save` | Decrypts and parses `player.gdc`. The file must parse with nothing left over, so a format change surfaces as an error rather than as wrong numbers. |
-| `Code/Database` | Readers for the `.arz` record database and `.arc` archives, a pure-Swift LZ4 block decompressor and a `.tex` decoder. Archives are memory-mapped; records and icons decode lazily and are memoised. |
-| `Code/Domain` | Resolves save records into named items, mastery panels and constellations. |
-| `Code/Stats` | The stat catalogue, the accumulator, an evaluator for the game's stored formulas, and the engine that produces the sheet. |
+| `Engine/…/Save` | Decrypts and parses `player.gdc`. The file must parse with nothing left over, so a format change surfaces as an error rather than as wrong numbers. |
+| `Engine/…/Database` | Readers for the `.arz` record database and `.arc` archives, a pure-Swift LZ4 block decompressor and a `.tex` decoder. Archives are memory-mapped; records and icons decode lazily and are memoised. |
+| `Engine/…/Domain` | Resolves save records into named items, mastery panels and constellations. |
+| `Engine/…/Stats` | The stat catalogue, the accumulator, an evaluator for the game's stored formulas, and the engine that produces the sheet. |
 | `Code/UI` | SwiftUI views over the resolved character. |
 
 Icons are the game's own art. A record names a texture by a path whose first component is the archive it

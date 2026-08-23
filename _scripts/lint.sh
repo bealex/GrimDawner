@@ -64,8 +64,7 @@ cd "$REPO"
 if [ "$MODE" = "fix" ]; then
   # Safety guard: --fix rewrites files, so don't touch a tree with uncommitted target changes (recoverable).
   if [ "$ALLOW_DIRTY" = 0 ] && git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    TARGETS=(Code)
-    [ -d "$REPO/Frameworks" ] && TARGETS=(Code Frameworks)
+    TARGETS=(Code Engine/Sources Engine/Tests)
     [ ${#PATHS[@]} -gt 0 ] && TARGETS=("${PATHS[@]}")
     DIRTY="$(git -C "$REPO" status --porcelain -- "${TARGETS[@]}" 2>/dev/null)"
     if [ -n "$DIRTY" ]; then

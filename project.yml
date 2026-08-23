@@ -13,12 +13,19 @@ configFiles:
   Debug: GrimDawner.xcconfig
   Release: GrimDawner.xcconfig
 
+packages:
+  GrimDawnerEngine:
+    path: Engine
+
 targets:
   GrimDawner:
     type: application
     platform: macOS
     sources:
       - path: Code
+    dependencies:
+      - package: GrimDawnerEngine
+        product: GrimDawnerEngine
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.lonelybytes.grimdawner
@@ -46,32 +53,10 @@ targets:
         NSHumanReadableCopyright: "Copyright (c) 2026 Alex Babaev. MIT licence."
         ITSAppUsesNonExemptEncryption: false
 
-  GrimDawnerTests:
-    type: bundle.unit-test
-    platform: macOS
-    sources:
-      - path: Tests
-    dependencies:
-      - target: GrimDawner
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.lonelybytes.grimdawner.tests
-        SWIFT_VERSION: "6.0"
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "-"
-        GENERATE_INFOPLIST_FILE: "YES"
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/GrimDawner.app/Contents/MacOS/GrimDawner"
-        BUNDLE_LOADER: "$(TEST_HOST)"
-
 schemes:
   GrimDawner:
     build:
       targets:
         GrimDawner: all
-        GrimDawnerTests: [ test ]
     run:
       config: Debug
-    test:
-      config: Debug
-      targets:
-        - GrimDawnerTests
