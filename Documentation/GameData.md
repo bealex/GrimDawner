@@ -52,11 +52,11 @@ grapheme, so `"\n"` never matches and the whole file reads as a single line.
 ### `.tex`
 
 Twelve-byte wrapper — `"TEX"`, version byte, `u32`, `u32 payloadSize` — around a DDS whose magic reads
-`DDSR`, not `DDS `. **Its mipmaps are written smallest first**, so the full-size level sits at the *end*
-of the file: reading from the front gives a montage of the small levels with the top of the real image
-below them, which is what the app used to draw on anything mipmapped. Icons carry a single level, which
-is why it went unnoticed for so long. Nearly every icon is uncompressed 32-bit in **B, G, R, A** byte order; some are 24-bit
-BGR; a handful are BC1 or BC3.
+`DDSR`, not `DDS `. **Mipmaps are written smallest first**, so the full-size level is the last one in the
+file, not the first: read from the front and you get a montage of the small levels with the top of the
+real image below them. Icons carry a single level and read the same either way; every creature skin does
+not. Nearly every icon is uncompressed 32-bit in **B, G, R, A** byte order; some are 24-bit BGR; a handful
+are BC1 or BC3.
 
 Texture paths in records name their archive in the first path component: `ui/skills/...` lives in `UI.arc`
 as `skills/...`, `items/...` in `Items.arc` as `...`.
@@ -177,29 +177,42 @@ flat list of chunks — a `uint32` id, a `uint32` byte count, and that many byte
 
 The vertex chunk is a format, the bytes one vertex takes, how many there are, then one word per element
 of the vertex — and those words say what the vertex holds and in what order: 0 position (12 bytes), 1
-normal (12), 2 tangent (12), 3 bitangent (12), 4 texture (8), 5 bone indices (4), 6 bone weights (16), 7
-a second texture (8), 14 vertex colour (4). Six layouts appear across the game; the two common ones are
-56 bytes unskinned and 76 skinned. The triangle chunk is a count, a group count, then three `uint16`
-indices per triangle, and then one block per group: **a material index, the triangle it starts at, how
-many triangles it covers**, a spare word, a bounding box, and the bones it hangs off — the bone list is
-what makes the blocks different lengths. A creature is two or three groups — its body, the vines growing
-through it, the crystal on its back — and each wears its own material. Painting them all with the first
-one is what puts a plant's skin on a monster's chest. The material chunk is a count, then a
-shader path and pairs of texture slot and path, each string written as its length and then its bytes.
+normal (12), 2 tangent (12), 3 bitangent (12), 4 texture (8), 5 bone weights (16), 6 bone indices (4), 7 a
+second texture (8), 14 vertex colour (4). Six layouts appear across the game; the common two are 56 bytes
+unskinned and 76 skinned.
 
-**Texture coordinates are written as the game reads them** — the first row of a decoded texture is its
-top, and nothing needs turning upside down. A model drawn with its coordinates flipped wears its face
-inside out, which is the loudest way to find out.
+The triangle chunk is a count, a group count, three `uint16` indices per triangle, and then one block per
+group: **a material index, the triangle it starts at, how many triangles it covers**, a spare word, a
+bounding box, and the bones it hangs off — that bone list is what makes the blocks different lengths. A
+creature is two or three groups, its body and the vines growing through it, and each wears its own
+material; painting them all with the first puts a plant's skin on a monster's chest.
 
-**Vertices are stored in the bind pose**, so a model draws without its skeleton — which is why a still
-needs neither the bones nor the `.anm` animations beside them.
+The material chunk is a count, then for each material a shader path and its slots, every string written as
+its length and then its bytes. **A slot's value is a path for a texture and a number for anything else** —
+a specular colour, a glow strength — and nothing says which, so the pairing is: a name ending in `Texture`
+takes the path that follows it. An unfilled slot is followed by the next material's shader, and pairing
+that one folds two materials into one.
 
-**A model with no vertices is a blocker**, one of the game's invisible walls. `loghorrean01a_blocker.msh`
+**Texture coordinates need no flipping.** The first row of a decoded texture is its top and the
+coordinates are written to match; a model drawn upside down wears its face inside out, which is how a
+wrong guess announces itself.
+
+**Vertices are stored in the bind pose**, so a model draws without its skeleton — a still needs neither
+the bones nor the `.anm` animations beside them. Every model shares that pose, which is why a helmet and a
+pair of shoulders drawn in one scene land where they belong. A weapon does not: it is modelled at the
+origin and hung off a hand bone, so it needs the skeleton this reader skips.
+
+**A model with no vertices is a blocker**, one of the game's invisible walls; `loghorrean01a_blocker.msh`
 is the only one among the creatures.
 
 **A model wears the texture its record names**, or the one its own material names, or — when neither does
-— the one sitting beside it under the same name: `humanmale05b.msh` wears `humanmale05b_dif.tex`, and
+— the one beside it under the same name: `humanmale05b.msh` wears `humanmale05b_dif.tex`, and
 `aetherialabomination01a_phase1.msh` falls back to `aetherialabomination01a_dif.tex`.
+
+**A human is assembled from what it wears.** Its record names a head and nothing else; the body comes from
+the armour it equips, each piece naming `armorMaleMesh` and `armorFemaleMesh`, and the creature's own
+`characterGenderProfile` says which. A monster with no armour equipped is a head on its own — where the
+game finds the bare body is not yet known.
 
 ### Window layouts
 

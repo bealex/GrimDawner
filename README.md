@@ -2,7 +2,8 @@
 
 A macOS app that reads Grim Dawn saves and shows a character the way GrimTools does: attributes,
 resistances and derived stats, both mastery panels, the devotion sky, and every worn item with the values
-that copy actually rolled.
+that copy actually rolled. It also reads the game's own models, so every monster in the game can be looked
+at from any angle.
 
 Nothing about the game is hardcoded. Names, panel coordinates, faction tiers, resistance caps and the
 combat formulas are read from the installed game's own records at runtime, so the app follows the game
@@ -32,7 +33,7 @@ On first launch, pick two folders:
   point at the game folder inside the bottle.
 - **Save folder** — the game's `save` folder, or its `main` subfolder.
 
-Both are kept as security-scoped bookmarks, so they survive relaunches. ⌘1 … ⌘6 switch tabs, ⌘R re-reads
+Both are kept as security-scoped bookmarks, so they survive relaunches. ⌘1 … ⌘7 switch tabs, ⌘R re-reads
 the save folder.
 
 Every tab works the same way: click something to see it in full in the sidebar, and start typing to light
@@ -70,6 +71,12 @@ what it grants, what it adds to every pet, and what it summons — the pet's own
 and each of its abilities. Two fingers pan the sky and a pinch zooms it; a mouse wheel zooms and the
 middle button drags.
 
+**Monsters** — every named monster in the game, filtered by rank, by race and by name. A monster is read
+at a level and a difficulty, since everything it has is an equation of both: what it is worth in a fight,
+its attacks with their ranges and timings, its passives, and what it drops from each equipment slot with
+the odds. Double-clicking opens it in a window of its own, with its whole sheet, its attacks, its loot,
+and its **model** — the game's own, drawn live: drag to turn it, scroll to move in.
+
 **Stats** — every number the sheet knows, grouped: attributes, offence, defence, armour per hit region,
 resistances against their caps, control resistances, damage by type, damage over time, retaliation,
 utility, blocking, what the character grants its pets, the kill record and faction standings.
@@ -78,8 +85,8 @@ own name, under the piece it sits in.
 
 ## How it works
 
-The engine — everything that is not a view — is a Swift package under `Engine/`, so its tests run on
-their own without an app to host them. The app is that package plus `Code/UI` and `Code/App`.
+Three Swift packages hold everything that is not a view, so their tests run without an app to host them.
+The app is those packages plus `Code/UI` and `Code/App`.
 
 | Layer | What it does |
 | --- | --- |
@@ -87,6 +94,8 @@ their own without an app to host them. The app is that package plus `Code/UI` an
 | `Engine/…/Database` | Readers for the `.arz` record database and `.arc` archives, a pure-Swift LZ4 block decompressor and a `.tex` decoder. Archives are memory-mapped; records and icons decode lazily and are memoised. |
 | `Engine/…/Domain` | Resolves save records into named items, mastery panels and constellations. |
 | `Engine/…/Stats` | The stat catalogue, the accumulator, an evaluator for the game's stored formulas, and the engine that produces the sheet. |
+| `Mesh/` | Reads the game's `.msh` models: Titan Quest's format, undocumented, worked out for this project. |
+| `Render/` | Builds a SceneKit scene from a model and draws it, and ships `render-monsters` for doing the whole roster offline. |
 | `Code/UI` | SwiftUI views over the resolved character. |
 
 Icons are the game's own art. A record names a texture by a path whose first component is the archive it
@@ -107,7 +116,11 @@ here than in game with that buff up.
 Checked against the game's own character window: the ten resistances, health, energy, both abilities, both
 regenerations, armour region by region, every damage modifier and every pet bonus match to the point, as
 do the rolled figures on individual items, bands included. The damage panel and its damage per second are
-not modelled. [Documentation/Status.md](Documentation/Status.md) has the whole of it.
+not modelled.
+
+Monsters have no such window in the game, so they are checked against GrimTools' monster database, which
+reads the same records: Ravager of Minds at level 100 on Ultimate matches to the unit.
+[Documentation/Status.md](Documentation/Status.md) has the whole of it.
 
 ## Documentation
 
@@ -130,8 +143,13 @@ The formats are not published by the game's authors. What this implementation wa
   item randomiser: the MINSTD generator, the store order it draws in, and the per-store mechanics.
   [GameData.md](Documentation/GameData.md#the-item-randomiser) records the four rules this project found
   that reference does not model.
-- **The game's own tooltips and character window**, used as the ground truth every number was checked
-  against.
+- **[grimtools.com/monsterdb](https://www.grimtools.com/monsterdb/)** — the reference every monster figure
+  was checked against, and what showed that the difficulty's own adjustment had to be in there.
+- **The game's own tooltips and character window**, used as the ground truth every character number was
+  checked against.
+
+The `.msh` model format is documented nowhere; [GameData.md](Documentation/GameData.md#the-model-format)
+is this project's own reading of it.
 
 ## Licence
 

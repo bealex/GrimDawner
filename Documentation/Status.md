@@ -93,50 +93,59 @@ threshold and the cap. If the game shows *Hated* there instead, the boundaries a
 
 - `elementalinfusion1` has modifiers but no `skillConnectionOn` list, so its branch is not drawn.
 - Two factions point at `faction_user3.tex`, which the game ships as a blank white placeholder.
-- The doll's centre box shows the character's class artwork. The game renders its 3D model there, which
-  the app has no way to pose, so the mastery the most points went into stands in for it.
+- The doll's centre box shows a stand-in figure rather than the character. The game renders the character's
+  own model there, posed and dressed in what it wears; the app draws models but does not assemble a
+  player's gear onto one.
 
 ## The monster listing
 
-Every named monster in the game, filtered by rank, by faction and by whatever is typed. A monster is read
-at a level, since everything it has is an equation of one, and the sidebar opens on the level the
-character is: what it is worth in a fight, its attacks with their ranges and timings, its passives, and
-what it carries in each equipment slot with the odds of each. Its whole stat sheet is far more than a
-sidebar holds, so **All Stats…** opens it in a window of its own.
+Every named monster in the game — 2,108 lines, filtered by rank, by race and by name. A monster is read at
+a level and a difficulty because everything it has is an equation of both, and it opens on the
+character's own; the sidebar gives what it is worth in a fight, its attacks with their ranges and timings,
+its passives, and what it carries in each equipment slot with the odds of each. Double-clicking a line, or
+**All Stats…**, opens it in a window with tabs for the sheet, the attacks, the loot and its model, and its
+own type-to-search over all of them.
 
-A monster's stats are what its record states, what its equations produce at that level, what its permanent
-skills add, and the adjustment the difficulty lays over every enemy. **Checked against GrimTools' monster
-database**, which reads the same records: Ravager of Minds at level 100 on Ultimate agrees to the unit on
-its attributes, health, energy, both abilities, armour and all ten resistances. `MonsterStatsTests` pins
-those figures; it needs the installed game, so it reads `GRIM_DAWN_FOLDER` from the environment and skips
-without it.
+**The figures agree with GrimTools' monster database**, which reads the same records: Ravager of Minds at
+level 100 on Ultimate matches to the unit on its attributes, health, energy, both abilities, armour and
+all ten resistances. `MonsterStatsTests` pins those; it needs the installed game, so it reads
+`GRIM_DAWN_FOLDER` from the environment and skips without it.
 
-The listing shows a monster's race rather than its faction: a record's faction is a pack it counts as for
-hostility and reputation, and most creatures carry the Aetherials' whatever they are made of. A nemesis
-names its own faction — Kubacabra reads as the Beasts' nemesis — because the faction pack is what says so. Records that share a name and
-differ in what they hold stay as separate lines — three Ravagers of Minds
-are three different fights — with the record's own file name to tell them apart. Copies that a region
-merely repeats collapse into one.
+Getting there took three facts no record states outright: the difficulty lays one adjustment over every
+enemy, both abilities run through the game's combat equations rather than being read, and the celestial
+bosses carry a skill that cancels the game's ascendant-mode bonus.
+[GameData.md](GameData.md#monsters) has them.
+
+A line shows a monster's **race**, not its faction: a faction is a pack a creature counts as for hostility
+and reputation, and most carry the Aetherials' whatever they are made of — 266 of the 405 beast-race
+records do. A nemesis names its own faction, because the faction pack is the record that says so, and
+Kubacabra reads as the Beasts' nemesis. Records that share a name and differ in what they hold stay as
+separate lines — three Ravagers of Minds are three different fights — with the record's own file name to
+tell them apart; copies that a region merely repeats collapse into one.
+
+Most of what a monster fights with has no name: 442 skills carry one and some 3,500 do not, so a line
+reads by what its record class is — *Auto attack · Weapon attack · close up · every 2s*. A named skill
+shows its own description, and what a skill summons is named inside it and opens as a monster of its own.
 
 ## The models
 
-`Mesh` reads the game's `.msh` models and `Render` draws them, both packages of their own.
-[GameData.md](GameData.md#the-model-format) has the format. Every one of the 782 models the monsters name
-reads and renders; `render-monsters` writes the lot as PNGs with a transparent background in about twelve
-seconds:
+`Mesh` reads the game's `.msh` models and `Render` draws them, each a package of its own.
+[GameData.md](GameData.md#the-model-format) has the format, which is undocumented and was worked out here.
+Every model the game ships reads; `render-monsters` draws the whole roster — 2,036 monsters, each with
+whatever armour it wears — as PNGs with a transparent background in about half a minute:
 
 ```sh
 cd Render && swift run -c release render-monsters "<game folder>" <output> --size 512
 ```
 
-`SceneConfiguration` is the whole look — where the camera stands, how bright the rig is, whether there is
-a background and a floor at all. The app draws the same scene live rather than from a picture: the
-monster sidebar and the model tab of its window hold a SceneKit view, which is a drag to turn and a
-scroll to move in.
+`SceneConfiguration` is the whole look: where the camera stands, how bright the rig is, whether there is a
+background and a floor at all. The app draws that same scene live rather than from a picture — the monster
+sidebar, the model tab of its window, and a window of its own, each a drag to turn and a scroll to move
+in.
 
-**A human NPC renders as a head.** Their record names the head alone, and the game dresses the rest from
-the equipment it wears; nothing here assembles that. Animations are not read at all — the `.anm` files
-beside the models are a format of their own.
+**What is not drawn.** Weapons, which hang off a hand bone the reader skips. The bare body of a human
+wearing no armour, which the game finds somewhere this does not. And animation: the `.anm` files beside
+the models are a format of their own, unread.
 
 ## The catalogues
 
@@ -215,5 +224,9 @@ Resident memory settles around 300–420 MB: the archives are memory-mapped, but
 are real heap — roughly 80k strings per archive across seven archives. Reducing that would mean interning
 them lazily.
 
+Drawing a model costs about 15 ms, which is why the app renders one live rather than caching a picture of
+it.
+
 The Debug build is much slower than Release for the decode paths; hand testing should use Release. The
-engine's tests need neither: `swift test` in `Engine/` runs the suite in about 20 milliseconds.
+tests need neither: `_scripts/test.sh` runs all three packages' suites, and the engine's own finish in
+about 20 milliseconds.

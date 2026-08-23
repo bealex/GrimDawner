@@ -62,15 +62,23 @@ decodes before the stash's.
 Real save content must never land in a committed test, and a committed test must skip when the local
 fixtures are absent.
 
-## Two traps that have already cost time
+**A monster has no window in the game to check against.** [grimtools.com/monsterdb](https://www.grimtools.com/monsterdb/)
+reads the same records and is the reference `MonsterStatsTests` pins. Anything drawn — a model, a texture —
+is checked by eye, and a wrong guess about orientation or mip order looks plausible until something with a
+face proves otherwise.
+
+## Traps that have already cost time
 
 **Editing by string replacement silently does nothing.** `_scripts/format.sh` reflows files, so a pattern
 captured before a format run will not match after one, and a `str.replace` no-ops without complaining. Two
 finished features were lost that way and only found in a screenshot. Use the `Edit` tool, which fails
 loudly, and re-read a file after formatting it.
 
-**An invisible SwiftUI view still takes clicks.** The zero-opacity buttons carrying ⌘1–⌘5 need
+**An invisible SwiftUI view still takes clicks.** The zero-opacity buttons carrying ⌘1–⌘7 need
 `allowsHitTesting(false)`, or they swallow pointer input.
+
+**A scroll view starves a SceneKit view.** It offers unbounded height, an `SCNView` asks for none, and the
+model comes out zero pixels tall. Give the model the pane and let only the reading tabs scroll.
 
 ## Layout
 
@@ -78,17 +86,18 @@ loudly, and re-read a file after formatting it.
 Engine/Sources/GrimDawnerEngine/
     Save        player.gdc reader and parser
     Database    .arz / .arc / .tex readers, LZ4, memory-mapped byte access, folder bookmarks
-    Domain      save records -> named items, masteries, constellations, factions
+    Domain      save records -> named items, masteries, constellations, factions, monsters
     Stats       stat catalogue, accumulator, formula evaluator, engine
-Engine/Tests    the suite, and any temporary probe
+Mesh/           the .msh model reader, which depends on nothing
+Render/         SceneKit scene and renderer, plus the render-monsters command
 Code/UI         SwiftUI views
 Code/App        the app itself
 ```
 
-The engine is a Swift package the app depends on. Its tests run with `swift test` — no app is built and
-none is launched — so a probe belongs in `Engine/Tests`, where it reads the game folder directly rather
-than through the app's sandbox. Everything the views touch is `public`; a new type the UI reads needs
-that too.
+Three packages, all depended on by the app; `Render` depends on the other two. Their tests run with
+`swift test` — no app is built and none is launched — so **a probe belongs in the package whose data it
+reads**, where it opens the game folder directly rather than through the app's sandbox. `_scripts/test.sh`
+runs all three. Everything the views touch is `public`; a new type the UI reads needs that too.
 
 `StatCatalog` is the whitelist of `.dbr` fields the app understands; a stat that does not appear there is
 read from no record and shown nowhere. Adding a stat means adding its definition.
