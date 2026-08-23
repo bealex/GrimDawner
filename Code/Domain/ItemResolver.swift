@@ -44,6 +44,7 @@ struct ItemResolver {
         }
 
         let rarity = rarity(base: base, parts: parts, path: item.baseName)
+        let petBonus = petBonus(of: item, base: base)
         let mark = ItemQualityMark(ItemQualityMark.Parts(
             // A rare-classified record is a monster infrequent only when it is a piece of gear; a
             // component or an augment carries the same classification and wears no badge.
@@ -73,12 +74,41 @@ struct ItemResolver {
             flavourText: database.localised(base.text("itemText")) ?? "",
             stats: stats,
             statsLowest: lowest,
-            statsHighest: highest
+            statsHighest: highest,
+            petBonus: petBonus
         )
     }
 
     /// Classes whose numbers never roll: a component and an augment read the same on every copy.
     private static let fixedClasses: Set<String> = [ "ItemRelic", "ItemEnchantment" ]
+
+    /// What the item grants every pet, rolled from its seed in a stream of its own.
+    private func petBonus(of item: Gdc.Item, base: ArzRecord) -> StatBlock {
+        var sources = [(table: ItemRoll.Table, jitter: Double)]()
+        for (path, jitter) in [
+            (item.baseName, ItemRoll.baseJitter),
+            (item.prefixName, database.record(item.prefixName)?.number("lootRandomizerJitter") ?? 0),
+            (item.suffixName, database.record(item.suffixName)?.number("lootRandomizerJitter") ?? 0),
+        ] {
+            guard
+                let record = database.record(path),
+                case let bonusPath = record.text("petBonusName"),
+                !bonusPath.isEmpty,
+                let bonus = database.record(bonusPath)
+            else { continue }
+
+            sources.append((Self.table(of: bonus), jitter))
+        }
+        guard !sources.isEmpty else { return StatBlock() }
+
+        var block = StatBlock()
+        for (key, value) in ItemRoll.petStats(of: sources, seed: item.seed) {
+            guard StatCatalog.definition(for: key) != nil else { continue }
+
+            block.increase(key, by: value)
+        }
+        return block
+    }
 
     /// One affix read on its own, as the catalogue lists it rather than as an item wears it.
     func affix(at path: String) -> ResolvedAffix? {

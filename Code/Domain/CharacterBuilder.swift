@@ -54,6 +54,7 @@ struct CharacterBuilder {
             itemGrantedSkills: skills.looseSkills(from: save, claimed: claimed),
             skillModifications: Self.skillModifications(of: equipped),
             skillRankSources: Self.skillRankSources(of: equipped, sets: sets),
+            petBonuses: petBonuses(items: equipped, masteries: masteries, devotion: devotions.map(from: save)),
             doll: LayoutResolver(database: database).equipmentDoll(),
             equipment: equipment,
             weaponSets: weaponSets,
@@ -65,7 +66,8 @@ struct CharacterBuilder {
             sheet: StatEngine(database: database).sheet(
                 for: save,
                 contributions: total,
-                bodyArmor: bodyArmor(from: equipment)
+                bodyArmor: bodyArmor(from: equipment),
+                weaponSpeed: weaponSpeed(of: weaponSets)
             )
         )
     }
@@ -85,6 +87,24 @@ struct CharacterBuilder {
             }
         }
         return changes
+    }
+
+    /// What the character grants every pet it has: from gear, from the skills that are always in
+    /// effect, and from the devotion stars taken.
+    private func petBonuses(
+        items: [ResolvedItem],
+        masteries: [ResolvedMastery],
+        devotion: DevotionMap
+    ) -> StatBlock {
+        var block = StatBlock()
+        for item in items { block.merge(item.petBonus) }
+        for mastery in masteries {
+            for skill in mastery.sheetSkills { block.merge(skill.petBonus) }
+        }
+        for constellation in devotion.constellations {
+            for star in constellation.stars where star.isTaken { block.merge(star.skill.petBonus) }
+        }
+        return block
     }
 
     /// Every `+N to skill` the gear carries, one entry per thing that grants it.
@@ -128,11 +148,24 @@ struct CharacterBuilder {
         return sources
     }
 
+    /// What the weapon in hand does to the base attack rate. Only the set being held counts.
+    private func weaponSpeed(of sets: [WeaponSet]) -> Double {
+        let held = sets.first { $0.isActive } ?? sets.first
+        return held?.items
+            .compactMap { $0.flatMap { database.record($0.raw.baseName) } }
+            .map { $0.number("characterBaseAttackSpeed") }
+            .reduce(0, +) ?? 0
+    }
+
     /// Armour on the six hit-region slots, which the engine weights rather than sums.
     private func bodyArmor(from equipment: [EquippedItem]) -> [EquipmentSlot: Double] {
         var values = [EquipmentSlot: Double]()
         for equipped in equipment where equipped.slot.hitRegionChanceKey != nil {
-            values[equipped.slot] = equipped.item?.stats.value("defensiveProtection") ?? 0
+            // A component's bonus armour belongs to the piece it is socketed in: the game's own
+            // per-region breakdown credits it to that region and to no other.
+            values[equipped.slot] =
+                (equipped.item?.stats.value("defensiveProtection") ?? 0)
+                + (equipped.item?.stats.value("defensiveBonusProtection") ?? 0)
         }
         return values
     }

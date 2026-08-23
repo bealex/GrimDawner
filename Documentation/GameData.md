@@ -175,6 +175,11 @@ rating is the weighted mean. Armour from belts, jewellery and skills is added to
 survives the weighting intact. The game states this itself in `tagCharStatsArmorTotalDescription`. Summing
 overstates it several times over.
 
+**A component's bonus armour belongs to its own piece.** `defensiveBonusProtection` — the 35 armour a
+Scaled Hide adds — lands on the hit region of the item it is socketed in, not on every region the way
+armour from a belt or a skill does. The game's per-region breakdown is what says so: two Scaled Hides on
+the shoulders and legs raise exactly those two regions.
+
 **Absorption multiplies.** "Increases Armor Absorption by X%" scales the base 70%, capped at 100 — the same
 wording, and the same behaviour, as "Increases Armor by X%".
 
@@ -220,6 +225,25 @@ are both rare-classified; an awakened item sits under `records/items/awakened/`.
 which item is decided in the engine and stated nowhere in the data, so `ItemQualityMark` follows the
 texture names. `itembackground.tex` and `itembackgroundlegendary.tex` are 64×64 slot backgrounds rather
 than marks.
+
+**A skill that only drives a buff states no ranks of its own.** Its `skillMaxLevel` is zero and the buff
+it names carries both the ceiling and the per-rank arrays. Reading the ceiling from the skill alone pins
+such a skill at rank 1 however many points and `+skill` bonuses it has — Iskandra's Elemental Exchange at
+rank 8 grants 66% elemental damage against 10% at rank 1.
+
+**Speeds are printed as results, not bonuses.** `gameengine.dbr` states what a player may reach —
+`playerRunSpeedCapMax` is 135, `playerAttackSpeedCapMax` 200 — and the weapon's `characterBaseAttackSpeed`
+scales the total: a hundred plus every bonus plus `characterTotalSpeedModifier`, times the weapon's own
+rate, clamped. A wand at −0.1 with +25% attack speed and +11% total speed reads 122%.
+
+**A pet bonus rolls in a stream of its own.** `petBonusName` on an item, its prefix or its suffix names a
+record of what every pet is given; each rolls from the item's seed in its own stream, so the block neither
+takes draws from the item's own figures nor gives them any. `characterTotalSpeedModifier` there raises a
+pet's attack, cast and run speed together.
+
+**Regeneration.** `tagCharStatsEnergyRegenInfo` states the shape: percent bonuses apply to what gear and
+skills give, not to the base, which comes from an attribute — spirit for energy, physique for health. The
+rate per point is not in the records.
 
 **Factions.** Only records with `questEnabled` are reputations the player earns; the rest are the engine's
 hostility groups and the game's faction window never lists them. Eight tiers, from

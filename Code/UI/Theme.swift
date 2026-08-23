@@ -66,6 +66,28 @@ extension Theme {
     /// How a damage conversion reads: "Chaos ➠ Aether".
     static let convertsTo = "\u{27A0}"
 
+    /// What one line's figures read as: a damage range where the record writes a pair, the flat and
+    /// percentage variants joined where it writes both, and a lone figure otherwise.
+    static func figures(_ parts: [(definition: StatDefinition, value: Double)]) -> String {
+        if let low = parts.first(where: { $0.definition.key.hasSuffix("Min") }),
+                let high = parts.first(where: { $0.definition.key.hasSuffix("Max") }),
+                high.value > low.value {
+            let rest = parts.filter { $0.definition.key != low.definition.key }
+                .filter { $0.definition.key != high.definition.key }
+                .map { $0.definition.unit.format($0.value) }
+            let range =
+                "\(low.definition.unit.format(low.value))"
+                + "–\(high.definition.unit.format(high.value, signed: false))"
+            return ([ range ] + rest).joined(separator: " & ")
+        }
+
+        return
+            parts
+            .filter { !$0.definition.key.hasSuffix("Max") || $0.value != 0 }
+            .map { $0.definition.unit.format($0.value) }
+            .joined(separator: " & ")
+    }
+
     /// One word of a line's title, coloured for the damage type it names.
     struct Accent: Equatable {
         let word: String

@@ -115,6 +115,8 @@ struct ResolvedItem: Identifiable, Sendable {
     /// The same, with every roll at the bottom and the top of its band — the range the game prints.
     let statsLowest: StatBlock
     let statsHighest: StatBlock
+    /// What the item grants every pet the character has, which the game lists in a panel of its own.
+    var petBonus = StatBlock()
 
     var displayName: String {
         [ prefixName, baseName, suffixName ]

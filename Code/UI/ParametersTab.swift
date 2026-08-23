@@ -24,11 +24,13 @@ struct ParametersTab: View {
                     defenceCard
                     armorCard
                     resistancesCard
+                    blockingCard
                     controlResistancesCard
                     damageCard
                     ForEach(extraGroups, id: \.group) { group in
                         catalogueCard(group.group, lines: group.lines)
                     }
+                    petBonusesCard
                     setsCard
                     progressCard
                     factionsCard
@@ -106,16 +108,21 @@ struct ParametersTab: View {
                     icon: "target"
                 )
                 row("Crit Damage", "+\(whole(sheet.critDamage))%", key: "offensiveCritDamageModifier", icon: "burst")
-                row("Attack Speed", "+\(whole(sheet.attackSpeed))%", key: "characterAttackSpeedModifier", icon: "hare")
+                row(
+                    "Attacks per Second",
+                    sheet.attacksPerSecond.formatted(.number.precision(.fractionLength(2))),
+                    icon: "timer"
+                )
+                row("Attack Speed", "\(whole(sheet.attackSpeed))%", key: "characterAttackSpeedModifier", icon: "hare")
                 row(
                     "Casting Speed",
-                    "+\(whole(sheet.castSpeed))%",
+                    "\(whole(sheet.castSpeed))%",
                     key: "characterSpellCastSpeedModifier",
                     icon: "wand.and.stars"
                 )
                 row(
                     "Movement Speed",
-                    "+\(whole(sheet.movementSpeed))%",
+                    "\(whole(sheet.movementSpeed))%",
                     key: "characterRunSpeedModifier",
                     icon: "figure.run"
                 )
@@ -151,7 +158,9 @@ struct ParametersTab: View {
                     key: "characterManaRegen",
                     icon: "bolt.badge.clock"
                 )
-                row("Armor Rating", whole(sheet.armor), key: "defensiveProtection", icon: "shield.fill")
+                // Armour is the one figure the game rounds rather than truncates: 1659.8 reads as 1660
+                // where a pool of 16851.5 reads as 16851.
+                row("Armor Rating", whole(sheet.armor.rounded()), key: "defensiveProtection", icon: "shield.fill")
                 row(
                     "Armor Absorption",
                     "\(whole(sheet.armorAbsorption))%",
@@ -243,18 +252,82 @@ struct ParametersTab: View {
         .accessibilityLabel("\(kind.title) resistance \(Int(value)) percent, cap \(Int(maximum))")
     }
 
+    /// Blocking, dodge and deflection, as the game's own Defense panel opens.
+    private var blockingCard: some View {
+        let stats = sheet.contributions
+        let rows: [(String, String, String)] = [
+            ("Chance to Block", "defensiveBlockChance", percent(stats.value("defensiveBlockChance"))),
+            ("Damage Blocked", "defensiveBlock", whole(stats.value("defensiveBlock"))),
+            (
+                "Block Recovery", "characterDefensiveBlockRecoveryReduction",
+                percent(stats.value("characterDefensiveBlockRecoveryReduction"))
+            ),
+            ("Dodge Chance", "characterDodgePercent", percent(stats.value("characterDodgePercent"))),
+            (
+                "Deflect Chance", "characterDeflectProjectile",
+                percent(stats.value("characterDeflectProjectile"))
+            ),
+        ]
+
+        return card(title: "Defence", titles: rows.map(\.0)) {
+            VStack(spacing: 6) {
+                ForEach(rows, id: \.0) { title, key, value in
+                    row(title, value, key: key)
+                }
+            }
+        }
+    }
+
+    /// What every pet the character has is given, in the order the game's own panel lists it.
+    private var petBonusesCard: some View {
+        let pets = character.petBonuses
+        let overall = pets.value("characterTotalSpeedModifier")
+        let rows: [(String, Double)] =
+            [
+                ("Life", pets.value("characterLifeModifier")),
+                ("Damage", pets.value("offensiveTotalDamageModifier")),
+                ("Critical Damage", pets.value("offensiveCritDamageModifier")),
+                // The one modifier the game spreads over all three speeds.
+                ("Attack Speed", pets.value("characterAttackSpeedModifier") + overall),
+                ("Cast Speed", pets.value("characterSpellCastSpeedModifier") + overall),
+                ("Run Speed", pets.value("characterRunSpeedModifier") + overall),
+                ("Offensive Ability", pets.value("characterOffensiveAbility")),
+                ("Defensive Ability", pets.value("characterDefensiveAbility")),
+            ]
+            + ResistanceKind.allCases.map { kind in
+                ("\(kind.title) Resist", pets.value(kind.resistanceKey))
+            }
+
+        return card(title: "Pet Bonuses", titles: rows.map(\.0)) {
+            VStack(spacing: 6) {
+                ForEach(rows, id: \.0) { title, value in
+                    row(
+                        title,
+                        "+\(whole(value))%",
+                        valueColor: value > 0 ? .primary : .secondary,
+                        accent: Theme.damageAccent(forStatKey: "defensive\(title)", in: title)
+                    )
+                }
+            }
+        }
+    }
+
     private var controlResistancesCard: some View {
         let lines = StatCatalog.everyStat.filter { $0.group == .controlResistances }
 
         return card(title: StatGroup.controlResistances.title, titles: lines.map(\.title)) {
             VStack(spacing: 6) {
                 ForEach(lines, id: \.key) { definition in
-                    let value = sheet.contributions.value(definition.key)
+                    // These cap where every other resistance does, and the game's own window shows the
+                    // capped figure: 87% stun resistance reads as 80%.
+                    let raw = sheet.contributions.value(definition.key)
+                    let value = min(raw, CharacterSheet.resistanceCap)
                     row(
                         definition.title,
                         definition.unit.format(value, signed: false),
                         key: definition.key,
-                        valueColor: value > 0 ? .primary : .secondary
+                        valueColor: value > 0 ? .primary : .secondary,
+                        detail: raw > value ? "over \(whole(raw - value))%" : nil
                     )
                 }
             }
@@ -263,9 +336,9 @@ struct ParametersTab: View {
 
     private var damageCard: some View {
         let types = DamageType.allCases.filter { $0 != .elemental }
-            .filter { abs(sheet.damageModifiers[$0] ?? 0) >= 0.5 }
+            .filter { abs(sheet.damageModifiers[$0] ?? 0) >= 0.5 || sheet.flatDamage[$0] ?? 0 >= 0.5 }
 
-        return card(title: "Damage Bonuses", subtitle: "percent", titles: types.map(\.title)) {
+        return card(title: "Damage Bonuses", titles: types.map(\.title)) {
             VStack(spacing: 6) {
                 ForEach(types, id: \.self) { type in
                     Button(action: { selection = .stat(title: type.title, key: type.modifierKey) }) {
@@ -275,9 +348,12 @@ struct ParametersTab: View {
                                 .frame(width: 8, height: 8)
                             Text(type.title)
                                 .foregroundStyle(type.color)
-                            Text("+\(whole(sheet.damageModifiers[type] ?? 0))%")
-                                .monospacedDigit()
-                                .frame(maxWidth: .infinity, alignment: .trailing)
+                            Text(Self.damageText(
+                                flat: sheet.flatDamage[type] ?? 0,
+                                percent: sheet.damageModifiers[type] ?? 0
+                            ))
+                            .monospacedDigit()
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                         }
                         .font(.callout)
                         .contentShape(.rect)
@@ -307,7 +383,7 @@ struct ParametersTab: View {
                 ForEach(StatBlock.merged(lines), id: \.title) { line in
                     row(
                         line.title,
-                        line.parts.map { $0.definition.unit.format($0.value) }.joined(separator: " & "),
+                        Theme.figures(line.parts),
                         key: line.parts.first?.definition.key,
                         valueColor: Theme.valueColor(line.parts.first?.value ?? 0),
                         accent: Theme.damageAccent(forStatKey: line.parts.first?.definition.key ?? "", in: line.title)
@@ -462,7 +538,8 @@ struct ParametersTab: View {
         key: String? = nil,
         icon: String? = nil,
         valueColor: Color = .primary,
-        accent: Theme.Accent? = nil
+        accent: Theme.Accent? = nil,
+        detail: String? = nil
     ) -> some View {
         Button(action: { selection = key.map { .stat(title: title, key: $0) } }) {
             StatRow(
@@ -470,7 +547,8 @@ struct ParametersTab: View {
                 value: value,
                 valueColor: valueColor,
                 accents: [ accent ].compactMap { $0 },
-                icon: icon
+                icon: icon,
+                range: detail
             )
             .contentShape(.rect)
         }
@@ -504,6 +582,19 @@ struct ParametersTab: View {
     }
 
     /// The game truncates the figures it prints on the character sheet rather than rounding them.
+    /// "+204 & +2858%" — the flat damage a character adds and the percentage it is raised by.
+    private static func damageText(flat: Double, percent: Double) -> String {
+        let figures = [
+            flat >= 0.5 ? "+\(Int(flat.rounded()))" : nil,
+            abs(percent) >= 0.5 ? "+\(Int(percent.rounded()))%" : nil,
+        ]
+        .compactMap { $0 }
+
+        return figures.isEmpty ? "—" : figures.joined(separator: " & ")
+    }
+
+    private func percent(_ value: Double) -> String { "\(whole(value))%" }
+
     private func whole(_ value: Double) -> String {
         value.rounded(.towardZero).formatted(.number.precision(.fractionLength(0)))
     }

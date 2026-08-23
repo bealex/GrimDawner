@@ -109,6 +109,7 @@ enum StatCatalog {
         StatDefinition("characterManaRegen", "Energy Regenerated", .defence, .perSecond, order: 6),
         StatDefinition("characterManaRegenModifier", "Energy Regeneration", .defence, .percent, order: 7),
         StatDefinition("defensiveProtection", "Armor", .defence, .flat, order: 8),
+        StatDefinition("defensiveBonusProtection", "Armor", .defence, .flat, order: 8),
         StatDefinition("defensiveProtectionModifier", "Armor", .defence, .percent, order: 9),
         StatDefinition("defensiveAbsorptionModifier", "Armor Absorption", .defence, .percent, order: 10),
         StatDefinition("damageAbsorptionPercent", "Damage Absorption", .defence, .percent, order: 11),
@@ -123,6 +124,7 @@ enum StatCatalog {
         StatDefinition("defensivePhysical", "Physical Resistance", .defence, .percent, order: 19),
         StatDefinition("characterEnergyAbsorptionPercent", "Energy Absorption", .defence, .percent, order: 20),
         StatDefinition("characterHealIncreasePercent", "Healing Effects Increased", .defence, .percent, order: 21),
+        StatDefinition("characterConstitutionModifier", "Constitution Bonus", .defence, .percent, order: 22),
     ]
 
     private static let resistances: [StatDefinition] = [
@@ -188,8 +190,10 @@ enum StatCatalog {
     private static let damage: [StatDefinition] = perDamageType { index, type in
         [
             StatDefinition(type.minimumKey, "\(type.title) Damage", .damage, .flat, order: index * 3),
+            StatDefinition(type.maximumKey, "\(type.title) Damage", .damage, .flat, order: index * 3),
             StatDefinition(type.modifierKey, "\(type.title) Damage", .damage, .percent, order: index * 3 + 1),
             StatDefinition(type.baseMinimumKey, "Base \(type.title) Damage", .damage, .flat, order: index * 3 + 2),
+            StatDefinition(type.baseMaximumKey, "Base \(type.title) Damage", .damage, .flat, order: index * 3 + 2),
         ]
     }
 

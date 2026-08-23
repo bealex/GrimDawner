@@ -115,6 +115,8 @@ struct ResolvedCharacter: Sendable {
     let skillModifications: [String: [SkillModification]]
     /// Every `+N to skill` the gear carries, kept whole so a skill can ask which of them reach it.
     let skillRankSources: [SkillRankSource]
+    /// What every pet the character has is given, as the game's own Pet Bonuses panel lists it.
+    let petBonuses: StatBlock
 
     /// Every skill the character's own masteries hold, lowercased, for telling a `+N` line about one
     /// of them from a `+N` line about a skill of some other class.

@@ -291,9 +291,7 @@ struct StatBlockView: View {
                             .foregroundStyle(.secondary)
                         ForEach(StatBlock.merged(group.lines), id: \.title) { line in
                             let bands = line.parts.compactMap { band(of: $0) }
-                            let figures = line.parts
-                                .map { $0.definition.unit.format($0.value) }
-                                .joined(separator: " & ")
+                            let figures = Theme.figures(line.parts)
                             StatRow(
                                 title: line.title,
                                 value: showsRolls || bands.count != line.parts.count

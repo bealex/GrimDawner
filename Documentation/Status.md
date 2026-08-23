@@ -30,13 +30,23 @@ them, and skills whose numbers live on the buff they drive. Anything the player 
 a celestial power or a low-health trigger: those numbers are the proc's own, and counting them inflates
 the sheet.
 
-**Collected but not folded into derived numbers.** Damage conversions (parsed into `StatBlock.conversions`
-and shown, but not applied to damage totals), retaliation totals, pet stats.
+**Collected but not folded into derived numbers.** Damage conversions are parsed into
+`StatBlock.conversions` and shown, but not applied to damage totals, and retaliation totals are listed
+rather than summed into a figure.
 
-**Verified** against the game's own character window for a level 100 character: all ten resistance totals,
-health, energy, offensive and defensive ability, energy absorption, freeze resistance and life leech
-resistance match to the point, as does every rolled figure on the items checked against their tooltips,
-bands included.
+**The damage panel is not modelled.** The game's *Fire Damage 50*, *Aether Damage 9118–9993* and *Damage
+Per Second* combine the weapon's own damage range with conversions, flat bonuses and the percentages; the
+app shows the flat damage a character adds and the percentage it is raised by, which are exact, but not
+the weapon figures those feed. Attacks per second is computed from a base rate of 1.5 swings a second,
+fitted to one reading, since the records name a weapon's speed class without stating its rate.
+
+**Verified** against the game's own character window for a level 100 character: all ten resistance totals
+against their own caps, health, energy, offensive and defensive ability, health and energy regeneration,
+every damage modifier, cooldown reduction, skill energy cost, constitution, healing, dodge, deflect and
+every control resistance match to the point, as does every rolled figure on the items checked against
+their tooltips, bands included. Armor Rating matches region by region — 1508, 1550, 1710, 1456,
+2035, 1456 — as does the rating those weigh into and armour absorption. Attack speed, run speed and attacks per second read as the game
+prints them, and every figure of the Pet Bonuses panel matches, the rolled resistances included.
 
 `StatCatalog` is the whitelist of `.dbr` fields the app understands. A stat absent from it is read from no
 record and shown nowhere; adding one means adding its definition.
@@ -56,9 +66,11 @@ threshold and the cap. If the game shows *Hated* there instead, the boundaries a
 
 ## Known approximations
 
-**Armor Rating is about a percent low** — 1645 against 1660 on the character it was checked with. Every
-armour figure and both `defensiveProtectionModifier` bonuses match their tooltips, so the gap is in how
-the regions are weighted or how a belt's armour spreads, not in the values.
+**Base regeneration is fitted, not read.** The game states the shape — "percent bonuses only affect
+regeneration from gear and skills; not base regeneration, which is based on spirit" — but the rate per
+point is in the executable. `StatEngine` carries 0.1656 per spirit and 0.03847 per physique, fitted to one
+level-100 character and exact for it. A second character that disagrees means the rate is not flat per
+point.
 
 ## Known cosmetic gaps
 

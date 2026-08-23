@@ -208,8 +208,12 @@ struct SkillResolver {
         let devotionBonus = ranks.devotion
         let itemBonus = ranks.items
 
-        let maxLevel = max(1, record.integer("skillMaxLevel"))
-        let ultimateLevel = max(maxLevel, record.integer("skillUltimateLevel"))
+        // A skill that only drives a buff states no ranks of its own; the buff it drives holds them,
+        // along with the per-rank arrays. Reading the ceiling from the skill alone pins such a skill at
+        // rank 1 however many points and item bonuses it has.
+        let ranked = record.integer("skillMaxLevel") > 0 ? record : (linkedRecord(of: record) ?? record)
+        let maxLevel = max(1, ranked.integer("skillMaxLevel"))
+        let ultimateLevel = max(maxLevel, ranked.integer("skillUltimateLevel"))
         let rank = baseLevel > 0 ? min(baseLevel + devotionBonus + itemBonus, ultimateLevel) : 0
 
         return ResolvedSkill(
@@ -293,12 +297,16 @@ struct SkillResolver {
         return skillName(skill, path: skill.path)
     }
 
-    /// What a skill does at a rank. A skill that only triggers a buff carries its numbers over there.
+    /// What a skill does at a rank, its own numbers and those of the buff it drives.
+    ///
+    /// A skill can carry both — the activation on itself, the effect on the buff — so the two are
+    /// merged rather than one chosen over the other.
     func effects(of record: ArzRecord, atLevel level: Int) -> StatBlock {
-        let own = stats(of: record, atLevel: level)
-        guard own.hasNothingToShow, let linked = linkedRecord(of: record) else { return own }
+        var own = stats(of: record, atLevel: level)
+        guard let linked = linkedRecord(of: record) else { return own }
 
-        return stats(of: linked, atLevel: level)
+        own.merge(stats(of: linked, atLevel: level))
+        return own
     }
 
     private static func connectors(of record: ArzRecord) -> [SkillConnector] {

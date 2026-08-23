@@ -23,6 +23,8 @@ struct CharacterSheet: Sendable {
     var defensiveAbility: Double = 0
 
     var armor: Double = 0
+    /// Where a resistance stops counting, absent anything that raises it.
+    static let resistanceCap: Double = 80
     var armorAbsorption: Double = 0
     /// Armour on each hit region, as the game's character window lists it.
     var armorBySlot: [EquipmentSlot: Double] = [:]
@@ -35,8 +37,13 @@ struct CharacterSheet: Sendable {
 
     /// Percentage damage bonus by type, including the attribute-driven scaling the game applies.
     var damageModifiers: [DamageType: Double] = [:]
+    /// Flat damage the character adds to what it wields, by type.
+    var flatDamage: [DamageType: Double] = [:]
 
+    /// The speeds as the game's own window prints them: the resulting percentage, not the bonus.
     var attackSpeed: Double = 0
+    /// How often the character swings, at that speed.
+    var attacksPerSecond: Double = 0
     var castSpeed: Double = 0
     var movementSpeed: Double = 0
     var critDamage: Double = 0
@@ -61,7 +68,26 @@ struct StatEngine {
         let lifePerSpiritPoint: Double
         let energyPerSpiritPoint: Double
         let armorAbsorption: Double
+        /// What the engine lets a player's speeds run between, in percent.
+        let attackSpeedRange: ClosedRange<Double>
+        let castSpeedRange: ClosedRange<Double>
+        let runSpeedRange: ClosedRange<Double>
     }
+
+    /// What a point of an attribute regenerates per second before any bonus.
+    ///
+    /// No record states these — the shipped data carries only the 1.0/s a bare character record holds —
+    /// so they are fitted to the game's own character window: 201.89 energy at 874.24 spirit and 154.20
+    /// health at 1306.24 physique, both reproduced to within a hundredth. One character is one sample,
+    /// and the fit only holds while every other contribution is right — a missing bonus lands here as a
+    /// wrong rate. A second character that disagrees means the rate is not a flat per-point figure.
+    /// Swings a second at 100% attack speed. The records name a weapon's speed class — `tagAttackSpeed
+    /// Average` — but state no rate for it; this is fitted to the game's own reading of 1.84 attacks a
+    /// second at 122.4%, and a weapon of another class may well swing at a different base rate.
+    private static let baseAttackRate = 1.5
+
+    private static let energyRegenPerSpirit = 0.165_60
+    private static let healthRegenPerPhysique = 0.038_47
 
     private static let playerLevelsPath = "records/creatures/pc/playerlevels.dbr"
     private static let malePlayerPath = "records/creatures/pc/malepc01.dbr"
@@ -74,7 +100,10 @@ struct StatEngine {
     func sheet(
         for save: Gdc.SaveFile,
         contributions: StatBlock,
-        bodyArmor: [EquipmentSlot: Double] = [:]
+        bodyArmor: [EquipmentSlot: Double] = [:],
+        /// What the weapon in hand does to the base attack rate, as a fraction: a wand at −0.1 is 10%
+        /// slower before any bonus.
+        weaponSpeed: Double = 0
     ) -> CharacterSheet {
         let constants = constants(isMale: save.header.isMale)
         var sheet = CharacterSheet()
@@ -89,7 +118,7 @@ struct StatEngine {
             constants: constants
         )
         applyMitigation(to: &sheet, contributions: contributions, constants: constants, bodyArmor: bodyArmor)
-        applySpeeds(to: &sheet, contributions: contributions)
+        applySpeeds(to: &sheet, contributions: contributions, weaponSpeed: weaponSpeed, constants: constants)
 
         return sheet
     }
@@ -133,14 +162,22 @@ struct StatEngine {
             flat: contributions.value("characterMana"),
             percent: contributions.value("characterManaModifier")
         )
-        sheet.healthRegen = scaled(
-            contributions.value("characterLifeRegen"),
-            percent: contributions.value("characterLifeRegenModifier")
-        )
-        sheet.energyRegen = scaled(
-            contributions.value("characterManaRegen"),
-            percent: contributions.value("characterManaRegenModifier")
-        )
+        // "Percent bonuses only affect regeneration from gear and skills; not base regeneration, which
+        // is based on spirit" — the game's own words for the energy line, and health reads the same way
+        // against physique. The rate per point is in the executable rather than the records; see
+        // `Self.regenPerPoint`.
+        sheet.healthRegen =
+            sheet.physique.total * Self.healthRegenPerPhysique
+            + scaled(
+                contributions.value("characterLifeRegen"),
+                percent: contributions.value("characterLifeRegenModifier")
+            )
+        sheet.energyRegen =
+            sheet.spirit.total * Self.energyRegenPerSpirit
+            + scaled(
+                contributions.value("characterManaRegen"),
+                percent: contributions.value("characterManaRegenModifier")
+            )
     }
 
     private func applyAbilities(
@@ -172,10 +209,12 @@ struct StatEngine {
         bodyArmor: [EquipmentSlot: Double]
     ) {
         sheet.armorBySlot = bodyArmor
+        // What is left once the hit regions have taken their own: armour from belts, jewellery and
+        // skills, which the game's help text says lands on every region.
         sheet.armorFromOtherSources =
             contributions.value("defensiveProtection")
-            - bodyArmor.values.reduce(0, +)
             + contributions.value("defensiveBonusProtection")
+            - bodyArmor.values.reduce(0, +)
         sheet.armor = scaled(
             armorRating(bodyArmor: bodyArmor, global: sheet.armorFromOtherSources),
             percent: contributions.value("defensiveProtectionModifier")
@@ -188,6 +227,9 @@ struct StatEngine {
         sheet.resistances = resistances(contributions)
         sheet.maxResistances = maxResistances(contributions)
         sheet.damageModifiers = damageModifiers(contributions)
+        sheet.flatDamage = Dictionary(
+            uniqueKeysWithValues: DamageType.allCases.map { ($0, contributions.value($0.minimumKey)) }
+        )
     }
 
     /// The game's Armor Rating: each hit region contributes in proportion to how often it is struck.
@@ -212,11 +254,29 @@ struct StatEngine {
         return weighted / totalChance + global
     }
 
-    private func applySpeeds(to sheet: inout CharacterSheet, contributions: StatBlock) {
+    /// The speeds the game prints: a hundred plus every bonus, the weapon's own rate folded in, and the
+    /// engine's caps applied — a character with +48% movement still runs at the 135% the engine allows.
+    private func applySpeeds(
+        to sheet: inout CharacterSheet,
+        contributions: StatBlock,
+        weaponSpeed: Double,
+        constants: Constants
+    ) {
         let overall = contributions.value("characterTotalSpeedModifier")
-        sheet.attackSpeed = contributions.value("characterAttackSpeedModifier") + overall
-        sheet.castSpeed = contributions.value("characterSpellCastSpeedModifier") + overall
-        sheet.movementSpeed = contributions.value("characterRunSpeedModifier") + overall
+
+        func speed(_ key: String, weapon: Double = 0, within range: ClosedRange<Double>) -> Double {
+            let bonus = 100 + contributions.value(key) + overall
+            return min(max(bonus * (1 + weapon), range.lowerBound), range.upperBound)
+        }
+
+        sheet.attackSpeed = speed(
+            "characterAttackSpeedModifier",
+            weapon: weaponSpeed,
+            within: constants.attackSpeedRange
+        )
+        sheet.attacksPerSecond = Self.baseAttackRate * sheet.attackSpeed / 100
+        sheet.castSpeed = speed("characterSpellCastSpeedModifier", within: constants.castSpeedRange)
+        sheet.movementSpeed = speed("characterRunSpeedModifier", within: constants.runSpeedRange)
         sheet.critDamage = contributions.value("offensiveCritDamageModifier")
         sheet.cooldownReduction = contributions.value("skillCooldownReduction")
     }
@@ -329,7 +389,19 @@ struct StatEngine {
             lifePerCunningPoint: levels?.number("lifeIncrementDexterity") ?? 8,
             lifePerSpiritPoint: levels?.number("lifeIncrementIntelligence") ?? 12,
             energyPerSpiritPoint: levels?.number("manaIncrement") ?? 16,
-            armorAbsorption: engine?.number("armorDefensiveAbsorption") ?? 70
+            armorAbsorption: engine?.number("armorDefensiveAbsorption") ?? 70,
+            attackSpeedRange: Self.range(engine, "playerAttackSpeedCap"),
+            castSpeedRange: Self.range(engine, "playerSpellCastSpeedCap"),
+            runSpeedRange: Self.range(engine, "playerRunSpeedCap")
         )
+    }
+
+    /// A `…CapMin` / `…CapMax` pair, which is how the engine states what it lets a player reach.
+    private static func range(_ engine: ArzRecord?, _ prefix: String) -> ClosedRange<Double> {
+        let lowest = engine?.number(prefix + "Min") ?? 0
+        let highest = engine?.number(prefix + "Max") ?? 200
+        guard lowest < highest else { return 0 ... 200 }
+
+        return lowest ... highest
     }
 }

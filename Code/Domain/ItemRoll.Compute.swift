@@ -21,6 +21,24 @@ extension ItemRoll {
         return pass.run()
     }
 
+    /// What an item grants every pet the character has.
+    ///
+    /// The block is rolled apart from the item's own stats: each record that carries one — the item's,
+    /// its prefix's, its suffix's — rolls its own stream from the item's seed, so a pet bonus neither
+    /// takes draws from the item's figures nor gives them any.
+    static func petStats(of sources: [(table: Table, jitter: Double)], seed: UInt32) -> [String: Double] {
+        var total = [String: Double]()
+        for source in sources {
+            var pass = Pass(
+                sources: Sources(base: source.table, seed: seed),
+                draws: .seeded(Random(seed: seed)),
+                baseJitter: source.jitter
+            )
+            for (key, value) in pass.run() { total[key, default: 0] += value }
+        }
+        return total
+    }
+
     /// One roll of one item.
     private struct Pass {
         let base: Table
@@ -42,13 +60,13 @@ extension ItemRoll {
         let prefixHasSkill: Bool
         let suffixHasSkill: Bool
 
-        init(sources: Sources, draws: Draws) {
+        init(sources: Sources, draws: Draws, baseJitter: Double = ItemRoll.baseJitter) {
             base = sources.base
             prefix = sources.prefix
             suffix = sources.suffix
             modifier = sources.modifier
 
-            baseJitter = ItemRoll.baseJitter
+            self.baseJitter = baseJitter
             prefixJitter = sources.prefix?.value("lootRandomizerJitter") ?? 0
             suffixJitter = sources.suffix?.value("lootRandomizerJitter") ?? 0
             modifierJitter = sources.modifier?.value("lootRandomizerJitter") ?? 0
@@ -130,8 +148,9 @@ extension ItemRoll {
                     source.jitter,
                     &random
                 )
-                // A line the affixes gave a chance to is a proc of its own, not part of the total.
-                if hasAffix, table.has(chance) { continue }
+                // A line that carries a chance is a proc of its own, not part of the total. Records
+                // declare the field whether or not they use it, so the value is what decides.
+                if hasAffix, table.value(chance) > 0 { continue }
 
                 drew = true
                 total += low
@@ -247,7 +266,11 @@ extension ItemRoll {
 
             var rolled = [Double]()
             if draw.store == .skill {
-                rolled = rollSkill(field: field)
+                // An affix's skill reduction is drawn early and stored there and then; the sum below
+                // would write a zero over it.
+                guard let drawn = rollSkill(field: field) else { return }
+
+                rolled = drawn
             } else if draw.store == .damage || draw.store == .defence
                     || draw.store == .retaliationModifier {
                 // These draw the item's own record before its affixes.
@@ -294,12 +317,13 @@ extension ItemRoll {
             handledDuration.insert(duration)
         }
 
-        private mutating func rollSkill(field: String) -> [Double] {
+        /// The values this field draws, or nothing when the early path has already stored the total.
+        private mutating func rollSkill(field: String) -> [Double]? {
             if ItemRoll.earlySkillFields.contains(field), prefixHasSkill || suffixHasSkill {
                 let fromModifier = modifier.map { ItemRoll.jitterSkill($0.value(field), modifierJitter, &random) } ?? 0
                 let fromBase = ItemRoll.jitterSkill(base.value(field), baseJitter, &random)
                 result[field] = (earlySkill[field] ?? 0) + fromModifier + fromBase
-                return []
+                return nil
             }
 
             var rolled = affixes.map { ItemRoll.jitterSkill($0.table.value(field), $0.jitter, &random) }
