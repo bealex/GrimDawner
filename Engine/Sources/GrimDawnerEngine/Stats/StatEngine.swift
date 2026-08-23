@@ -320,29 +320,13 @@ public struct StatEngine {
         percent: Double,
         level: Double
     ) -> Double {
-        let variables: [String: Double] = [
-            "offensiveAbilityDV": flat,
-            "defensiveAbilityDV": flat,
-            "characterLevelDV": level,
-            "dexterityDV": attribute,
-            "strengthDV": attribute,
-            "bonusDV": 0,
-            "offensiveAbilityModifierDV": percent,
-            "defensiveAbilityModifierDV": percent,
-        ]
-
-        guard
-            let formulas = database.record(Self.combatFormulasPath),
-            case let source = formulas.text(equationKey),
-            !source.isEmpty,
-            let equation = try? Equation(source),
-            let value = try? equation.value(variables)
-        else {
-            // Matches the shipped equations; only reached if the record is missing.
-            return (flat + level * 12 + attribute * 0.5) * (1 + percent / 100) + 53
-        }
-
-        return value
+        CombatFormulas(database: database).ability(
+            equationKey: equationKey,
+            flat: flat,
+            attribute: attribute,
+            percent: percent,
+            level: level
+        )
     }
 
     private func resistances(_ stats: StatBlock) -> [ResistanceKind: Double] {

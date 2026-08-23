@@ -153,7 +153,8 @@ struct StatRow: View {
     /// The words of the title that name a damage type, each in that type's colour.
     var accents: [Theme.Accent] = []
     var icon: String?
-    /// The game's own mark for the damage type this line names.
+    /// The game's own mark for the damage type this line names, drawn beside the figure rather than
+    /// beside the name: the mark is about the number.
     var iconPath: String?
     /// The band the value may roll in, for the stats an item rolls from its seed.
     var range: String?
@@ -184,10 +185,6 @@ struct StatRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            if let iconPath, !iconPath.isEmpty {
-                GameIcon(path: iconPath, size: 13, fallbackSymbol: "circle.fill")
-                    .accessibilityHidden(true)
-            }
             if let icon {
                 Image(systemName: icon)
                     .font(.caption)
@@ -210,6 +207,10 @@ struct StatRow: View {
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .fixedSize()
+            }
+            if let iconPath, !iconPath.isEmpty {
+                GameIcon(path: iconPath, size: 13, fallbackSymbol: "circle.fill")
+                    .accessibilityHidden(true)
             }
             Text(value)
                 .monospacedDigit()

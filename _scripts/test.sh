@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# test.sh — run the engine's test suite.
+# test.sh — run the packages' test suites.
 #
-# The tests live with the engine package, so they run on their own: no app is built and none is
-# launched.
+# The tests live with the packages, so they run on their own: no app is built and none is launched.
+# The engine reads saves and records, the mesh package reads the game's models.
 #
 # Usage:
 #   _scripts/test.sh
@@ -30,14 +30,21 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-cd "$REPO/Engine"
+STATUS=0
 
-set +e
-swift test $([ "$CONFIG" = "Release" ] && echo "-c release") 2>&1 |
-  sed 's/\x1b\[[0-9;]*m//g' |
-  grep -E "error:|Test run with|failed|✘"
-STATUS=${PIPESTATUS[0]}
-set -e
+for package in Engine Mesh Render; do
+  [ -f "$REPO/$package/Package.swift" ] || continue
+
+  echo "▸ $package"
+  cd "$REPO/$package"
+
+  set +e
+  swift test $([ "$CONFIG" = "Release" ] && echo "-c release") 2>&1 |
+    sed 's/\x1b\[[0-9;]*m//g' |
+    grep -E "error:|Test run with|failed|✘"
+  [ "${PIPESTATUS[0]}" -eq 0 ] || STATUS=1
+  set -e
+done
 
 [ "$STATUS" -eq 0 ] && echo "test ✅" || echo "test ❌"
 exit "$STATUS"

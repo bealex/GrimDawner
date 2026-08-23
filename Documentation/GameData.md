@@ -52,7 +52,10 @@ grapheme, so `"\n"` never matches and the whole file reads as a single line.
 ### `.tex`
 
 Twelve-byte wrapper — `"TEX"`, version byte, `u32`, `u32 payloadSize` — around a DDS whose magic reads
-`DDSR`, not `DDS `. Nearly every icon is uncompressed 32-bit in **B, G, R, A** byte order; some are 24-bit
+`DDSR`, not `DDS `. **Its mipmaps are written smallest first**, so the full-size level sits at the *end*
+of the file: reading from the front gives a montage of the small levels with the top of the real image
+below them, which is what the app used to draw on anything mipmapped. Icons carry a single level, which
+is why it went unnoticed for so long. Nearly every icon is uncompressed 32-bit in **B, G, R, A** byte order; some are 24-bit
 BGR; a handful are BC1 or BC3.
 
 Texture paths in records name their archive in the first path component: `ui/skills/...` lives in `UI.arc`
@@ -97,6 +100,106 @@ suffixes and ascendant affixes have **no artwork in the game either** — they a
 `+N to skills` comes from `augmentSkillName1..8` / `augmentSkillLevel1..8`, `augmentMasteryName1..4` /
 `augmentMasteryLevel1..4`, and `augmentAllLevel`. A granted ability is `itemSkillName`, whose rank is
 `itemSkillLevel` or the formula in `itemSkillLevelEq` (evaluate with `Equation`).
+
+### Monsters
+
+`records/creatures/enemies/**` with `Class = Monster` — 2,970 named ones. The record gives the name
+(`description`), the rank (`monsterClassification`: Common, Champion, Hero, Quest, Boss, SuperBoss), the
+faction record it fights for, the race the "damage to <race>" bonuses name (`characterRacialProfile` →
+`tagRaceNNN`), the levels it is met between, and the experience it is worth. The same monster is written
+once per region it appears in, so the listing keeps one line per name, rank and faction.
+
+**Nothing about a monster is a number until a level is chosen.** Its pools and abilities live in the
+record `characterAttributeEquations` names, as equations of `charLevel` — the Ravager's life reads
+`((charLevel*195)^1.53)+50000` — and its skills are levelled the same way: `skillLevel4 = charLevel/4+1`
+against `skillName4`. `Equation` evaluates both.
+
+Its attacks are `attackSkillName` and `specialAttack…SkillName`, each with a range, a first delay and a
+timeout; `dyingSkillName` is what it does as it falls. **Nearly all of them are nameless** — 442 monster
+skills carry a `skillDisplayName` and some 3,500 do not — so the record's class is what says what one is:
+`Skill_AttackWeapon` is a weapon attack, `Skill_AttackProjectileFan` a fan of projectiles,
+`Skill_BuffRadiusToggled` an aura. `SkillKind` holds that vocabulary. Everything else in the skill list is a passive —
+the game's own level adjusters among them, which is where a monster's armour, resistances and damage
+scaling come from.
+
+**Loot is per equipment slot.** `loot<Slot>Item<N>` names a table or an item and
+`chanceToEquip<Slot>Item<N>` weighs it against the slot's other entries, with `chanceToEquip<Slot>` the
+chance the slot holds anything at all. A `LootItemTable_DynWeight` holds `lootName1..N` and
+`lootWeight1..N`, and those entries are often tables of their own, so following them three deep reaches
+the items without walking the whole tree.
+
+**A monster's `factions` is a faction pack, not what it is.** The pack — `faction_beast.dbr` and its
+kin — says who that creature counts as: its standing toward every other faction, what killing it does to
+a reputation, and which nemesis the faction spawns. Most creatures carry the Aetherials' pack whatever
+they are made of: 266 of the 405 beast-race records do, Kubacabra among them. What a player means by "a
+beast", and what the game's own "+% Damage to Beasts" reads, is `characterRacialProfile`, so that is what
+the listing shows and filters by.
+
+**A nemesis belongs to the faction whose pack names it.** `nemesisSpawn` on the pack is the only record
+that says so — `faction_beast.dbr` names Kubacabra, `faction_cronley.dbr` names Fabius — and a nemesis is
+written as several records, one per phase, that share a name. Reading it from the monster's own faction
+field would make Kubacabra an Aetherial.
+
+**A monster is worth far more on the deeper difficulties.**
+`balancingadjustment_mp+difficulty_enemies01.dbr` lays one adjustment over every enemy, written as twelve
+numbers per stat — three difficulties of four party sizes, single-player first. On Ultimate that is +580%
+life, +200% energy, +10% to cunning and spirit, +50 offensive and +75 defensive ability, and resistances
+besides. Nothing about a monster reads right without it.
+
+**Twelve celestial bosses cancel the game's ascendant-mode bonus.** `balancingadjustment_ultramode_enemies01.dbr`
+is what ascendant mode grants — +850% life, +165% damage — and Ravager, Callagadra, Mogdrogen, Lokarr and
+the rest each hold `superboss_ascendantmodeadjustment_01`, which is that adjustment negated stat for stat.
+Neither is in effect in an ordinary fight, so the app counts neither, recognising the skill by the fact
+that it cancels the record rather than by its name.
+
+**Offensive and defensive ability are equations, not fields.** A monster's `characterAttributeEquations`
+gives the base of each; the game's `combatformulas.dbr` turns that, the attribute (cunning for offensive,
+physique for defensive) and the level into the figure a fight uses — the same equations a character's
+sheet runs. Reading the base alone understates a level 100 boss by a factor of three.
+
+### The model format
+
+A monster record names a `mesh` and the skin it wears, and every one of the 2,981 of them does — 785
+distinct models. `Creatures.arc` holds 510 of those, `Items.arc` 1,534, `Level Art.arc` the rest.
+Nothing in the game ships a picture of a monster: the skins are UV atlases and the UI has no portraits,
+so a picture has to be rendered.
+
+**`.msh` is Titan Quest's format, and this is what it is.** Four magic bytes, `MSH` and a version, then a
+flat list of chunks — a `uint32` id, a `uint32` byte count, and that many bytes:
+
+| id | what it holds |
+|---|---|
+| 10 | the bounding box, six floats |
+| 4 | the vertices |
+| 5 | the triangles |
+| 7 | the materials |
+| 3, 0 | the skeleton, which a still does not need |
+
+The vertex chunk is a format, the bytes one vertex takes, how many there are, then one word per element
+of the vertex — and those words say what the vertex holds and in what order: 0 position (12 bytes), 1
+normal (12), 2 tangent (12), 3 bitangent (12), 4 texture (8), 5 bone indices (4), 6 bone weights (16), 7
+a second texture (8), 14 vertex colour (4). Six layouts appear across the game; the two common ones are
+56 bytes unskinned and 76 skinned. The triangle chunk is a count, a group count, then three `uint16`
+indices per triangle, and then one block per group: **a material index, the triangle it starts at, how
+many triangles it covers**, a spare word, a bounding box, and the bones it hangs off — the bone list is
+what makes the blocks different lengths. A creature is two or three groups — its body, the vines growing
+through it, the crystal on its back — and each wears its own material. Painting them all with the first
+one is what puts a plant's skin on a monster's chest. The material chunk is a count, then a
+shader path and pairs of texture slot and path, each string written as its length and then its bytes.
+
+**Texture coordinates are written as the game reads them** — the first row of a decoded texture is its
+top, and nothing needs turning upside down. A model drawn with its coordinates flipped wears its face
+inside out, which is the loudest way to find out.
+
+**Vertices are stored in the bind pose**, so a model draws without its skeleton — which is why a still
+needs neither the bones nor the `.anm` animations beside them.
+
+**A model with no vertices is a blocker**, one of the game's invisible walls. `loghorrean01a_blocker.msh`
+is the only one among the creatures.
+
+**A model wears the texture its record names**, or the one its own material names, or — when neither does
+— the one sitting beside it under the same name: `humanmale05b.msh` wears `humanmale05b_dif.tex`, and
+`aetherialabomination01a_phase1.msh` falls back to `aetherialabomination01a_dif.tex`.
 
 ### Window layouts
 

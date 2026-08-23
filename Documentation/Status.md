@@ -3,9 +3,9 @@
 ## Working
 
 The save parser consumes a current save exactly. Names and icons for items, skills, factions and
-constellations resolve from the installed game's data. Six tabs render — Inventory, Items, Affixes,
-Skills, Devotions, Stats — each with a detail sidebar and the shared quick search, which starts on the
-first keystroke rather than from a field in the toolbar. The app runs dark whatever the system is set to,
+constellations resolve from the installed game's data. Seven tabs render — Inventory, Items, Affixes,
+Skills, Devotions, Stats, Monsters — each with a detail sidebar and the shared quick search, which starts
+on the first keystroke rather than from a field in the toolbar. The app runs dark whatever the system is set to,
 since every panel it draws is the game's own artwork.
 
 Panels are drawn at the game's own pixel coordinates from its UI records — the equipment doll, both
@@ -95,6 +95,48 @@ threshold and the cap. If the game shows *Hated* there instead, the boundaries a
 - Two factions point at `faction_user3.tex`, which the game ships as a blank white placeholder.
 - The doll's centre box shows the character's class artwork. The game renders its 3D model there, which
   the app has no way to pose, so the mastery the most points went into stands in for it.
+
+## The monster listing
+
+Every named monster in the game, filtered by rank, by faction and by whatever is typed. A monster is read
+at a level, since everything it has is an equation of one, and the sidebar opens on the level the
+character is: what it is worth in a fight, its attacks with their ranges and timings, its passives, and
+what it carries in each equipment slot with the odds of each. Its whole stat sheet is far more than a
+sidebar holds, so **All Stats…** opens it in a window of its own.
+
+A monster's stats are what its record states, what its equations produce at that level, what its permanent
+skills add, and the adjustment the difficulty lays over every enemy. **Checked against GrimTools' monster
+database**, which reads the same records: Ravager of Minds at level 100 on Ultimate agrees to the unit on
+its attributes, health, energy, both abilities, armour and all ten resistances. `MonsterStatsTests` pins
+those figures; it needs the installed game, so it reads `GRIM_DAWN_FOLDER` from the environment and skips
+without it.
+
+The listing shows a monster's race rather than its faction: a record's faction is a pack it counts as for
+hostility and reputation, and most creatures carry the Aetherials' whatever they are made of. A nemesis
+names its own faction — Kubacabra reads as the Beasts' nemesis — because the faction pack is what says so. Records that share a name and
+differ in what they hold stay as separate lines — three Ravagers of Minds
+are three different fights — with the record's own file name to tell them apart. Copies that a region
+merely repeats collapse into one.
+
+## The models
+
+`Mesh` reads the game's `.msh` models and `Render` draws them, both packages of their own.
+[GameData.md](GameData.md#the-model-format) has the format. Every one of the 782 models the monsters name
+reads and renders; `render-monsters` writes the lot as PNGs with a transparent background in about twelve
+seconds:
+
+```sh
+cd Render && swift run -c release render-monsters "<game folder>" <output> --size 512
+```
+
+`SceneConfiguration` is the whole look — where the camera stands, how bright the rig is, whether there is
+a background and a floor at all. The app draws the same scene live rather than from a picture: the
+monster sidebar and the model tab of its window hold a SceneKit view, which is a drag to turn and a
+scroll to move in.
+
+**A human NPC renders as a head.** Their record names the head alone, and the game dresses the rest from
+the equipment it wears; nothing here assembles that. Animations are not read at all — the `.anm` files
+beside the models are a format of their own.
 
 ## The catalogues
 

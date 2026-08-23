@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
 import GrimDawnerEngine
+import GrimDawnerRender
 import AppKit
 import Foundation
 import SwiftUI
@@ -24,6 +25,7 @@ extension MainScreen {
             case devotions = "Devotions"
             case parameters = "Stats"
             case affixes = "Affixes"
+            case monsters = "Monsters"
 
             var id: String { rawValue }
 
@@ -36,6 +38,7 @@ extension MainScreen {
                     case .devotions: "4"
                     case .parameters: "5"
                     case .affixes: "6"
+                    case .monsters: "7"
                 }
             }
 
@@ -47,6 +50,7 @@ extension MainScreen {
                     case .devotions: "sparkles"
                     case .parameters: "person.text.rectangle"
                     case .affixes: "textformat.abc"
+                    case .monsters: "pawprint"
                 }
             }
         }
@@ -56,6 +60,9 @@ extension MainScreen {
         private(set) var catalogue: [DirectoryEntry] = []
         private(set) var affixes: [AffixEntry] = []
         private(set) var catalogueState: LoadState = .idle
+        /// Every monster in the game, listed the first time the Monsters tab is opened.
+        private(set) var monsters: [MonsterEntry] = []
+        private(set) var monsterState: LoadState = .idle
         private(set) var character: ResolvedCharacter?
         private(set) var saveState: LoadState = .idle
         private(set) var databaseState: LoadState = .idle
@@ -77,6 +84,13 @@ extension MainScreen {
         var selectedStar: DevotionStar.ID?
         var selectedConstellation: ResolvedConstellation.ID?
         var selectedParameter: ParameterSelection?
+        private(set) var selectedMonsterPath: String?
+        private(set) var selectedMonster: ResolvedMonster?
+        /// The level a monster is read at; monsters scale, so nothing about one is known without it.
+        private(set) var monsterLevel = 100
+        /// Monsters are worth several times more on Ultimate than on Normal, so the difficulty is read
+        /// alongside the level.
+        private(set) var monsterDifficulty: Difficulty = .ultimate
 
         var saveFolderName: String? { saveAccess?.url.lastPathComponent }
         var gameFolderName: String? { gameAccess?.url.lastPathComponent }
@@ -84,6 +98,12 @@ extension MainScreen {
 
         var isListingItems: Bool {
             if case .ready = catalogueState { return false }
+
+            return true
+        }
+
+        var isListingMonsters: Bool {
+            if case .ready = monsterState { return false }
 
             return true
         }
@@ -107,6 +127,11 @@ extension MainScreen {
         private var saveAccess: FolderAccess.Access?
         private var gameAccess: FolderAccess.Access?
         private var database: GameDatabase?
+        /// The records, for the views that read them directly — the model of a human is assembled from
+        /// the gear its record equips.
+        var records: GameDatabase? { database }
+        /// Draws the game's own models, once the game folder is known.
+        private(set) var modelRenderer: ModelRenderer?
 
         init() {
             restore()
@@ -136,6 +161,50 @@ extension MainScreen {
                 affixes = listing.1
                 catalogueState = .ready
             }
+        }
+
+        // MARK: - The monster listing
+
+        /// Lists every monster in the game, from the cache when the installed version has been listed
+        /// before.
+        func openMonsters() {
+            guard case .idle = monsterState, let database else { return }
+
+            monsterState = .loading
+            Task {
+                let listed = await Task.detached(priority: .userInitiated) {
+                    let catalogue =
+                        MonsterCatalogueStore.load(fingerprint: database.fingerprint)
+                        ?? {
+                            let built = MonsterCatalogue.build(from: database)
+                            MonsterCatalogueStore.save(built)
+                            return built
+                        }()
+
+                    return catalogue.monsters.map(MonsterEntry.init)
+                }.value
+
+                monsters = listed
+                monsterLevel = character?.level ?? monsterLevel
+                monsterDifficulty = character?.difficulty ?? monsterDifficulty
+                monsterState = .ready
+            }
+        }
+
+        /// Reads one monster at a level and a difficulty, which is what every figure it has depends on.
+        func selectMonster(path: String, level: Int, difficulty: Difficulty? = nil) {
+            guard let database else { return }
+
+            let skills = SkillResolver(database: database)
+            let resolver = MonsterResolver(
+                database: database,
+                skills: skills,
+                items: ItemResolver(database: database, skills: skills)
+            )
+            selectedMonsterPath = path
+            monsterLevel = level
+            monsterDifficulty = difficulty ?? monsterDifficulty
+            selectedMonster = resolver.monster(at: path, level: level, difficulty: monsterDifficulty)
         }
 
         /// Shows a piece of the character's gear where it is worn.
@@ -220,6 +289,7 @@ extension MainScreen {
         private func loadDatabase() {
             guard let folder = gameAccess?.url else { return }
 
+            modelRenderer = ModelRenderer(gameFolder: folder)
             databaseState = .loading
             Task {
                 let result = await Task.detached(priority: .userInitiated) {
@@ -267,6 +337,8 @@ extension MainScreen {
             selectedStar = nil
             selectedConstellation = nil
             selectedParameter = nil
+            selectedMonsterPath = nil
+            selectedMonster = nil
         }
 
         func reloadSelected() {

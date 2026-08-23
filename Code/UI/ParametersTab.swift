@@ -281,15 +281,15 @@ struct ParametersTab: View {
 
         return Button(action: { selection = .stat(title: kind.title, key: kind.resistanceKey) }) {
             HStack(spacing: 6) {
+                Text(kind.title)
+                    .foregroundStyle(kind.color)
+                Spacer(minLength: 6)
                 if let icon = damageIcons[Theme.damageToken(forStatKey: kind.resistanceKey) ?? ""] {
                     GameIcon(path: icon, size: 15, fallbackSymbol: "circle.fill")
                 }
-                Text(kind.title)
-                    .foregroundStyle(kind.color)
                 Text("\(whole(min(value, maximum)))%")
                     .monospacedDigit()
                     .foregroundStyle(value < 0 ? .red : .primary)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
                 if value > maximum {
                     Text(Theme.overCap(value - maximum))
                         .font(.caption2)
@@ -401,6 +401,9 @@ struct ParametersTab: View {
                 ForEach(types, id: \.self) { type in
                     Button(action: { selection = .stat(title: type.title, key: type.modifierKey) }) {
                         HStack(spacing: 8) {
+                            Text(type.title)
+                                .foregroundStyle(type.color)
+                            Spacer(minLength: 6)
                             if let icon = damageIcons[Theme.damageToken(forStatKey: type.modifierKey) ?? ""] {
                                 GameIcon(path: icon, size: 15, fallbackSymbol: "circle.fill")
                             } else {
@@ -408,14 +411,11 @@ struct ParametersTab: View {
                                     .fill(type.color)
                                     .frame(width: 8, height: 8)
                             }
-                            Text(type.title)
-                                .foregroundStyle(type.color)
                             Text(Self.damageText(
                                 flat: sheet.flatDamage[type] ?? 0,
                                 percent: sheet.damageModifiers[type] ?? 0
                             ))
                             .monospacedDigit()
-                            .frame(maxWidth: .infinity, alignment: .trailing)
                         }
                         .font(.callout)
                         .contentShape(.rect)

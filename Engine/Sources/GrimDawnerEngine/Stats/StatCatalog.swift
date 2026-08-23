@@ -121,7 +121,6 @@ public enum StatCatalog {
         StatDefinition("blockRecoveryTime", "Block Recovery", .defence, .seconds, order: 16),
         StatDefinition("characterDodgePercent", "Chance to Avoid Melee Attacks", .defence, .percent, order: 17),
         StatDefinition("characterDeflectProjectile", "Chance to Avoid Projectiles", .defence, .percent, order: 18),
-        StatDefinition("defensivePhysical", "Physical Resistance", .defence, .percent, order: 19),
         StatDefinition("characterEnergyAbsorptionPercent", "Energy Absorption", .defence, .percent, order: 20),
         StatDefinition("characterHealIncreasePercent", "Healing Effects Increased", .defence, .percent, order: 21),
         StatDefinition("characterConstitutionModifier", "Constitution Bonus", .defence, .percent, order: 22),
@@ -138,6 +137,9 @@ public enum StatCatalog {
         StatDefinition("defensiveChaos", "Chaos Resistance", .resistances, .percent, order: 7),
         StatDefinition("defensivePierce", "Pierce Resistance", .resistances, .percent, order: 8),
         StatDefinition("defensiveBleeding", "Bleeding Resistance", .resistances, .percent, order: 9),
+        // Physical resistance is flat damage reduction rather than a resistance the caps apply to, but
+        // it belongs beside the others: a sheet that prints it twice is a sheet that has it in two groups.
+        StatDefinition("defensivePhysical", "Physical Resistance", .resistances, .percent, order: 10),
         StatDefinition("defensiveAllResistance", "All Resistances", .resistances, .percent, order: 10),
         StatDefinition("defensiveFireMaxResist", "Max Fire Resistance", .resistances, .percent, order: 11),
         StatDefinition("defensiveColdMaxResist", "Max Cold Resistance", .resistances, .percent, order: 12),

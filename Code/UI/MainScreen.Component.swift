@@ -5,8 +5,8 @@ import SwiftUI
 
 extension MainScreen {
     struct Component: View {
-        @State
-        private var model: Model = .init()
+        @Bindable
+        var model: Model
 
         var body: some View {
             NavigationSplitView(sidebar: { sidebar }, detail: { detail })
@@ -163,6 +163,20 @@ extension MainScreen {
                         select: model.selectAffixes
                     )
                     .task { model.openCatalogue() }
+                case .monsters:
+                    MonstersTab(
+                        monsters: model.monsters,
+                        isListing: model.isListingMonsters,
+                        search: search,
+                        selectedPath: model.selectedMonsterPath,
+                        selected: model.selectedMonster,
+                        level: model.monsterLevel,
+                        difficulty: model.monsterDifficulty,
+                        renderer: model.modelRenderer,
+                        database: model.records,
+                        select: model.selectMonster(path:level:difficulty:)
+                    )
+                    .task { model.openMonsters() }
                 case .parameters:
                     ParametersTab(
                         character: character,

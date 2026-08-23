@@ -494,7 +494,7 @@ public struct ItemResolver {
     }
 
     /// Records name their inventory art differently depending on what kind of item they are.
-    private static func iconPath(of record: ArzRecord) -> String {
+    public static func iconPath(of record: ArzRecord) -> String {
         for key in [ "bitmap", "artifactBitmap", "relicBitmap", "shardBitmap", "artifactFormulaBitmapName" ] {
             let path = record.text(key)
             if !path.isEmpty { return path }

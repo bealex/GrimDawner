@@ -96,15 +96,25 @@ public enum Texture {
         let bitsPerPixel = Int(try uint32(raw, header + 4 + 84))
 
         let body = header + ddsHeaderSize
-        let pixels = try decode(
-            raw,
-            at: body,
-            width: width,
-            height: height,
-            layout: try layout(pixelFormatFlags: pixelFormatFlags, fourCC: fourCC, bitsPerPixel: bitsPerPixel)
-        )
+        let layout = try layout(pixelFormatFlags: pixelFormatFlags, fourCC: fourCC, bitsPerPixel: bitsPerPixel)
+        // The game writes its mipmaps smallest first, so a texture that carries them keeps its full-size
+        // level at the end of the file rather than at the start. Reading from the front instead gives a
+        // montage of the small levels with the top of the real image below them.
+        let level = levelSize(width: width, height: height, layout: layout)
+        let start = raw.count - body > level ? raw.count - level : body
+        let pixels = try decode(raw, at: start, width: width, height: height, layout: layout)
 
         return try makeImage(pixels, width: width, height: height)
+    }
+
+    /// What one mip level of this size takes: whole pixels, or four-by-four blocks of them.
+    private static func levelSize(width: Int, height: Int, layout: Layout) -> Int {
+        switch layout {
+            case let .uncompressed(bitsPerPixel):
+                width * height * bitsPerPixel / 8
+            case let .blockCompressed(hasAlphaBlock):
+                ((width + 3) / 4) * ((height + 3) / 4) * (hasAlphaBlock ? 16 : 8)
+        }
     }
 
     private static func layout(pixelFormatFlags: UInt32, fourCC: UInt32, bitsPerPixel: Int) throws -> Layout {

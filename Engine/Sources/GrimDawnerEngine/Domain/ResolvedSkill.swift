@@ -55,6 +55,10 @@ public struct SkillChanges: Sendable {
 public struct ResolvedSummon: Identifiable, Sendable {
     public let id = UUID()
     public let name: String
+    /// The summoned thing's own record, so a reader can open it and see what it is.
+    public let recordPath: String
+    /// True where that record is a monster of its own rather than a chest or a piece of scenery.
+    public let isMonster: Bool
     /// Seconds it lives, or zero when it stands until it dies.
     public let timeToLive: Double
     /// How many of it can stand at once.
@@ -73,6 +77,9 @@ public struct ResolvedSkill: Identifiable, Sendable {
     /// The skill this one modifies, for the round nodes that hang off another skill.
     private(set) var modifies: String?
     public let name: String
+    /// The name the game gives it, absent for the thousands of records that carry none — a monster's
+    /// skills mostly do not, and their file name is an identifier rather than something to print.
+    public let properName: String?
     public let description: String
     /// Points the character actually spent.
     public let baseLevel: Int

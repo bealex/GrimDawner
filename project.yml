@@ -16,6 +16,10 @@ configFiles:
 packages:
   GrimDawnerEngine:
     path: Engine
+  GrimDawnerMesh:
+    path: Mesh
+  GrimDawnerRender:
+    path: Render
 
 targets:
   GrimDawner:
@@ -26,6 +30,10 @@ targets:
     dependencies:
       - package: GrimDawnerEngine
         product: GrimDawnerEngine
+      - package: GrimDawnerMesh
+        product: GrimDawnerMesh
+      - package: GrimDawnerRender
+        product: GrimDawnerRender
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.lonelybytes.grimdawner

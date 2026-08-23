@@ -16,6 +16,8 @@ public final class TextureStore: Sendable {
         "items": "Items.arc",
         "creatures": "Creatures.arc",
         "fx": "FX.arc",
+        // Some creatures are dressed as level art — a totem, a ward, a crystal that fights back.
+        "level art": "Level Art.arc",
     ]
 
     private static let expansionFolders = [ "", "gdx1/", "gdx2/", "gdx3/" ]

@@ -223,6 +223,7 @@ public struct SkillResolver {
             recordClass: record.recordClass,
             modifies: nil,
             name: skillName(record, path: path),
+            properName: properName(of: record),
             description: description(of: record) ?? "",
             baseLevel: baseLevel,
             devotionBonus: devotionBonus,
@@ -251,7 +252,7 @@ public struct SkillResolver {
     }
 
     /// What a skill puts on the field, for the classes that spawn one.
-    private func summon(of record: ArzRecord) -> ResolvedSummon? {
+    public func summon(of record: ArzRecord) -> ResolvedSummon? {
         guard let pet = database.record(record.text("spawnObjects")) else { return nil }
 
         var abilities = [ResolvedSkill]()
@@ -285,6 +286,8 @@ public struct SkillResolver {
 
         return ResolvedSummon(
             name: petName(pet, summonedBy: record),
+            recordPath: record.text("spawnObjects"),
+            isMonster: pet.text("Class") == "Monster",
             timeToLive: record.number("spawnObjectsTimeToLive"),
             limit: record.integer("petLimit"),
             stats: stats,
@@ -367,6 +370,14 @@ public struct SkillResolver {
     }
 
     // MARK: - Naming
+
+    /// The name the game itself gives a skill, following the same link its own tooltip does. Nothing for
+    /// a record that carries none, which is most of what a monster fights with.
+    private func properName(of record: ArzRecord) -> String? {
+        if let name = database.localised(record.text("skillDisplayName")) { return name }
+
+        return linkedRecord(of: record).flatMap { database.localised($0.text("skillDisplayName")) }
+    }
 
     /// Some skills carry their name only on the buff or pet record they drive, so follow that link before
     /// falling back to the record's file name.

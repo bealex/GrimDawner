@@ -272,6 +272,8 @@ struct StatBlockView: View {
     var highest: StatBlock?
     /// False shows a rolled figure as its band alone, for an item nobody owns a copy of.
     var showsRolls = true
+    /// How far apart the groups sit. A card small enough reads better with its lines running together.
+    var groupSpacing: CGFloat = 10
 
     @Environment(\.damageIcons)
     private var damageIcons
@@ -284,12 +286,11 @@ struct StatBlockView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         } else {
-            VStack(alignment: .leading, spacing: 10) {
+            // The group's name is left out: what a stat is about reads from its own line, and a column
+            // of headings over one or two lines each is noise.
+            VStack(alignment: .leading, spacing: groupSpacing) {
                 ForEach(groups, id: \.group) { group in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(group.group.title)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
                         ForEach(StatBlock.merged(group.lines), id: \.title) { line in
                             let bands = line.parts.compactMap { band(of: $0) }
                             let figures = Theme.figures(line.parts)
