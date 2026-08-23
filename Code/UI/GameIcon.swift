@@ -52,6 +52,22 @@ struct GameArtwork: View {
     }
 }
 
+/// A record's artwork at the size the game authored it, for the buttons whose records state only where
+/// they go.
+struct GameBitmap: View {
+    let path: String
+
+    @Environment(\.textures)
+    private var textures
+
+    var body: some View {
+        if let image = textures?.image(at: path) {
+            Image(decorative: image, scale: 1, orientation: .up)
+                .interpolation(.high)
+        }
+    }
+}
+
 /// The game's quality badge, sat in the corner of an item's icon the way the game's own slots wear it.
 struct ItemQualityBadge: ViewModifier {
     let path: String

@@ -139,7 +139,12 @@ extension MainScreen {
                     )
                     .task { model.openCatalogue() }
                 case .skills:
-                    SkillsTab(character: character, search: search, selected: $model.selectedSkill)
+                    SkillsTab(
+                        character: character,
+                        search: search,
+                        selected: $model.selectedSkill,
+                        revealItem: model.reveal
+                    )
                 case .devotions:
                     DevotionsTab(
                         character: character,

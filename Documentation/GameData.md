@@ -104,9 +104,16 @@ Every panel the app draws is the game's own, at the game's own pixel coordinates
 
 **The equipment doll.** `character_mastertable.dbr` names one item box per slot (`equipHead`, `equipNeck`,
 … `equipHandLeft` for the off hand, `equipHandRight` for the main hand). Each box record gives `itemX`,
-`itemY`, `itemXSize`, `itemYSize` and a `silhouette` texture for when it is empty. The boxes are laid out
-inside the top-left corner of `characterDisplayBitmap`, which is one texture holding the whole character
-window — doll, stat panel and bag grid — so only that corner is drawn.
+`itemY`, `itemXSize`, `itemYSize` and a `silhouette` texture for when it is empty. The same table names
+the weapon-swap button (`equipSwap1LeftButton`, positioned and drawn like any other button, with its two
+rollover lines under `equipSwapButtonRollover`) and `characterView`, the scene the game renders the
+character's model in — a rectangle at 111, 95 sized 177 × 273, with a backdrop texture.
+
+The boxes are laid out inside the top-left corner of `characterDisplayInspectBitmap` rather than
+`characterDisplayBitmap`: both textures hold the whole character window in one image, and the two draw
+the same panel, but the inspect window closes it off at the bottom where the character window puts its
+gold display. Neither draws the frame down the panel's right edge, since the bag grid abuts it there, so
+the app mirrors the left strip onto it.
 
 **A mastery panel.** `classtable.dbr` gives the panel background, the class artwork, the mastery bar and
 its position, and `tabSkillButtons`. A button record carries `bitmapPositionX/Y` (its top-left),
@@ -184,7 +191,9 @@ value exactly — so gear and mastery attributes add on top of it, never instead
 chance of being struck (torso 26, legs 20, head 15, shoulders 15, arms 12, feet 12, summing to 100). The
 rating is the weighted mean. Armour from belts, jewellery and skills is added to *every* region, so it
 survives the weighting intact. The game states this itself in `tagCharStatsArmorTotalDescription`. Summing
-overstates it several times over.
+overstates it several times over. The figure the game prints against a region is that region's own armour
+and the shared armour together, with `defensiveProtectionModifier` over both: a head carrying 1149 with 108
+shared and +20% reads as 1508.
 
 **A component's bonus armour belongs to its own piece.** `defensiveBonusProtection` — the 35 armour a
 Scaled Hide adds — lands on the hit region of the item it is socketed in, not on every region the way
@@ -193,6 +202,15 @@ the shoulders and legs raise exactly those two regions.
 
 **Absorption multiplies.** "Increases Armor Absorption by X%" scales the base 70%, capped at 100 — the same
 wording, and the same behaviour, as "Increases Armor by X%".
+
+**Blanket bonuses fold into every figure they reach**, and the figure never names them. A resistance takes
+`defensiveAllResistance`, and fire, cold and lightning also take `defensiveElementalResistance`; a maximum
+resistance takes `defensiveAllMaxResist`; a damage percentage takes `offensiveTotalDamageModifier`, the
+elemental three taking `offensiveElementalModifier` as well; a damage-over-time percentage takes the
+total-damage bonus too — the game's own panel reads +100% Bleed for +65% bleeding and +35% total damage.
+`StatComposition` holds these rules, and both the sheet and its breakdowns read them, so a figure and the
+sources behind it can never disagree. Flat elemental damage counting as that much of each of the three, and
+the elemental bonus not reaching an elemental damage over time, are inferences rather than readings.
 
 **Displayed damage percentages exclude attribute scaling.** `tagCharStatsPhysicalPercentDmgInfo` says so
 outright. Cunning and Spirit still scale damage in combat; they are simply not in this number.

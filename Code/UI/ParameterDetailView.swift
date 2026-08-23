@@ -113,8 +113,23 @@ enum StatSources {
         var item: ResolvedItem?
     }
 
+    /// Everything feeding one figure, the blanket bonuses it folds in included: fire resistance is fed
+    /// by "+3% to all resistances" and "+15% elemental resistance" as much as by its own stat.
     static func contributors(to key: String, in character: ResolvedCharacter) -> [Entry] {
         var entries = [Entry]()
+        for part in StatComposition.parts(feeding: key) {
+            entries += contributors(to: part, in: character)
+        }
+        return entries.sorted { abs($0.value) > abs($1.value) }
+    }
+
+    private static func contributors(to part: StatComposition.Part, in character: ResolvedCharacter) -> [Entry] {
+        var entries = [Entry]()
+        let key = part.key
+
+        func name(_ source: String) -> String {
+            part.note.isEmpty ? source : "\(source) · \(part.note)"
+        }
 
         for item in character.equippedItems {
             let value = item.stats.value(key)
@@ -125,32 +140,32 @@ enum StatSources {
             let fitted = item.parts.filter { part in
                 part.kind == .component || part.kind == .augment || part.kind == .completionBonus
             }
-            for part in fitted where part.stats.value(key) != 0 {
+            for fitting in fitted where fitting.stats.value(key) != 0 {
                 entries.append(Entry(
                     kind: .gear,
-                    name: "\(part.title) · in \(item.displayName)",
-                    value: part.stats.value(key),
+                    name: name("\(fitting.title) · in \(item.displayName)"),
+                    value: fitting.stats.value(key),
                     item: item
                 ))
             }
 
             let fittedTotal = fitted.reduce(0) { $0 + $1.stats.value(key) }
             if abs(value - fittedTotal) >= 0.005 {
-                entries.append(Entry(kind: .gear, name: item.displayName, value: value - fittedTotal, item: item))
+                entries.append(Entry(kind: .gear, name: name(item.displayName), value: value - fittedTotal, item: item))
             }
         }
 
         for mastery in character.masteries {
             let value = mastery.bonuses.value(key)
             if value != 0 {
-                entries.append(Entry(kind: .skills, name: "\(mastery.name) mastery", value: value))
+                entries.append(Entry(kind: .skills, name: name("\(mastery.name) mastery"), value: value))
             }
 
             for skill in mastery.sheetSkills {
                 let value = skill.stats.value(key)
                 guard value != 0 else { continue }
 
-                entries.append(Entry(kind: .skills, name: skill.name, value: value))
+                entries.append(Entry(kind: .skills, name: name(skill.name), value: value))
             }
         }
 
@@ -158,21 +173,25 @@ enum StatSources {
             let value = set.bonuses.value(key)
             guard value != 0 else { continue }
 
-            entries.append(Entry(kind: .gear, name: "\(set.name) (\(set.summary))", value: value))
+            entries.append(Entry(kind: .gear, name: name("\(set.name) (\(set.summary))"), value: value))
         }
 
         for constellation in character.devotion.startedConstellations {
             let value = constellation.bonuses.value(key)
             guard value != 0 else { continue }
 
-            entries.append(Entry(kind: .devotion, name: constellation.name, value: value))
+            entries.append(Entry(kind: .devotion, name: name(constellation.name), value: value))
         }
 
         let penalty = character.difficultyPenalty.value(key)
         if penalty != 0 {
-            entries.append(Entry(kind: .difficulty, name: "\(character.difficulty.title) difficulty", value: penalty))
+            entries.append(Entry(
+                kind: .difficulty,
+                name: name("\(character.difficulty.title) difficulty"),
+                value: penalty
+            ))
         }
 
-        return entries.sorted { abs($0.value) > abs($1.value) }
+        return entries
     }
 }

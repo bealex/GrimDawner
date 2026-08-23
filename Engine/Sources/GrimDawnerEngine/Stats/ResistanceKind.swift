@@ -34,6 +34,9 @@ public enum ResistanceKind: String, CaseIterable, Sendable {
         }
     }
 
+    /// The name where a grid has no room for the full one.
+    public var shortTitle: String { self == .acid ? "Poison" : title }
+
     /// The `.dbr` stem the game uses, which differs from the display name for several of these.
     private var stem: String {
         switch self {

@@ -27,6 +27,8 @@ public struct SkillRankSource: Identifiable, Sendable {
     public let reach: Reach
     /// The skill or mastery it names, lowercased. Empty for a bonus to all skills.
     public let path: String
+    /// The piece of gear carrying the bonus, absent for a set bonus, which no one item grants.
+    public let item: ResolvedItem?
 
     public func reaches(skill skillPath: String, in masteryPath: String?) -> Bool {
         switch reach {
@@ -40,9 +42,11 @@ public struct SkillRankSource: Identifiable, Sendable {
 /// What one worn item changes about one skill.
 public struct SkillModification: Identifiable, Sendable {
     public let id = UUID()
-    public let itemName: String
-    public let iconPath: String
+    public let item: ResolvedItem
     public let changes: SkillChanges
+
+    public var itemName: String { item.displayName }
+    public var iconPath: String { item.iconPath }
 }
 
 /// One equipment slot with whatever occupies it.

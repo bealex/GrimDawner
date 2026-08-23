@@ -50,6 +50,9 @@ public enum DamageType: String, CaseIterable, Sendable {
         }
     }
 
+    /// Fire, cold and lightning, the three the blanket elemental bonuses reach.
+    public var isElemental: Bool { self == .fire || self == .cold || self == .lightning }
+
     public var color: Color {
         switch self {
             case .physical: Color(red: 0.85, green: 0.82, blue: 0.72)

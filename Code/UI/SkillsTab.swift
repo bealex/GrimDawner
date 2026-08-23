@@ -9,6 +9,8 @@ struct SkillsTab: View {
     let search: QuickSearch
     @Binding
     var selected: ResolvedSkill?
+    /// Opens a piece of gear on the doll, for the lines naming what lifts a skill's rank.
+    var revealItem: ((ResolvedItem) -> Void)?
 
     var body: some View {
         TabLayout {
@@ -38,7 +40,8 @@ struct SkillsTab: View {
                     rankSources: character.rankSources(
                         forSkill: selected.recordPath,
                         in: mastery(of: selected)?.recordPath
-                    )
+                    ),
+                    revealItem: revealItem
                 )
             } else {
                 DetailPlaceholder(

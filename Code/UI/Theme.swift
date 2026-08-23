@@ -67,6 +67,11 @@ extension Theme {
     /// How a damage conversion reads: "Chaos ➠ Aether".
     static let convertsTo = "\u{27A0}"
 
+    /// What stands above a cap, which counts for nothing until the cap itself is raised: "↑7%".
+    static func overCap(_ value: Double) -> String {
+        "\u{2191}\(Int(value.rounded()))%"
+    }
+
     /// What one line's figures read as: a damage range where the record writes a pair, the flat and
     /// percentage variants joined where it writes both, and a lone figure otherwise.
     static func figures(_ parts: [(definition: StatDefinition, value: Double)]) -> String {
@@ -219,7 +224,7 @@ struct StatRow: View {
     }
 }
 
-/// A horizontal meter, used for resistances and mastery progress.
+/// A horizontal meter, for how far a standing has come through its tier.
 struct MeterBar: View {
     let value: Double
     let maximum: Double

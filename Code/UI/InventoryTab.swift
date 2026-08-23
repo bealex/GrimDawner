@@ -3,7 +3,7 @@
 import GrimDawnerEngine
 import SwiftUI
 
-/// The equipment doll, laid out on the game's own character panel, with both weapon sets.
+/// The equipment doll, laid out on the game's own character panel, with the sheet beside it.
 struct InventoryTab: View {
     let character: ResolvedCharacter
     let search: QuickSearch
@@ -20,27 +20,29 @@ struct InventoryTab: View {
             // The doll sits in the middle of the space it is given, and only scrolls when it outgrows it.
             GeometryReader { proxy in
                 ScrollView {
-                    VStack(spacing: 14) {
+                    VStack {
                         if let doll = character.doll {
                             DollView(
                                 doll: doll,
                                 character: character,
                                 weaponSet: shownWeaponSet,
                                 search: search,
-                                selection: $selection
+                                selection: $selection,
+                                swapWeaponSet: swapWeaponSet
                             )
                         }
-                        weaponSetPicker
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .center)
                 }
             }
         } detail: {
+            // The sheet is what the sidebar reads until a piece of gear is picked, and what the
+            // character in the middle of the doll goes back to.
             if let selection {
                 ItemDetailView(item: selection, wearer: character.skillContext, revealSkill: revealSkill)
             } else {
-                DetailPlaceholder(title: "No item selected", hint: "Pick a piece of gear to see everything it carries.")
+                CharacterSheetPanel(character: character)
             }
         }
     }
@@ -52,16 +54,14 @@ struct InventoryTab: View {
         return character.weaponSets.first { $0.index == index }
     }
 
-    private var weaponSetPicker: some View {
-        Picker("Weapon set", selection: Binding(get: { shownWeaponSet?.index ?? 0 }, set: { weaponSet = $0 })) {
-            ForEach(character.weaponSets) { set in
-                Text(set.isActive ? "\(set.title) (in hand)" : set.title).tag(set.index)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .frame(maxWidth: 360)
-        .accessibilityLabel("Weapon set shown on the doll")
+    private func swapWeaponSet() {
+        let sets = character.weaponSets
+        guard
+            let shown = shownWeaponSet,
+            let position = sets.firstIndex(where: { $0.index == shown.index })
+        else { return }
+
+        weaponSet = sets[(position + 1) % sets.count].index
     }
 }
 
@@ -73,14 +73,14 @@ private struct DollView: View {
     let search: QuickSearch
     @Binding
     var selection: ResolvedItem?
-    /// Opens one of the character's own skills on its mastery panel.
-    var revealSkill: ((String) -> Void)?
+    let swapWeaponSet: () -> Void
 
     var body: some View {
         // The doll's boxes are small next to the skill panel's, so it is given a quarter more room.
         ScaledCanvas(size: doll.canvas, maximumScale: 1.25) {
             ZStack(alignment: .topLeading) {
-                GameArtwork(path: doll.background, size: doll.canvas)
+                background
+                portrait
 
                 ForEach(doll.slots) { slot in
                     let item = item(in: slot)
@@ -93,8 +93,36 @@ private struct DollView: View {
                     )
                     .position(x: slot.frame.midX, y: slot.frame.midY)
                 }
+
+                if let button = doll.weaponSwap, character.weaponSets.count > 1, let weaponSet {
+                    WeaponSwapButton(button: button, set: weaponSet, swap: swapWeaponSet)
+                        .offset(x: button.origin.x, y: button.origin.y)
+                }
             }
         }
+    }
+
+    private var background: some View {
+        ZStack(alignment: .topLeading) {
+            GameArtwork(path: doll.background, size: doll.panel)
+            // The artwork draws the panel's frame down its left edge only, since the inventory bag sits
+            // against its right one. Mirroring that strip closes the panel.
+            GameArtwork(path: doll.background, size: CGSize(width: doll.frame, height: doll.panel.height))
+                .scaleEffect(x: -1, y: 1)
+                .offset(x: doll.panel.width)
+        }
+    }
+
+    private var portrait: some View {
+        Button(action: { selection = nil }) {
+            PortraitView(backdrop: doll.portraitBackground, size: doll.portrait.size, isSelected: selection == nil)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .pointerStyle(.link)
+        .help("\(character.name) — show the character's own stats")
+        .accessibilityLabel("\(character.name): shows the character's stats")
+        .offset(x: doll.portrait.minX, y: doll.portrait.minY)
     }
 
     private func item(in slot: DollSlot) -> ResolvedItem? {
@@ -112,6 +140,76 @@ private struct DollView: View {
             [ item.displayName, item.rarity.title ] + item.stats.titles
                 + item.parts.map(\.name) + item.grantedSkills.map(\.name)
         )
+    }
+}
+
+/// A character standing where the game renders its 3D model, over the backdrop the game renders it
+/// against.
+private struct PortraitView: View {
+    let backdrop: String
+    let size: CGSize
+    /// Ringed while the sidebar is reading the character rather than a piece of gear.
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            GameArtwork(path: backdrop, size: size)
+            Image("CharacterModel")
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fill)
+                .frame(width: size.width, height: size.height)
+        }
+        .frame(width: size.width, height: size.height)
+        .clipped()
+        .overlay(
+            Rectangle()
+                .stroke(isSelected ? Theme.accent : .clear, lineWidth: 2)
+        )
+        .accessibilityHidden(true)
+    }
+}
+
+/// The game's own weapon-swap button, in the black space the window keeps it in.
+private struct WeaponSwapButton: View {
+    let button: EquipmentDoll.Button
+    let set: WeaponSet
+    let swap: () -> Void
+
+    @State
+    private var isHovered = false
+
+    var body: some View {
+        Button(action: swap) {
+            GameBitmap(path: isHovered ? button.over : button.up)
+                .overlay(alignment: .bottomTrailing) {
+                    Text(set.index == 0 ? "I" : "II")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 2)
+                        .background(.black.opacity(0.75), in: .rect(cornerRadius: 3))
+                        .padding(2)
+                }
+        }
+        .buttonStyle(PressedArtworkStyle(pressed: button.down))
+        .onHover { isHovered = $0 }
+        .help("\(button.title) — \(set.title)\(set.isActive ? " (in hand)" : "")\n\(button.hint)")
+        .accessibilityLabel("\(button.title), showing \(set.title)")
+    }
+}
+
+/// A button drawn as artwork, which swaps in the game's pressed image while it is held down.
+private struct PressedArtworkStyle: ButtonStyle {
+    let pressed: String
+
+    func makeBody(configuration: Configuration) -> some View {
+        ZStack {
+            configuration.label.opacity(configuration.isPressed ? 0 : 1)
+            if configuration.isPressed {
+                GameBitmap(path: pressed)
+            }
+        }
+        .contentShape(.rect)
     }
 }
 

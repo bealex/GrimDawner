@@ -9,7 +9,11 @@ first keystroke rather than from a field in the toolbar. The app runs dark whate
 since every panel it draws is the game's own artwork.
 
 Panels are drawn at the game's own pixel coordinates from its UI records — the equipment doll, both
-mastery trees, the devotion sky — and are never scaled up, only shrunk to fit a narrow window.
+mastery trees, the devotion sky — and are never scaled up, only shrunk to fit a narrow window. The
+equipment panel carries the game's own weapon-swap button where the game puts it, and a character in the
+box the game renders its model in. Clicking that character — which is also what the tab opens on — reads
+the sheet into the sidebar: the attributes, the pools, the combat stats and the resistance grid, with
+Armor Rating opening the same region-by-region account the game's popup gives.
 [GameData.md](GameData.md#window-layouts) says which record holds what.
 
 ## The stat engine
@@ -31,12 +35,18 @@ each figure as the tooltip does. [GameData.md](GameData.md#the-item-randomiser) 
 - Armor Rating region by region — 1508, 1550, 1710, 1456, 2035, 1456 — the rating they weigh into, and
   armour absorption;
 - every damage modifier, cooldown reduction, skill energy cost, constitution, healing, dodge, deflect;
+- the game's Physical panel line for line: physical and pierce modifiers, bleeding and internal trauma
+  with the total-damage bonus folded in, and life steal;
 - attack speed, run speed and attacks per second, which read as results rather than bonuses;
 - every figure of the Pet Bonuses panel, the rolled resistances included;
 - every rolled figure on the items checked against their tooltips, bands included.
 
 `StatCatalog` is the whitelist of `.dbr` fields the app understands. A stat absent from it is read from no
 record and shown nowhere; adding one means adding its definition.
+
+Clicking a figure opens what feeds it — every item, component, skill, set, constellation and the
+difficulty's own penalty. The blanket bonuses are in that list under the stat they lift, which is the only
+way a fire resistance of 126 reads as −50 from Ultimate and +176 elemental rather than as a bare −50.
 
 ## What the game shows and the app does not
 
@@ -69,6 +79,11 @@ are covered by `QuickSearchTests`.
 Blocking reads zero on the character it was checked against, which wears no shield, so those three rows
 are structurally right and numerically untested. Pet stats have no reference either.
 
+**Two blanket-bonus rules are inferred**, both in `StatComposition`: flat elemental damage counts as that
+much of each of fire, cold and lightning, and the elemental percentage does not reach an elemental damage
+over time. The game's Fire panel settles the second — Burn should read +446% rather than +599% for the
+character checked here.
+
 **Whether Nemesis is the right tier around −12000.** The band runs from the floor at −20000 up to −8000,
 which follows from reading `factionValueN` as lower bounds — consistent with 25000 being both the Revered
 threshold and the cap. If the game shows *Hated* there instead, the boundaries are upper bounds and
@@ -78,8 +93,8 @@ threshold and the cap. If the game shows *Hated* there instead, the boundaries a
 
 - `elementalinfusion1` has modifiers but no `skillConnectionOn` list, so its branch is not drawn.
 - Two factions point at `faction_user3.tex`, which the game ships as a blank white placeholder.
-- The doll's centre box is empty. The game renders the character's 3D model there; the record behind it is
-  a scene view, not a texture.
+- The doll's centre box shows the character's class artwork. The game renders its 3D model there, which
+  the app has no way to pose, so the mastery the most points went into stands in for it.
 
 ## The catalogues
 
@@ -129,7 +144,8 @@ with the pet's unnamed adjuster skills folded in, as the game folds them — how
 (`spawnObjectsTimeToLive`), how many stand at once (`petLimit`), and its named abilities at the ranks the
 pet record gives them. A pet's own abilities are read without summons of their own, so nothing recurses.
 A skill's sidebar also names every item, set and mastery bonus that lifts its rank, `+N` each, beside the
-total the sheet counts.
+total the sheet counts. A line naming a worn piece opens it on the doll; a set bonus is no single item's,
+so it stays a line.
 
 Artwork that recedes is darkened rather than faded: a skill button turned transparent shows the connectors
 the panel draws beneath it, so the search's dimming and the unlearned-skill dimming both multiply the

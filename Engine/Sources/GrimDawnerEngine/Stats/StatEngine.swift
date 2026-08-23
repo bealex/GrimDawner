@@ -26,10 +26,13 @@ public struct CharacterSheet: Sendable {
     /// Where a resistance stops counting, absent anything that raises it.
     public static let resistanceCap: Double = 80
     public var armorAbsorption: Double = 0
-    /// Armour on each hit region, as the game's character window lists it.
+    /// Armour on each hit region, as the game's own popup lists it: the piece worn there plus the
+    /// armour every region shares, raised by the percentage bonus.
     public var armorBySlot: [EquipmentSlot: Double] = [:]
-    /// Armour from belts, jewellery and skills, which the game adds to every region.
+    /// The share of that which comes from belts, jewellery and skills rather than from the piece.
     public var armorFromOtherSources: Double = 0
+    /// How often each region is the one struck, as the percentages the game's own popup prints.
+    public var armorHitChance: [EquipmentSlot: Double] = [:]
 
     /// Resistance percentages, already including the elemental and all-resistance blanket bonuses.
     public var resistances: [ResistanceKind: Double] = [:]
@@ -208,17 +211,21 @@ public struct StatEngine {
         constants: Constants,
         bodyArmor: [EquipmentSlot: Double]
     ) {
-        sheet.armorBySlot = bodyArmor
+        let bonus = contributions.value("defensiveProtectionModifier")
         // What is left once the hit regions have taken their own: armour from belts, jewellery and
         // skills, which the game's help text says lands on every region.
-        sheet.armorFromOtherSources =
+        let shared =
             contributions.value("defensiveProtection")
             + contributions.value("defensiveBonusProtection")
             - bodyArmor.values.reduce(0, +)
-        sheet.armor = scaled(
-            armorRating(bodyArmor: bodyArmor, global: sheet.armorFromOtherSources),
-            percent: contributions.value("defensiveProtectionModifier")
-        )
+        sheet.armorHitChance = hitChances()
+        sheet.armorFromOtherSources = scaled(shared, percent: bonus)
+        // Each region reads as the window prints it: the piece worn there, the shared armour, and the
+        // percentage bonus over both.
+        sheet.armorBySlot = Dictionary(uniqueKeysWithValues: sheet.armorHitChance.keys.map {
+            ($0, scaled((bodyArmor[$0] ?? 0) + shared, percent: bonus))
+        })
+        sheet.armor = scaled(armorRating(bodyArmor: bodyArmor, global: shared), percent: bonus)
         // "Increases Armor Absorption by X%" scales the base share, and no share can exceed the whole hit.
         sheet.armorAbsorption = min(
             100,
@@ -227,9 +234,9 @@ public struct StatEngine {
         sheet.resistances = resistances(contributions)
         sheet.maxResistances = maxResistances(contributions)
         sheet.damageModifiers = damageModifiers(contributions)
-        sheet.flatDamage = Dictionary(
-            uniqueKeysWithValues: DamageType.allCases.map { ($0, contributions.value($0.minimumKey)) }
-        )
+        sheet.flatDamage = Dictionary(uniqueKeysWithValues: DamageType.allCases.map {
+            ($0, StatComposition.total(feeding: $0.minimumKey, in: contributions))
+        })
     }
 
     /// The game's Armor Rating: each hit region contributes in proportion to how often it is struck.
@@ -237,21 +244,30 @@ public struct StatEngine {
     /// Its own help text puts it plainly — "Bonuses on skills and on non-armor pieces are added to all
     /// armor slots" — so global armour lands in every region and survives the weighting intact.
     private func armorRating(bodyArmor: [EquipmentSlot: Double], global: Double) -> Double {
+        let chances = hitChances()
+        let total = chances.values.reduce(0, +)
+
+        guard total > 0 else { return bodyArmor.values.reduce(0, +) + global }
+
+        let weighted = chances.reduce(0) { $0 + $1.value * (bodyArmor[$1.key] ?? 0) }
+        return weighted / total + global
+    }
+
+    /// How often each hit region is the one struck, normalised to percentages.
+    private func hitChances() -> [EquipmentSlot: Double] {
         let formulas = database.record(Self.combatFormulasPath)
-        var weighted: Double = 0
-        var totalChance: Double = 0
+        var chances = [EquipmentSlot: Double]()
 
         for slot in EquipmentSlot.allCases {
             guard let key = slot.hitRegionChanceKey else { continue }
 
-            let chance = formulas?.number(key) ?? 0
-            totalChance += chance
-            weighted += chance * (bodyArmor[slot] ?? 0)
+            chances[slot] = formulas?.number(key) ?? 0
         }
 
-        guard totalChance > 0 else { return bodyArmor.values.reduce(0, +) + global }
+        let total = chances.values.reduce(0, +)
+        guard total > 0 else { return chances }
 
-        return weighted / totalChance + global
+        return chances.mapValues { $0 * 100 / total }
     }
 
     /// The speeds the game prints: a hundred plus every bonus, the weapon's own rate folded in, and the
@@ -330,27 +346,15 @@ public struct StatEngine {
     }
 
     private func resistances(_ stats: StatBlock) -> [ResistanceKind: Double] {
-        let elemental = stats.value("defensiveElementalResistance")
-        let everyKind = stats.value("defensiveAllResistance")
-
-        var values = [ResistanceKind: Double]()
-        for kind in ResistanceKind.allCases {
-            var amount = stats.value(kind.resistanceKey)
-            if kind.takesAllResistanceBonus { amount += everyKind }
-            if kind.isElemental { amount += elemental }
-            values[kind] = amount
-        }
-        return values
+        Dictionary(uniqueKeysWithValues: ResistanceKind.allCases.map {
+            ($0, StatComposition.total(feeding: $0.resistanceKey, in: stats))
+        })
     }
 
     private func maxResistances(_ stats: StatBlock) -> [ResistanceKind: Double] {
-        let everyKind = stats.value("defensiveAllMaxResist")
-
-        var values = [ResistanceKind: Double]()
-        for kind in ResistanceKind.allCases {
-            values[kind] = Self.baseResistanceCap + everyKind + stats.value(kind.maximumKey)
-        }
-        return values
+        Dictionary(uniqueKeysWithValues: ResistanceKind.allCases.map {
+            ($0, Self.baseResistanceCap + StatComposition.total(feeding: $0.maximumKey, in: stats))
+        })
     }
 
     /// Percentage damage bonuses as the character window reports them.
@@ -358,17 +362,10 @@ public struct StatEngine {
     /// The game states that this figure excludes the bonus attributes give — Cunning to physical and
     /// pierce, Spirit to the magical types — so that scaling is deliberately left out here too.
     private func damageModifiers(_ stats: StatBlock) -> [DamageType: Double] {
-        let total = stats.value("offensiveTotalDamageModifier")
-        let elemental = stats.value("offensiveElementalModifier")
-
-        var values = [DamageType: Double]()
-        for type in DamageType.allCases where type != .elemental {
-            var percent = stats.value(type.modifierKey) + total
-            if type == .fire || type == .cold || type == .lightning { percent += elemental }
-
-            values[type] = percent
-        }
-        return values
+        Dictionary(
+            uniqueKeysWithValues: DamageType.allCases.filter { $0 != .elemental }
+                .map { ($0, StatComposition.total(feeding: $0.modifierKey, in: stats)) }
+        )
     }
 
     /// Every resistance caps at 80% before gear raises the cap.

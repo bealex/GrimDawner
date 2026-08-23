@@ -100,7 +100,9 @@ struct ParametersTab: View {
     }
 
     private var offenceCard: some View {
-        card(title: "Offence", titles: Self.offenceTitles) {
+        let stats = sheet.contributions
+
+        return card(title: "Offence", titles: Self.offenceTitles) {
             VStack(spacing: 6) {
                 row(
                     "Offensive Ability",
@@ -133,13 +135,41 @@ struct ParametersTab: View {
                     key: "skillCooldownReduction",
                     icon: "timer"
                 )
+                row(
+                    "All Damage",
+                    "+\(whole(stats.value("offensiveTotalDamageModifier")))%",
+                    key: "offensiveTotalDamageModifier",
+                    icon: "bolt.horizontal"
+                )
+                row(
+                    "Life Steal",
+                    percent(stats.value("offensiveLifeLeechMin")),
+                    key: "offensiveLifeLeechMin",
+                    icon: "drop.fill"
+                )
+                if stats.value("racialBonusPercentDamage") != 0 {
+                    row(
+                        "Damage to Race",
+                        "+\(whole(stats.value("racialBonusPercentDamage")))%",
+                        key: "racialBonusPercentDamage",
+                        icon: "pawprint"
+                    )
+                }
+                if stats.value("racialBonusPercentDefense") != 0 {
+                    row(
+                        "Reduced Damage from Race",
+                        "\(whole(stats.value("racialBonusPercentDefense")))%",
+                        key: "racialBonusPercentDefense",
+                        icon: "pawprint"
+                    )
+                }
             }
         }
     }
 
     private static let offenceTitles = [
         "Offensive Ability", "Crit Damage", "Attack Speed", "Casting Speed", "Movement Speed",
-        "Cooldown Reduction",
+        "Cooldown Reduction", "All Damage", "Life Steal", "Damage to Race", "Reduced Damage from Race",
     ]
 
     private var defenceCard: some View {
@@ -180,13 +210,38 @@ struct ParametersTab: View {
                     key: "defensiveBlockChance",
                     icon: "shield"
                 )
+                row(
+                    "Damage Absorption",
+                    percent(sheet.contributions.value("damageAbsorptionPercent")),
+                    key: "damageAbsorptionPercent",
+                    icon: "shield.lefthalf.filled"
+                )
+                row(
+                    "Energy Absorption",
+                    percent(sheet.contributions.value("characterEnergyAbsorptionPercent")),
+                    key: "characterEnergyAbsorptionPercent",
+                    icon: "bolt.shield"
+                )
+                row(
+                    "Healing Increased",
+                    percent(sheet.contributions.value("characterHealIncreasePercent")),
+                    key: "characterHealIncreasePercent",
+                    icon: "cross.case"
+                )
+                row(
+                    "Constitution",
+                    percent(sheet.contributions.value("characterConstitutionModifier")),
+                    key: "characterConstitutionModifier",
+                    icon: "heart.text.square"
+                )
             }
         }
     }
 
     private static let defenceTitles = [
         "Health", "Energy", "Health Regenerated", "Energy Regenerated", "Armor Rating", "Armor Absorption",
-        "Defensive Ability", "Chance to Block",
+        "Defensive Ability", "Chance to Block", "Damage Absorption", "Energy Absorption",
+        "Healing Increased", "Constitution",
     ]
 
     /// The game reports armour per hit region, so this mirrors that rather than a single number.
@@ -198,13 +253,13 @@ struct ParametersTab: View {
                 ForEach(slots, id: \.self) { slot in
                     row(
                         slot.title,
-                        whole(sheet.armorBySlot[slot] ?? 0),
-                        valueColor: (sheet.armorBySlot[slot] ?? 0) > 0 ? .primary : .secondary
+                        whole((sheet.armorBySlot[slot] ?? 0).rounded()),
+                        detail: "\(whole(sheet.armorHitChance[slot] ?? 0))% of hits"
                     )
                 }
                 if sheet.armorFromOtherSources != 0 {
                     Divider().padding(.vertical, 2)
-                    row("Added to every slot", whole(sheet.armorFromOtherSources), icon: "plus.circle")
+                    row("Shared by every region", whole(sheet.armorFromOtherSources.rounded()), icon: "plus.circle")
                 }
             }
         }
@@ -225,26 +280,24 @@ struct ParametersTab: View {
         let maximum = sheet.maxResistances[kind] ?? 80
 
         return Button(action: { selection = .stat(title: kind.title, key: kind.resistanceKey) }) {
-            VStack(spacing: 3) {
-                HStack(spacing: 6) {
-                    if let icon = damageIcons[Theme.damageToken(forStatKey: kind.resistanceKey) ?? ""] {
-                        GameIcon(path: icon, size: 15, fallbackSymbol: "circle.fill")
-                    }
-                    Text(kind.title)
-                        .foregroundStyle(kind.color)
-                    Text("\(whole(min(value, maximum)))%")
-                        .monospacedDigit()
-                        .foregroundStyle(value < 0 ? .red : .primary)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                    if value > maximum {
-                        Text("over \(whole(value - maximum))%")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+            HStack(spacing: 6) {
+                if let icon = damageIcons[Theme.damageToken(forStatKey: kind.resistanceKey) ?? ""] {
+                    GameIcon(path: icon, size: 15, fallbackSymbol: "circle.fill")
                 }
-                .font(.callout)
-                MeterBar(value: max(value, 0), maximum: maximum, tint: kind.color)
+                Text(kind.title)
+                    .foregroundStyle(kind.color)
+                Text("\(whole(min(value, maximum)))%")
+                    .monospacedDigit()
+                    .foregroundStyle(value < 0 ? .red : .primary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                if value > maximum {
+                    Text(Theme.overCap(value - maximum))
+                        .font(.caption2)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
             }
+            .font(.callout)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -259,6 +312,10 @@ struct ParametersTab: View {
         let rows: [(String, String, String)] = [
             ("Chance to Block", "defensiveBlockChance", percent(stats.value("defensiveBlockChance"))),
             ("Damage Blocked", "defensiveBlock", whole(stats.value("defensiveBlock"))),
+            (
+                "Shield Damage Blocked", "defensiveBlockAmountModifier",
+                percent(stats.value("defensiveBlockAmountModifier"))
+            ),
             (
                 "Block Recovery", "characterDefensiveBlockRecoveryReduction",
                 percent(stats.value("characterDefensiveBlockRecoveryReduction"))
@@ -328,7 +385,7 @@ struct ParametersTab: View {
                         definition.unit.format(value, signed: false),
                         key: definition.key,
                         valueColor: value > 0 ? .primary : .secondary,
-                        detail: raw > value ? "over \(whole(raw - value))%" : nil
+                        detail: raw > value ? Theme.overCap(raw - value) : nil
                     )
                 }
             }
@@ -344,9 +401,13 @@ struct ParametersTab: View {
                 ForEach(types, id: \.self) { type in
                     Button(action: { selection = .stat(title: type.title, key: type.modifierKey) }) {
                         HStack(spacing: 8) {
-                            Circle()
-                                .fill(type.color)
-                                .frame(width: 8, height: 8)
+                            if let icon = damageIcons[Theme.damageToken(forStatKey: type.modifierKey) ?? ""] {
+                                GameIcon(path: icon, size: 15, fallbackSymbol: "circle.fill")
+                            } else {
+                                Circle()
+                                    .fill(type.color)
+                                    .frame(width: 8, height: 8)
+                            }
                             Text(type.title)
                                 .foregroundStyle(type.color)
                             Text(Self.damageText(
@@ -370,7 +431,10 @@ struct ParametersTab: View {
 
     /// Groups the character sheet has no card of its own for: damage over time, retaliation, utility.
     private var extraGroups: [(group: StatGroup, lines: [(definition: StatDefinition, value: Double)])] {
-        sheet.contributions.catalogued().filter { Self.extraGroupKinds.contains($0.group) }
+        StatGroup.allCases
+            .filter { Self.extraGroupKinds.contains($0) }
+            .map { (group: $0, lines: sheet.contributions.sheetLines(of: $0)) }
+            .filter { !$0.lines.isEmpty }
     }
 
     private static let extraGroupKinds: Set<StatGroup> = [ .damageOverTime, .retaliation, .utility ]
@@ -542,19 +606,28 @@ struct ParametersTab: View {
         accent: Theme.Accent? = nil,
         detail: String? = nil
     ) -> some View {
-        Button(action: { selection = key.map { .stat(title: title, key: $0) } }) {
-            StatRow(
-                title: title,
-                value: value,
-                valueColor: valueColor,
-                accents: [ accent ].compactMap { $0 },
-                icon: icon,
-                range: detail
-            )
-            .contentShape(.rect)
+        let content = StatRow(
+            title: title,
+            value: value,
+            valueColor: valueColor,
+            accents: [ accent ].compactMap { $0 },
+            icon: icon,
+            range: detail
+        )
+
+        // A line with no stat behind it is a line, not a dead button: disabling one would fade every
+        // figure the character card, the armour breakdown and the pet panel print.
+        return Group {
+            if let key {
+                Button(action: { selection = .stat(title: title, key: key) }) {
+                    content
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+            } else {
+                content
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(key == nil)
     }
 
     private func attributeRow(_ title: String, _ attribute: CharacterSheet.Attribute, key: String) -> some View {

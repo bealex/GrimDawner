@@ -36,10 +36,30 @@ public struct DollSlot: Identifiable, Sendable {
 
 /// The equipment doll, arranged as the game's character window arranges it.
 public struct EquipmentDoll: Sendable {
+    /// A button the window draws at a position of its own, in each of the three states it is drawn in.
+    public struct Button: Sendable {
+        public let origin: CGPoint
+        public let up: String
+        public let over: String
+        public let down: String
+        public let title: String
+        public let hint: String
+    }
+
     public let slots: [DollSlot]
-    /// The character window's artwork. The doll occupies its top-left corner, which `canvas` measures.
+    /// The character window's artwork. The doll occupies its top-left corner, `panel` wide and tall.
     public let background: String
-    public let canvas: CGSize
+    public let panel: CGSize
+    /// The frame strip the artwork carries only down its left edge, mirrored onto the right to close
+    /// the panel: the inventory bag abuts it there, so the texture never draws that side.
+    public let frame: CGFloat
+    /// Where the game renders the character's 3D model, and the backdrop it renders it against.
+    public let portrait: CGRect
+    public let portraitBackground: String
+    /// The window's own weapon-set button, absent only when its record cannot be read.
+    public let weaponSwap: Button?
+
+    public var canvas: CGSize { CGSize(width: panel.width + frame, height: panel.height) }
 
     public func slot(_ kind: DollSlot.Kind) -> DollSlot? { slots.first { $0.kind == kind } }
 }
@@ -130,6 +150,10 @@ public struct LayoutResolver {
         ("equipHandLeft", .offHand),
     ]
 
+    /// Where the equipment panel's artwork ends. No record states it: the texture holds the whole
+    /// character window in one image, and only its bottom border is a line rather than a boundary.
+    private static let dollHeight: CGFloat = 428
+
     public func equipmentDoll() -> EquipmentDoll? {
         guard let table = database.record(Self.characterWindowPath) else { return nil }
 
@@ -151,12 +175,40 @@ public struct LayoutResolver {
 
         guard let first = slots.first else { return nil }
 
+        // The frame down the left edge is what the boxes leave clear of it, and the panel ends the same
+        // distance past the last box as the first box sits past the frame.
         let bounds = slots.dropFirst().reduce(first.frame) { $0.union($1.frame) }
+        let view = database.record(table.text("characterView"))
         return EquipmentDoll(
             slots: slots,
-            background: database.bitmap(inRecordAt: table.text("characterDisplayBitmap")),
-            // The panel repeats its top and left insets as its bottom and right margins.
-            canvas: CGSize(width: bounds.maxX + bounds.minX, height: bounds.maxY + bounds.minY)
+            // The inspect window's artwork rather than the character window's: it is the same panel,
+            // drawn with the bottom border the character window replaces with its gold display.
+            background: database.bitmap(inRecordAt: table.text("characterDisplayInspectBitmap")),
+            panel: CGSize(width: bounds.maxX + 1, height: Self.dollHeight),
+            frame: bounds.minX - 1,
+            portrait: CGRect(
+                x: view?.number("x") ?? 0,
+                y: view?.number("y") ?? 0,
+                width: view?.number("xSize") ?? 0,
+                height: view?.number("ySize") ?? 0
+            ),
+            portraitBackground: view?.text("backgroundTexture") ?? "",
+            weaponSwap: button(at: table.text("equipSwap1LeftButton"), rollover: table.text("equipSwapButtonRollover"))
+        )
+    }
+
+    /// One of the window's buttons, with the two lines its rollover box prints.
+    private func button(at path: String, rollover: String) -> EquipmentDoll.Button? {
+        guard let record = database.record(path) else { return nil }
+
+        let lines = database.record(rollover)
+        return EquipmentDoll.Button(
+            origin: CGPoint(x: record.number("bitmapPositionX"), y: record.number("bitmapPositionY")),
+            up: record.text("bitmapNameUp"),
+            over: record.text("bitmapNameInFocus"),
+            down: record.text("bitmapNameDown"),
+            title: database.text(lines?.text("Line1Tag") ?? ""),
+            hint: database.text(lines?.text("Line2Tag") ?? "")
         )
     }
 

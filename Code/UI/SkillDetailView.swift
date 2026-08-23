@@ -12,6 +12,8 @@ struct SkillDetailView: View {
     var modifications: [SkillModification] = []
     /// What lifts this skill's rank, one entry per item or set that does.
     var rankSources: [SkillRankSource] = []
+    /// Opens a piece of gear on the doll, for the lines that name one.
+    var revealItem: ((ResolvedItem) -> Void)?
 
     @Environment(\.quickSearch)
     private var search
@@ -22,6 +24,45 @@ struct SkillDetailView: View {
             case .skill: "\(source.name) names this skill"
             case .mastery: "\(source.name) lifts every skill of the mastery"
             case .everySkill: "\(source.name) lifts every skill"
+        }
+    }
+
+    /// One line of what lifts the rank. A line about a worn piece opens it on the doll; a set bonus is
+    /// nobody's single item, so it is a line and nothing more.
+    private func rankSourceRow(_ source: SkillRankSource) -> some View {
+        let row = HStack(spacing: 6) {
+            if !source.iconPath.isEmpty {
+                GameIcon(path: source.iconPath, size: 16, fallbackSymbol: "shippingbox")
+            }
+            StatRow(
+                title: source.name,
+                value: "+\(source.levels)",
+                valueColor: .green,
+                icon: source.iconPath.isEmpty ? "circle.hexagongrid" : nil
+            )
+        }
+
+        return reference(to: source.item, help: Self.reachText(source)) { row }
+    }
+
+    /// Wraps a view in a link to a piece of gear, leaving it alone where there is nothing to open.
+    @ViewBuilder
+    private func reference(
+        to item: ResolvedItem?,
+        help: String? = nil,
+        @ViewBuilder content: () -> some View
+    ) -> some View {
+        if let item, let revealItem {
+            Button(action: { revealItem(item) }) {
+                content()
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .pointerStyle(.link)
+            .help([ help, "Show \(item.displayName) on the doll" ].compactMap { $0 }.joined(separator: "\n"))
+        } else {
+            content()
+                .help(help ?? "")
         }
     }
 
@@ -50,19 +91,8 @@ struct SkillDetailView: View {
                         valueColor: skill.itemBonus > 0 ? .green : .secondary
                     )
                     ForEach(rankSources) { source in
-                        HStack(spacing: 6) {
-                            if !source.iconPath.isEmpty {
-                                GameIcon(path: source.iconPath, size: 16, fallbackSymbol: "shippingbox")
-                            }
-                            StatRow(
-                                title: source.name,
-                                value: "+\(source.levels)",
-                                valueColor: .green,
-                                icon: source.iconPath.isEmpty ? "circle.hexagongrid" : nil
-                            )
-                        }
-                        .padding(.leading, 12)
-                        .help(Self.reachText(source))
+                        rankSourceRow(source)
+                            .padding(.leading, 12)
                     }
 
                     Divider().padding(.vertical, 2)
@@ -95,7 +125,7 @@ struct SkillDetailView: View {
             ForEach(modifications) { change in
                 SectionCard(title: change.itemName, subtitle: "changes this skill") {
                     HStack(alignment: .top, spacing: 10) {
-                        if !change.iconPath.isEmpty {
+                        reference(to: change.item) {
                             GameIcon(path: change.iconPath, size: 30, fallbackSymbol: "shippingbox")
                         }
                         SkillChangesView(changes: change.changes)

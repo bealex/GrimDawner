@@ -81,11 +81,9 @@ public struct CharacterBuilder {
             for granted in item.grantedSkills where granted.kind == .enhanced {
                 guard let modifications = granted.modifications, !modifications.isEmpty else { continue }
 
-                changes[granted.recordPath.lowercased(), default: []].append(SkillModification(
-                    itemName: item.displayName,
-                    iconPath: item.iconPath,
-                    changes: modifications
-                ))
+                changes[granted.recordPath.lowercased(), default: []].append(
+                    SkillModification(item: item, changes: modifications)
+                )
             }
         }
         return changes
@@ -115,14 +113,15 @@ public struct CharacterBuilder {
     {
         var sources = [SkillRankSource]()
 
-        func collect(_ stats: StatBlock, name: String, iconPath: String) {
+        func collect(_ stats: StatBlock, name: String, iconPath: String, item: ResolvedItem?) {
             for (path, levels) in stats.skillBonuses where levels != 0 {
                 sources.append(SkillRankSource(
                     name: name,
                     iconPath: iconPath,
                     levels: levels,
                     reach: .skill,
-                    path: path
+                    path: path,
+                    item: item
                 ))
             }
             for (path, levels) in stats.masteryBonuses where levels != 0 {
@@ -131,7 +130,8 @@ public struct CharacterBuilder {
                     iconPath: iconPath,
                     levels: levels,
                     reach: .mastery,
-                    path: path
+                    path: path,
+                    item: item
                 ))
             }
             if stats.allSkillBonus != 0 {
@@ -140,13 +140,16 @@ public struct CharacterBuilder {
                     iconPath: iconPath,
                     levels: stats.allSkillBonus,
                     reach: .everySkill,
-                    path: ""
+                    path: "",
+                    item: item
                 ))
             }
         }
 
-        for item in items { collect(item.stats, name: item.displayName, iconPath: item.iconPath) }
-        for set in sets { collect(set.bonuses, name: set.name, iconPath: "") }
+        for item in items {
+            collect(item.stats, name: item.displayName, iconPath: item.iconPath, item: item)
+        }
+        for set in sets { collect(set.bonuses, name: set.name, iconPath: "", item: nil) }
         return sources
     }
 

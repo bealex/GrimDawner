@@ -100,6 +100,17 @@ public struct StatBlock: Sendable {
     }
 
     /// The stats the catalogue knows about, grouped and ordered for display.
+    /// The catalogued figures of one group as the character window prints them: the blanket bonuses
+    /// folded in, so Internal Trauma carries the total-damage bonus even where nothing rolled Internal
+    /// Trauma itself.
+    public func sheetLines(of group: StatGroup) -> [(definition: StatDefinition, value: Double)] {
+        StatCatalog.everyStat
+            .filter { $0.group == group }
+            .map { (definition: $0, value: StatComposition.total(feeding: $0.key, in: self)) }
+            .filter { $0.value != 0 }
+            .sorted { $0.definition.order < $1.definition.order }
+    }
+
     public func catalogued() -> [(group: StatGroup, lines: [(definition: StatDefinition, value: Double)])] {
         var grouped = [StatGroup: [(StatDefinition, Double)]]()
 
