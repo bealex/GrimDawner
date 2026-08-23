@@ -152,6 +152,15 @@ private struct Connectors: View {
     }
 }
 
+/// A pressed skill darkens like an unlearned one. The plain style fades it instead, and a faded button
+/// shows the connectors the panel draws behind it.
+private struct SkillPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .colorMultiply(configuration.isPressed ? Color(white: 0.55) : .white)
+    }
+}
+
 /// One skill on the panel: its button, its icon, and the rank printed beneath it.
 private struct SkillButton: View {
     let skill: ResolvedSkill
@@ -189,7 +198,7 @@ private struct SkillButton: View {
             .overlay { rank.position(panel.rankOffset) }
             .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SkillPressStyle())
         .scaleEffect(isHovered ? 1.08 : 1)
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .onHover { isHovered = $0 }

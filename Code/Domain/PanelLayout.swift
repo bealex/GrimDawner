@@ -76,6 +76,40 @@ struct LayoutResolver {
     private static let panelBasePath = "records/ui/skills/classcommon/skills_classpanelconfiguration.dbr"
     private static let gameEnginePath = "records/game/gameengine.dbr"
 
+    /// The character window's own mark for each resistance, by the field that names it. The window
+    /// draws them beside the numbers; the field name is what says which resistance a mark belongs to.
+    private static let resistanceMarks: [(field: String, kind: ResistanceKind)] = [
+        ("tab1FireResistanceBitmap", .fire),
+        ("tab1IceResistanceBitmap", .cold),
+        ("tab1LightningResistanceBitmap", .lightning),
+        ("tab1PoisonResistanceBitmap", .acid),
+        ("tab1PiercingResistanceBitmap", .pierce),
+        ("tab1BleedingResistanceBitmap", .bleeding),
+        ("tab1LifeResistanceBitmap", .vitality),
+        ("tab1SpiritResistanceBitmap", .aether),
+        // The last two fields carry names the template left behind — the artwork is a helm and a
+        // magenta bolt, and the character window's own grid shows them against physical and chaos.
+        ("tab1StunResistanceBitmap", .physical),
+        ("tab1DisruptionResistanceBitmap", .chaos),
+    ]
+
+    private static let characterTab1Path =
+        "records/ui/character/characterinfotab1/charinfo_mastertable_tab1.dbr"
+
+    /// The artwork the character window puts beside each resistance, for the ones it marks.
+    func resistanceIcons() -> [ResistanceKind: String] {
+        guard let table = database.record(Self.characterTab1Path) else { return [:] }
+
+        var icons = [ResistanceKind: String]()
+        for mark in Self.resistanceMarks {
+            let path = database.bitmap(inRecordAt: table.text(mark.field))
+            guard !path.isEmpty else { continue }
+
+            icons[mark.kind] = path
+        }
+        return icons
+    }
+
     /// The character window's equipment boxes, keyed by the field that names each one.
     private static let dollBoxes: [(key: String, kind: DollSlot.Kind)] = [
         ("equipHead", .equipment(.head)),

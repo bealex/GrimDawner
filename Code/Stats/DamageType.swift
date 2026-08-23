@@ -58,7 +58,7 @@ enum DamageType: String, CaseIterable, Sendable {
             case .cold: Color(red: 0.45, green: 0.75, blue: 0.98)
             case .lightning: Color(red: 0.98, green: 0.86, blue: 0.35)
             case .acid: Color(red: 0.56, green: 0.82, blue: 0.28)
-            case .vitality: Color(red: 0.82, green: 0.25, blue: 0.30)
+            case .vitality: Color(red: 0.88, green: 0.36, blue: 0.62)
             case .aether: Color(red: 0.62, green: 0.80, blue: 0.86)
             case .chaos: Color(red: 0.70, green: 0.32, blue: 0.85)
             case .elemental: Color(red: 0.95, green: 0.72, blue: 0.35)

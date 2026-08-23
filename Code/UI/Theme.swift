@@ -62,11 +62,71 @@ struct SectionCard<Content: View>: View {
 }
 
 /// A label-and-value row, the standard way a single statistic is shown.
+extension Theme {
+    /// How a damage conversion reads: "Chaos ➠ Aether".
+    static let convertsTo = "\u{27A0}"
+
+    /// One word of a line's title, coloured for the damage type it names.
+    struct Accent: Equatable {
+        let word: String
+        let color: Color
+    }
+
+    /// Which damage family a stat key names, and the words a title says it with. Longest token first,
+    /// so `Lightning` never reads as `Light`.
+    private static let damageTokens: [(token: String, words: [String], tint: Color)] = [
+        ("Physical", [ "Physical" ], DamageType.physical.color),
+        ("Pierce", [ "Pierce" ], DamageType.pierce.color),
+        ("Bleeding", [ "Bleeding" ], ResistanceKind.bleeding.color),
+        ("Fire", [ "Fire", "Burn" ], DamageType.fire.color),
+        ("Cold", [ "Cold", "Frostburn" ], DamageType.cold.color),
+        ("Lightning", [ "Lightning", "Electrocute" ], DamageType.lightning.color),
+        ("Poison", [ "Poison", "Acid" ], DamageType.acid.color),
+        ("Life", [ "Vitality", "Life" ], DamageType.vitality.color),
+        ("Aether", [ "Aether" ], DamageType.aether.color),
+        ("Chaos", [ "Chaos" ], DamageType.chaos.color),
+        ("Elemental", [ "Elemental" ], DamageType.elemental.color),
+    ]
+
+    /// The families whose keys name a damage type; `characterLife` is a health pool, not vitality.
+    private static let damageFamilies = [ "offensive", "defensive", "retaliation" ]
+
+    /// The word of a stat's title that names its damage type, coloured — "Fire" of "Fire Resistance",
+    /// leaving the rest of the line alone. Nothing for a stat that names no type.
+    static func damageAccent(forStatKey key: String, in title: String) -> Accent? {
+        guard
+            damageFamilies.contains(where: { key.hasPrefix($0) }),
+            let match = damageTokens.first(where: { key.contains($0.token) }),
+            let word = match.words.first(where: { title.localizedCaseInsensitiveContains($0) })
+        else { return nil }
+
+        return Accent(word: word, color: match.tint)
+    }
+
+    /// The damage type a stat key names, as the token the icons are kept under.
+    static func damageToken(forStatKey key: String) -> String? {
+        guard damageFamilies.contains(where: { key.hasPrefix($0) }) else { return nil }
+
+        return damageTokens.first { key.contains($0.token) }?.token
+    }
+
+    /// The colour a damage type reads in, for a line that is nothing but the type's name.
+    static func damageTint(forStatKey key: String) -> Color? {
+        guard damageFamilies.contains(where: { key.hasPrefix($0) }) else { return nil }
+
+        return damageTokens.first { key.contains($0.token) }?.tint
+    }
+}
+
 struct StatRow: View {
     let title: String
     let value: String
     var valueColor: Color = .primary
+    /// The words of the title that name a damage type, each in that type's colour.
+    var accents: [Theme.Accent] = []
     var icon: String?
+    /// The game's own mark for the damage type this line names.
+    var iconPath: String?
     /// The band the value may roll in, for the stats an item rolls from its seed.
     var range: String?
     /// False where an enclosing row already answers for the search, so a match is ringed once.
@@ -79,8 +139,27 @@ struct StatRow: View {
         highlights ? search.emphasis(matching: title) : .neutral
     }
 
+    /// The title with each accented word in its damage type's colour, and the rest left alone.
+    private var titleText: Text {
+        guard emphasis != .match, !accents.isEmpty else { return Text(title) }
+
+        var text = Text("")
+        var rest = Substring(title)
+        for accent in accents {
+            guard let range = rest.range(of: accent.word, options: .caseInsensitive) else { continue }
+
+            text = text + Text(rest[..<range.lowerBound]) + Text(rest[range]).foregroundStyle(accent.color)
+            rest = rest[range.upperBound...]
+        }
+        return text + Text(rest)
+    }
+
     var body: some View {
         HStack(spacing: 8) {
+            if let iconPath, !iconPath.isEmpty {
+                GameIcon(path: iconPath, size: 13, fallbackSymbol: "circle.fill")
+                    .accessibilityHidden(true)
+            }
             if let icon {
                 Image(systemName: icon)
                     .font(.caption)
@@ -90,7 +169,7 @@ struct StatRow: View {
             }
             // The name takes the slack and the number keeps its own width, so a long name truncates
             // only when it has run out of room rather than whenever the number is short.
-            Text(title)
+            titleText
                 .foregroundStyle(emphasis == .match ? Theme.match : Color.secondary)
                 .fontWeight(emphasis == .match ? .semibold : .regular)
                 .lineLimit(1)

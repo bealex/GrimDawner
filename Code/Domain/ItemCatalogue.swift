@@ -18,6 +18,10 @@ struct CataloguedItem: Codable, Identifiable, Sendable {
     let levelRequirement: Int
     /// The stats the item carries, by the names the sheet shows, so the directory can be filtered by them.
     let stats: [String]
+    /// The faction whose merchant sells this, and the standing it takes — augments only, since they
+    /// are the items a faction sells rather than drops.
+    var soldBy = ""
+    var standing = ""
     /// The awakened item this one becomes when the Ashes of Awakening are spent on it, and its name.
     /// Empty for the great majority of items, which no blueprint upgrades.
     var awakenedPath = ""
@@ -103,7 +107,7 @@ struct DirectoryEntry: Identifiable, Sendable {
 /// Every named item in the game, listed once per installed version and kept on disk.
 struct ItemCatalogue: Codable, Sendable {
     /// Bumped whenever an entry means something different, so an older listing on disk is discarded.
-    static let version = 6
+    static let version = 8
 
     /// The database this was built from; a patched game produces a different one and is listed again.
     let fingerprint: String
@@ -160,8 +164,18 @@ struct ItemCatalogue: Codable, Sendable {
                 qualityMarkPath: mark?.texturePath ?? "",
                 itemLevel: record.integer("itemLevel"),
                 levelRequirement: record.integer("levelRequirement"),
-                stats: Self.statTitles(of: record)
+                stats: Self.statTitles(of: record),
+                soldBy: record.text("factionSource")
             ))
+        }
+
+        let vendors = Self.vendors(in: database)
+        let factions = Self.factionNames(in: database)
+        for index in items.indices {
+            guard case let source = items[index].soldBy, !source.isEmpty else { continue }
+
+            items[index].soldBy = factions[source] ?? source
+            items[index].standing = vendors[items[index].path.lowercased()] ?? ""
         }
 
         let ashesIcon = database.record(Self.awakeningAshes).map { Self.iconPath(of: $0) } ?? ""
@@ -174,6 +188,16 @@ struct ItemCatalogue: Codable, Sendable {
             items[index].upgradeIconPath = ashesIcon
         }
 
+        // The same weapon is written once per enemy that carries it — three Pine Staffs at level 1,
+        // identical but for the monster wielding them. One line each is enough.
+        var seen = Set<String>()
+        items = items.filter { item in
+            seen.insert(
+                "\(item.name)|\(item.recordClass)|\(item.levelRequirement)|\(item.stats.joined(separator: ","))"
+            )
+            .inserted
+        }
+
         // An item is written once per level tier, so its variants read in order under the one name.
         items.sort {
             let order = $0.name.localizedStandardCompare($1.name)
@@ -184,6 +208,47 @@ struct ItemCatalogue: Codable, Sendable {
             return order == .orderedSame ? $0.levelRequirement < $1.levelRequirement : order == .orderedAscending
         }
         return ItemCatalogue(fingerprint: database.fingerprint, version: Self.version, items: items, affixes: affixes)
+    }
+
+    /// Which faction each `factionSource` names — the augment records say `User7`, and the game's
+    /// faction table says which faction that is.
+    private static func factionNames(in database: GameDatabase) -> [String: String] {
+        guard let table = database.record("records/game/gamefactions.dbr") else { return [:] }
+
+        var names = [String: String]()
+        for key in table.fields.keys where key.hasPrefix("factionUser") {
+            guard
+                let record = database.record(table.text(key)),
+                case let identifier = record.text("myFaction"),
+                !identifier.isEmpty
+            else { continue }
+
+            names[String(key.dropFirst("faction".count))] =
+                database.localised("tagFaction" + identifier)
+                ?? identifier
+        }
+        return names
+    }
+
+    /// The standing a faction's merchant asks for before it will sell an item.
+    ///
+    /// The merchant's table lists what it stocks but states no standing; its own file name does —
+    /// `factiontables/blacklegion_honored_01.dbr` — and the words there are the game's own tier names.
+    private static func vendors(in database: GameDatabase) -> [String: String] {
+        let standings = [ "revered", "honored", "respected", "friendly", "tolerated" ]
+        var sold = [String: String]()
+
+        database.sweep(prefix: "records/creatures/npcs/merchants/") { path, record in
+            let file = path.split(separator: "/").last.map(String.init)?.lowercased() ?? ""
+            guard let standing = standings.first(where: { file.contains($0) }) else { return }
+
+            for field in record.fieldOrder {
+                for entry in record[field]?.texts ?? [] where entry.hasSuffix(".dbr") {
+                    sold[entry.lowercased()] = standing.capitalized
+                }
+            }
+        }
+        return sold
     }
 
     /// A prefix or suffix a random item can roll, which the folder it sits in says it is.

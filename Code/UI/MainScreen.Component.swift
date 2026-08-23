@@ -10,6 +10,7 @@ extension MainScreen {
         var body: some View {
             NavigationSplitView(sidebar: { sidebar }, detail: { detail })
                 .environment(\.textures, model.textures)
+                .environment(\.damageIcons, model.damageIcons)
                 .environment(\.quickSearch, QuickSearch(model.search))
                 .navigationTitle(model.character?.name ?? "GrimDawner")
                 .navigationSubtitle(subtitle)

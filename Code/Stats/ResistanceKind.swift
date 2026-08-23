@@ -69,7 +69,7 @@ enum ResistanceKind: String, CaseIterable, Sendable {
             case .aether: DamageType.aether.color
             case .chaos: DamageType.chaos.color
             case .pierce: DamageType.pierce.color
-            case .bleeding: Color(red: 0.78, green: 0.18, blue: 0.22)
+            case .bleeding: Color(red: 1.00, green: 0.42, blue: 0.42)
             case .physical: DamageType.physical.color
         }
     }

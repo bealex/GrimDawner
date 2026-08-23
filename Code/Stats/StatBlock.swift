@@ -84,6 +84,21 @@ struct StatBlock: Sendable {
         catalogued().isEmpty && allSkillBonus == 0 && skillBonuses.isEmpty && conversions.isEmpty
     }
 
+    /// One line per stat, with the flat and percentage variants of the same thing folded together: the
+    /// game writes them as two fields, but they read as one line — "Aether Damage +11 & +50%".
+    static func merged(
+        _ lines: [(definition: StatDefinition, value: Double)]
+    ) -> [(title: String, parts: [(definition: StatDefinition, value: Double)])] {
+        var order = [String]()
+        var parts = [String: [(definition: StatDefinition, value: Double)]]()
+
+        for line in lines {
+            if parts[line.definition.title] == nil { order.append(line.definition.title) }
+            parts[line.definition.title, default: []].append(line)
+        }
+        return order.map { (title: $0, parts: parts[$0] ?? []) }
+    }
+
     /// The stats the catalogue knows about, grouped and ordered for display.
     func catalogued() -> [(group: StatGroup, lines: [(definition: StatDefinition, value: Double)])] {
         var grouped = [StatGroup: [(StatDefinition, Double)]]()

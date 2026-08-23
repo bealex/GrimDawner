@@ -11,6 +11,9 @@ struct ParametersTab: View {
     /// Opens a piece of gear on the inventory doll.
     let reveal: (ResolvedItem) -> Void
 
+    @Environment(\.damageIcons)
+    private var damageIcons
+
     var body: some View {
         TabLayout {
             ScrollView {
@@ -213,9 +216,12 @@ struct ParametersTab: View {
 
         return Button(action: { selection = .stat(title: kind.title, key: kind.resistanceKey) }) {
             VStack(spacing: 3) {
-                HStack {
+                HStack(spacing: 6) {
+                    if let icon = damageIcons[Theme.damageToken(forStatKey: kind.resistanceKey) ?? ""] {
+                        GameIcon(path: icon, size: 15, fallbackSymbol: "circle.fill")
+                    }
                     Text(kind.title)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(kind.color)
                     Text("\(whole(min(value, maximum)))%")
                         .monospacedDigit()
                         .foregroundStyle(value < 0 ? .red : .primary)
@@ -268,7 +274,7 @@ struct ParametersTab: View {
                                 .fill(type.color)
                                 .frame(width: 8, height: 8)
                             Text(type.title)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(type.color)
                             Text("+\(whole(sheet.damageModifiers[type] ?? 0))%")
                                 .monospacedDigit()
                                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -298,12 +304,13 @@ struct ParametersTab: View {
     ) -> some View {
         card(title: group.title, titles: lines.map(\.definition.title)) {
             VStack(spacing: 6) {
-                ForEach(lines, id: \.definition.key) { line in
+                ForEach(StatBlock.merged(lines), id: \.title) { line in
                     row(
-                        line.definition.title,
-                        line.definition.unit.format(line.value),
-                        key: line.definition.key,
-                        valueColor: Theme.valueColor(line.value)
+                        line.title,
+                        line.parts.map { $0.definition.unit.format($0.value) }.joined(separator: " & "),
+                        key: line.parts.first?.definition.key,
+                        valueColor: Theme.valueColor(line.parts.first?.value ?? 0),
+                        accent: Theme.damageAccent(forStatKey: line.parts.first?.definition.key ?? "", in: line.title)
                     )
                 }
             }
@@ -454,11 +461,18 @@ struct ParametersTab: View {
         _ value: String,
         key: String? = nil,
         icon: String? = nil,
-        valueColor: Color = .primary
+        valueColor: Color = .primary,
+        accent: Theme.Accent? = nil
     ) -> some View {
         Button(action: { selection = key.map { .stat(title: title, key: $0) } }) {
-            StatRow(title: title, value: value, valueColor: valueColor, icon: icon)
-                .contentShape(.rect)
+            StatRow(
+                title: title,
+                value: value,
+                valueColor: valueColor,
+                accents: [ accent ].compactMap { $0 },
+                icon: icon
+            )
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .disabled(key == nil)

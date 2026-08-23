@@ -21,6 +21,12 @@ struct ItemDetailView: View {
     /// What the Ashes of Awakening turn this item into, for the directory that can go and show it.
     var upgrade: ItemUpgrade?
     var selectItem: ((String) -> Void)?
+    /// Every level the game writes this item at, for the directory that lets you read any of them.
+    /// Who sells this and at what standing, for the augments a faction stocks.
+    var vendor: (faction: String, standing: String)?
+    var tiers: [CataloguedItem] = []
+    var tierPath: String?
+    var selectTier: ((String) -> Void)?
 
     @Environment(\.quickSearch)
     private var search
@@ -55,6 +61,25 @@ struct ItemDetailView: View {
                         }
                     }
                 }
+            }
+
+            if let vendor, !vendor.faction.isEmpty {
+                SectionCard(title: "Sold by") {
+                    StatRow(title: vendor.faction, value: vendor.standing, valueColor: Theme.accent)
+                }
+            }
+
+            if tiers.count > 1, let selectTier {
+                Picker("Level", selection: Binding(get: { tierPath ?? tiers[0].path }, set: selectTier)) {
+                    ForEach(tiers) { tier in
+                        Text(tier.levelRequirement > 0 ? "Level \(tier.levelRequirement)" : "Any level")
+                            .tag(tier.path)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .fixedSize()
+                .help("Which level tier of this item to read")
             }
 
             if let upgrade {
@@ -125,10 +150,12 @@ struct ItemDetailView: View {
 }
 
 /// What an item's skill actually does, rather than the name of the record behind it.
-private struct GrantedSkillView: View {
+struct GrantedSkillView: View {
     let granted: GrantedSkill
-    let wearer: SkillContext?
-    let reveal: ((String) -> Void)?
+    /// The character reading it, when there is one. Absent in the catalogues, where no skill is
+    /// anybody's own and nothing has a point spent on it.
+    var wearer: SkillContext?
+    var reveal: ((String) -> Void)?
 
     /// Whether the skill is one of the character's own, which the skill panels already show in full.
     private var isOwn: Bool { wearer?.own.contains(granted.recordPath.lowercased()) ?? false }
@@ -211,6 +238,8 @@ private struct GrantedSkillView: View {
                 if !skill.stats.hasNothingToShow {
                     StatBlockView(block: skill.stats)
                 }
+
+                SkillPetView(skill: skill)
             }
         }
         .opacity(isIdle ? 0.45 : 1)
@@ -243,6 +272,9 @@ struct StatBlockView: View {
     /// False shows a rolled figure as its band alone, for an item nobody owns a copy of.
     var showsRolls = true
 
+    @Environment(\.damageIcons)
+    private var damageIcons
+
     var body: some View {
         let groups = block.catalogued()
 
@@ -257,14 +289,28 @@ struct StatBlockView: View {
                         Text(group.group.title)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        ForEach(group.lines, id: \.definition.key) { line in
-                            let band = band(of: line)
+                        ForEach(StatBlock.merged(group.lines), id: \.title) { line in
+                            let bands = line.parts.compactMap { band(of: $0) }
+                            let figures = line.parts
+                                .map { $0.definition.unit.format($0.value) }
+                                .joined(separator: " & ")
                             StatRow(
-                                title: line.definition.title,
-                                value: showsRolls || band == nil
-                                    ? line.definition.unit.format(line.value) : band ?? "",
-                                valueColor: Theme.valueColor(line.value),
-                                range: showsRolls ? band.map { "[\($0)]" } : nil
+                                title: line.title,
+                                value: showsRolls || bands.count != line.parts.count
+                                    ? figures : bands.joined(separator: " & "),
+                                valueColor: Theme.valueColor(line.parts.first?.value ?? 0),
+                                accents: [
+                                    Theme.damageAccent(
+                                        forStatKey: line.parts.first?.definition.key ?? "",
+                                        in: line.title
+                                    )
+                                ]
+                                .compactMap { $0 },
+                                iconPath: damageIcons[
+                                    Theme.damageToken(forStatKey: line.parts.first?.definition.key ?? "") ?? ""
+                                ],
+                                range: showsRolls && !bands.isEmpty
+                                    ? "[\(bands.joined(separator: " & "))]" : nil
                             )
                         }
                     }
@@ -272,9 +318,15 @@ struct StatBlockView: View {
 
                 ForEach(block.conversions, id: \.self) { conversion in
                     StatRow(
-                        title: "\(conversion.source) converted to \(conversion.target)",
+                        title: "\(conversion.source) \(Theme.convertsTo) \(conversion.target)",
                         value: "\(Int(conversion.percent))%",
-                        valueColor: Theme.valueColor(conversion.percent)
+                        valueColor: Theme.valueColor(conversion.percent),
+                        // Both sides of a conversion name a type, and each reads in its own colour.
+                        accents: [
+                            Theme.damageAccent(forStatKey: "offensive\(conversion.source)", in: conversion.source),
+                            Theme.damageAccent(forStatKey: "offensive\(conversion.target)", in: conversion.target),
+                        ]
+                        .compactMap { $0 }
                     )
                 }
 

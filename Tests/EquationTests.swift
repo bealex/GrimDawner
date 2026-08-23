@@ -32,7 +32,8 @@ struct EquationTests {
 
     @Test
     func evaluatesTheShippedAbilityFormula() throws {
-        let source = "(offensiveAbilityDV + (characterLevelDV * 12) + ((dexterityDV + bonusDV) *0.5))"
+        let source =
+            "(offensiveAbilityDV + (characterLevelDV * 12) + ((dexterityDV + bonusDV) *0.5))"
             + " * (1 + (offensiveAbilityModifierDV / 100))+53"
         let value = try Equation(source).value([
             "offensiveAbilityDV": 100,
@@ -48,7 +49,7 @@ struct EquationTests {
 
     @Test
     func rejectsMalformedInput() {
-        #expect(throws: (any Error).self) { try Equation("2 +") .value([:]) }
+        #expect(throws: (any Error).self) { try Equation("2 +").value([:]) }
         #expect(throws: (any Error).self) { try Equation("(2 + 3").value([:]) }
         #expect(throws: (any Error).self) { try Equation("").value([:]) }
     }

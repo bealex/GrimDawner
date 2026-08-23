@@ -7,10 +7,20 @@ private struct TextureStoreKey: EnvironmentKey {
     static let defaultValue: TextureStore? = nil
 }
 
+private struct DamageIconsKey: EnvironmentKey {
+    static let defaultValue: [String: String] = [:]
+}
+
 extension EnvironmentValues {
     var textures: TextureStore? {
         get { self[TextureStoreKey.self] }
         set { self[TextureStoreKey.self] = newValue }
+    }
+
+    /// The game's own mark for each damage type, by the token `Theme.damageToken` reads from a stat key.
+    var damageIcons: [String: String] {
+        get { self[DamageIconsKey.self] }
+        set { self[DamageIconsKey.self] = newValue }
     }
 }
 

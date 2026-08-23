@@ -252,11 +252,12 @@ private struct AffixDetailView: View {
             if group.levels.count > 1 {
                 Picker("Level", selection: Binding(get: { level }, set: select)) {
                     ForEach(group.levels, id: \.self) { level in
-                        Text(level > 0 ? "\(level)" : "—").tag(level)
+                        Text(level > 0 ? "Level \(level)" : "Any level").tag(level)
                     }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
                 .labelsHidden()
+                .fixedSize()
                 .help("Which level tier of this affix to read")
             }
 
@@ -273,9 +274,7 @@ private struct AffixDetailView: View {
                             showsRolls: false
                         )
                         ForEach(variant.grantedSkills) { granted in
-                            Text(granted.summary)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Theme.accent)
+                            GrantedSkillView(granted: granted)
                         }
                     }
                 }

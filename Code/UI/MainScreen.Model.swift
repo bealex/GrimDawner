@@ -21,7 +21,7 @@ extension MainScreen {
             case items = "Items"
             case skills = "Skills"
             case devotions = "Devotions"
-            case parameters = "Parameters"
+            case parameters = "Stats"
             case affixes = "Affixes"
 
             var id: String { rawValue }
@@ -87,6 +87,18 @@ extension MainScreen {
             return true
         }
         var textures: TextureStore? { database?.textures }
+        /// The game's own mark for each damage type, by the token a stat key names it with.
+        var damageIcons: [String: String] {
+            guard let database else { return [:] }
+
+            var icons = [String: String]()
+            for (kind, path) in LayoutResolver(database: database).resistanceIcons() {
+                guard let token = Theme.damageToken(forStatKey: kind.resistanceKey) else { continue }
+
+                icons[token] = path
+            }
+            return icons
+        }
 
         private let saveFolder = FolderAccess(defaultsKey: "saveFolderBookmark")
         private let gameFolder = FolderAccess(defaultsKey: "gameFolderBookmark")

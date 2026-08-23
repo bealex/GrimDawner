@@ -15,11 +15,10 @@ struct ItemsTab: View {
     let selected: ResolvedItem?
     let select: (String) -> Void
 
-    /// Which groups are showing their level tiers, kept here so the arrow keys know what is on screen.
-    @State
-    private var expanded: Set<String> = []
     @State
     private var filter = DirectoryFilter()
+    @State
+    private var order = DirectoryOrder.name
     /// The row the arrow keys last walked to, which is the only thing that scrolls the list.
     @State
     private var walkedTo: String?
@@ -50,7 +49,11 @@ struct ItemsTab: View {
                     item: selected,
                     showsRolls: false,
                     upgrade: upgrade(of: selectedPath),
-                    selectItem: select
+                    selectItem: select,
+                    vendor: vendor(of: selectedPath),
+                    tiers: openGroup?.variants ?? [],
+                    tierPath: selectedPath,
+                    selectTier: select
                 )
                 // The query found this item by name, so the whole item is the match and none of
                 // its stats should dim.
@@ -67,6 +70,22 @@ struct ItemsTab: View {
             guard selectedPath == nil, search.isActive || filter.isActive, let first else { return }
 
             select(first)
+        }
+    }
+
+    /// Who sells the selected item, for an augment a faction stocks.
+    private func vendor(of path: String?) -> (faction: String, standing: String)? {
+        guard let entry = items.first(where: { $0.item.path == path })?.item, !entry.soldBy.isEmpty else { return nil }
+
+        return (entry.soldBy, entry.standing)
+    }
+
+    /// The item the sidebar is reading, with every level the game writes it at.
+    private var openGroup: CatalogueGroup? {
+        guard let selectedPath else { return nil }
+
+        return Self.grouped(items.map(\.item)).first { group in
+            group.variants.contains { $0.path == selectedPath }
         }
     }
 
@@ -88,11 +107,13 @@ struct ItemsTab: View {
     }
 
     /// The game writes one record per level tier of the same item, so the tiers read as one entry.
-    private var groups: [CatalogueGroup] {
+    private var groups: [CatalogueGroup] { order.sort(Self.grouped(matches)) }
+
+    private static func grouped(_ items: [CataloguedItem]) -> [CatalogueGroup] {
         var order = [String]()
         var variants = [String: [CataloguedItem]]()
 
-        for item in matches {
+        for item in items {
             let key = "\(item.name)|\(item.recordClass)"
             if variants[key] == nil { order.append(key) }
             variants[key, default: []].append(item)
@@ -113,6 +134,8 @@ struct ItemsTab: View {
             .frame(width: 190, alignment: .leading)
 
             if !isListing {
+                DirectoryOrderPicker(order: $order)
+
                 DirectoryFilterBar(
                     filter: $filter,
                     rarities: availableRarities,
@@ -151,13 +174,13 @@ struct ItemsTab: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(rows) { group in
-                        GroupRow(
-                            group: group,
-                            selectedPath: selectedPath,
-                            isExpanded: expanded.contains(group.id),
-                            expand: { toggle(group) },
-                            select: select
+                        ItemRow(
+                            item: group.item,
+                            detail: group.levels,
+                            isSelected: group.variants.contains { $0.path == selectedPath },
+                            select: { select(group.item.path) }
                         )
+                        .id(group.item.path)
                     }
                 }
                 .padding(.horizontal, 10)
@@ -172,21 +195,9 @@ struct ItemsTab: View {
         }
     }
 
-    private func toggle(_ group: CatalogueGroup) {
-        if expanded.contains(group.id) {
-            expanded.remove(group.id)
-        } else {
-            expanded.insert(group.id)
-        }
-    }
-
     /// The visible rows, top to bottom, which is what the arrow keys walk.
     private var visibleRows: [String] {
-        groups.flatMap { group in
-            expanded.contains(group.id)
-                ? [ group.item.path ] + group.variants.map(\.path)
-                : [ group.item.path ]
-        }
+        groups.map { $0.item.path }
     }
 
     private func move(_ step: Int) {
@@ -218,62 +229,18 @@ struct CatalogueGroup: Identifiable {
     }
 }
 
-/// A directory line: the item at its highest tier, opening onto the rest of them.
-private struct GroupRow: View {
-    let group: CatalogueGroup
-    let selectedPath: String?
-    let isExpanded: Bool
-    let expand: () -> Void
-    let select: (String) -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ItemRow(
-                item: group.item,
-                detail: group.levels,
-                isSelected: group.variants.contains { $0.path == selectedPath },
-                tierCount: group.hasTiers ? group.variants.count : 0,
-                isExpanded: isExpanded,
-                expand: expand,
-                select: { select(group.item.path) }
-            )
-            .id(group.item.path)
-
-            if isExpanded {
-                ForEach(group.variants) { variant in
-                    ItemRow(
-                        item: variant,
-                        detail: variant.levelRequirement > 0 ? "lv \(variant.levelRequirement)" : "—",
-                        isSelected: variant.path == selectedPath,
-                        tierCount: 0,
-                        isExpanded: false,
-                        expand: nil,
-                        select: { select(variant.path) }
-                    )
-                    .id(variant.path)
-                    .padding(.leading, 26)
-                }
-            }
-        }
-    }
-}
-
 /// One line of the directory: what the item is, and how far into the game it belongs.
+///
+/// An item written at several levels reads as one line; the sidebar picks which of them to show.
 private struct ItemRow: View {
     let item: CataloguedItem
     let detail: String
     let isSelected: Bool
-    /// How many level tiers sit under this line, or zero when it is a tier of its own.
-    let tierCount: Int
-    let isExpanded: Bool
-    let expand: (() -> Void)?
     let select: () -> Void
 
     var body: some View {
         Button(action: select) {
             HStack(spacing: 10) {
-                tierToggle
-
                 GameIcon(path: item.iconPath, size: 28, fallbackSymbol: "shippingbox")
                     .itemQualityBadge(item.qualityMarkPath, size: 12)
 
@@ -297,7 +264,7 @@ private struct ItemRow: View {
                     .font(.caption)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
-                    .frame(width: 74, alignment: .trailing)
+                    .frame(width: 84, alignment: .trailing)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
@@ -306,24 +273,6 @@ private struct ItemRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(item.name), \(item.kind), \(detail)")
-    }
-
-    @ViewBuilder
-    private var tierToggle: some View {
-        if let expand, tierCount > 1 {
-            Button(action: expand) {
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .frame(width: 16)
-                    .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isExpanded ? "Hide the other tiers" : "Show all \(tierCount) tiers")
-        } else {
-            Color.clear.frame(width: 16, height: 1)
-        }
     }
 }
 
@@ -386,6 +335,52 @@ struct ArrowKeys: NSViewRepresentable {
 
         private static let upArrow: UInt16 = 126
         private static let downArrow: UInt16 = 125
+    }
+}
+
+/// How the directory is ordered.
+enum DirectoryOrder: String, CaseIterable, Identifiable {
+    case name = "Name"
+    case level = "Level"
+
+    var id: String { rawValue }
+
+    /// Level order runs deepest first — what a finished character can wear is the interesting end — and
+    /// falls back to the name so items of one level keep a stable order.
+    func sort(_ groups: [CatalogueGroup]) -> [CatalogueGroup] {
+        switch self {
+            case .name: groups
+            case .level:
+                groups.sorted { first, second in
+                    let left = first.item.levelRequirement
+                    let right = second.item.levelRequirement
+                    guard
+                        left != right
+                    else {
+                        return first.item.name.localizedStandardCompare(second.item.name) == .orderedAscending
+                    }
+
+                    return left > right
+                }
+        }
+    }
+}
+
+/// The control that picks it.
+private struct DirectoryOrderPicker: View {
+    @Binding
+    var order: DirectoryOrder
+
+    var body: some View {
+        Picker("Sort", selection: $order) {
+            ForEach(DirectoryOrder.allCases) { order in
+                Text(order.rawValue).tag(order)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+        .help("Order the directory by name or by the level an item asks for")
     }
 }
 

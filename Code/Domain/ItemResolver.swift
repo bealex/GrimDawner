@@ -77,6 +77,9 @@ struct ItemResolver {
         )
     }
 
+    /// Classes whose numbers never roll: a component and an augment read the same on every copy.
+    private static let fixedClasses: Set<String> = [ "ItemRelic", "ItemEnchantment" ]
+
     /// One affix read on its own, as the catalogue lists it rather than as an item wears it.
     func affix(at path: String) -> ResolvedAffix? {
         guard let record = database.record(path) else { return nil }
@@ -218,6 +221,18 @@ struct ItemResolver {
         _ item: Gdc.Item,
         base: ArzRecord
     ) -> (stats: StatBlock, lowest: StatBlock, highest: StatBlock) {
+        // A component or an augment is the same on every copy — the game prints its figures without a
+        // band — so it is read as written rather than rolled.
+        guard
+            !Self.fixedClasses.contains(base.recordClass)
+        else {
+            var written = StatBlock()
+            for (key, value) in base.fields where StatCatalog.definition(for: key) != nil {
+                written.increase(key, by: value.number)
+            }
+            return (written, written, written)
+        }
+
         // A relic ignores the blacksmith's bonus its save entry names: the game shows none.
         let crafted = base.text("Class") == "ItemArtifact" ? nil : table(at: item.modifierName)
         let sources = ItemRoll.Sources(

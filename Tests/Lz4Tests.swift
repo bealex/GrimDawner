@@ -18,10 +18,10 @@ struct Lz4Tests {
     @Test
     func decodesOverlappingMatches() throws {
         let block: [UInt8] = [
-            0x1F,        // 1 literal, match length 15 + 4 = 19
-            0x5A,        // the literal "Z"
+            0x1F,  // 1 literal, match length 15 + 4 = 19
+            0x5A,  // the literal "Z"
             0x01, 0x00,  // match offset 1
-            0x00,        // trailing empty literal run
+            0x00,  // trailing empty literal run
         ]
 
         #expect(try Lz4.decompress(block, decompressedSize: 20) == [UInt8](repeating: 0x5A, count: 20))

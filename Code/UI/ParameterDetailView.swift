@@ -119,7 +119,24 @@ enum StatSources {
             let value = item.stats.value(key)
             guard value != 0 else { continue }
 
-            entries.append(Entry(kind: .gear, name: item.displayName, value: value, item: item))
+            // A component or an augment is worn as part of the item, and the game credits it by name;
+            // its share is listed under the piece it sits in rather than folded into it.
+            let fitted = item.parts.filter { part in
+                part.kind == .component || part.kind == .augment || part.kind == .completionBonus
+            }
+            for part in fitted where part.stats.value(key) != 0 {
+                entries.append(Entry(
+                    kind: .gear,
+                    name: "\(part.title) · in \(item.displayName)",
+                    value: part.stats.value(key),
+                    item: item
+                ))
+            }
+
+            let fittedTotal = fitted.reduce(0) { $0 + $1.stats.value(key) }
+            if abs(value - fittedTotal) >= 0.005 {
+                entries.append(Entry(kind: .gear, name: item.displayName, value: value - fittedTotal, item: item))
+            }
         }
 
         for mastery in character.masteries {
