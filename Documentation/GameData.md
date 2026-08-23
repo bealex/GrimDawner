@@ -144,7 +144,7 @@ of stores — character, flat damage, damage modifiers, leech, offensive, retali
 skill — drawing as it goes. Because the stream is shared, a stat's value depends on every stat drawn
 before it, so a field the app does not draw for throws off every later one. The order and the per-store
 mechanics come from [marius00/GrimDawnItemStats](https://github.com/marius00/GrimDawnItemStats); nothing
-in the shipped data describes them. Four rules it does not model, each confirmed against a tooltip:
+in the shipped data describes them. Five rules it does not model, each confirmed against a tooltip:
 
 - **The blacksmith's bonus draws in the item's own stream**, at its field's natural place — the medal's
   `defensiveBlockAmountModifier` draws at the head of the defence store, so every resistance after it
@@ -154,8 +154,19 @@ in the shipped data describes them. Four rules it does not model, each confirmed
 - **`retaliationFearMin` draws** where the other retaliation damages do.
 - **A racial bonus never draws.** Two items carrying identical `racialBonusRace` and
   `racialBonusPercentDamage` fields prove it: the relic's figures only match when it takes no draw.
+- **A chance is a value, not a field.** A damage line whose source gives it a chance is a proc of its own
+  rather than part of the total — but records declare `…Chance` whether or not they use it, so the figure
+  decides. Reading the field's presence instead drops a weapon's own damage from every item that carries
+  an affix.
+
+**A pet bonus rolls in a stream of its own.** `petBonusName` on an item, its prefix or its suffix names a
+record of what every pet is given; each rolls from the item's seed in its own stream, so the block neither
+takes draws from the item's own figures nor gives them any. `characterTotalSpeedModifier` there raises a
+pet's attack, cast and run speed together.
 
 `characterManaRegen` is read straight from the record and takes no draw, as `ItemRoll.fixedFields` says.
+A component and an augment do not roll at all — the game prints their figures without a band — and a
+weapon's own damage is written rather than rolled.
 
 Verified against the game's own tooltips: for the test character all ten resistance totals, energy, and
 every rolled figure on the hat, ring, medal, relic and wand match exactly. Health, Offensive and Defensive
@@ -191,11 +202,12 @@ array of four party sizes per difficulty, so Ultimate single-player reads the ni
 lightning, pierce and poison, −25% aether, chaos, vitality, bleeding and life leech resistance. The game's
 own character window shows the penalised number, and without it a character on Ultimate reads far too well.
 
-**A skill counts on the sheet only while it is in effect.** Passives, transmuters and toggled auras do;
-attacks, timed buffs and celestial powers do not; and neither does `Skill_PassiveOnLifeBuffSelf`, which
-waits for low health. A `Skill_Modifier` counts when the skill it hangs off does — the panel states which
-that is, by putting the modifier along its parent's row. Several skills keep their numbers on the buff
-they drive rather than on themselves, so the buff is read when the skill itself carries nothing.
+**A skill counts on the sheet only while it is in effect** — record classes `Skill_Passive`,
+`SkillBuff_Passive`, `Skill_BuffSelfToggled`, `Skill_BuffRadiusToggled`, `Skill_BuffAttackRadiusToggled`
+and `Skill_Transmuter`. Attacks, timed buffs and celestial powers do not, and neither does
+`Skill_PassiveOnLifeBuffSelf`, which waits for low health. A `Skill_Modifier` counts when the skill it
+hangs off does — the panel states which that is, by putting the modifier along its parent's row. A skill
+that keeps its numbers on the buff it drives is read there as well as on itself.
 
 **Resistances** are summed, with `defensiveElementalResistance` applying to fire, cold and lightning, and
 `defensiveAllResistance` to everything except physical. Cap is 80 plus `defensive*MaxResist`. Bleeding is a
@@ -236,11 +248,6 @@ rank 8 grants 66% elemental damage against 10% at rank 1.
 scales the total: a hundred plus every bonus plus `characterTotalSpeedModifier`, times the weapon's own
 rate, clamped. A wand at −0.1 with +25% attack speed and +11% total speed reads 122%.
 
-**A pet bonus rolls in a stream of its own.** `petBonusName` on an item, its prefix or its suffix names a
-record of what every pet is given; each rolls from the item's seed in its own stream, so the block neither
-takes draws from the item's own figures nor gives them any. `characterTotalSpeedModifier` there raises a
-pet's attack, cast and run speed together.
-
 **Regeneration.** `tagCharStatsEnergyRegenInfo` states the shape: percent bonuses apply to what gear and
 skills give, not to the base, which comes from an attribute — spirit for energy, physique for health. The
 rate per point is not in the records.
@@ -262,10 +269,6 @@ hostility groups and the game's faction window never lists them. Eight tiers, fr
 
 25000 is both the Revered threshold and the reputation cap, and −20000 is the floor, which is why a
 finished character reads as Revered with nearly everything.
-
-**Always-on skills** feed the character sheet: record classes `Skill_Passive`, `SkillBuff_Passive`,
-`Skill_PassiveOnLifeBuffSelf`, `Skill_BuffSelfToggled`, `Skill_BuffRadiusToggled`,
-`Skill_BuffAttackRadiusToggled`, `Skill_Transmuter`. Abilities the player presses do not.
 
 **No devotion star grants skill ranks** in this game version — checked across the whole database. The
 devotion column of the rank breakdown is computed properly and will simply read zero.

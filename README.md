@@ -47,12 +47,12 @@ the game's own quality badge: a monster infrequent's gem, a double rare's pair o
 ascendant affix adds. Selecting an item breaks it down part by part — base, prefix, suffix, crafting
 bonus, component, augment, ascendant affix — with what each contributes and the skills it grants.
 
-**Items** — every named item in the game, around eight thousand, with components, relics and augments,
-folded so one item's level tiers read as a single line. Typing filters this list rather than dimming it,
-and matches stats as well as names: `fireres` finds everything carrying fire resistance. Filters above the
-list cover the lowest level, rarity and kind. Rolled figures show as the band a copy can land in. An
-epic piece the Ashes of Awakening upgrade carries the ashes' own icon beside its name and a link to the
-awakened item it becomes.
+**Items** — every named item in the game, some seven and a half thousand, components, relics and augments
+among them, one line each with a dropdown for the levels it is written at. Typing filters this list rather
+than dimming it, and matches stats as well as names: `fireres` finds everything carrying fire resistance.
+Filters above the list cover the lowest level, rarity and kind, and it sorts by name or by level. Rolled
+figures show as the band a copy can land in. An epic piece the Ashes of Awakening upgrade carries the
+ashes' own icon beside its name and a link to the awakened item it becomes.
 
 **Affixes** — every prefix and suffix a random item can roll, one line per name. The sidebar picks which
 level tier to read and lists every roll the game writes at it, with the band each figure lands in and the
@@ -60,20 +60,21 @@ skills some of them grant. Filters for prefix or suffix and for quality; typing 
 alike, so `aetherres` lists everything that could put aether resistance on a rare item.
 
 **Skills** — both mastery trees on the game's own panels, with class artwork, mastery bar, tier milestones
-and the connectors between a skill and its modifiers. A skill's sidebar gives its rank over its cap, which items lift
-that rank and by how much, its parameters at that rank, everything it grants, and what each worn item
-changes about it.
+and the connectors between a skill and its modifiers. A skill's sidebar gives its rank over its cap, which
+items lift that rank and by how much, its parameters at that rank, everything it grants, and what each
+worn item changes about it.
 
 **Devotions** — the whole sky: 110 constellations over the game's nebulas, taken stars lit and linked, the
 rest tinted by whether affinity reaches them. A star reads in full: its rank, its parameters at that rank,
 what it grants, what it adds to every pet, and what it summons — the pet's own life, how long it stands
-and each of its abilities. Two fingers pan it and a pinch zooms; a mouse wheel zooms
-and the middle button drags. Clicking a star shows what it grants and what its constellation asks for.
+and each of its abilities. Two fingers pan the sky and a pinch zooms it; a mouse wheel zooms and the
+middle button drags.
 
-**Parameters** — every number the sheet knows, grouped: attributes, offence, defence, armour per hit
-region, resistances against their caps, control resistances, damage by type, damage over time,
-retaliation, utility, the kill record and faction standings. Clicking a number lists every item, skill and
-constellation behind it.
+**Stats** — every number the sheet knows, grouped: attributes, offence, defence, armour per hit region,
+resistances against their caps, control resistances, damage by type, damage over time, retaliation,
+utility, blocking, what the character grants its pets, the kill record and faction standings.
+Clicking a number lists every item, skill and constellation behind it — a component or an augment by its
+own name, under the piece it sits in.
 
 ## How it works
 
@@ -103,9 +104,10 @@ Gear, set bonuses, mastery bars, devotion stars, the difficulty's resistance pen
 feed the sheet. Abilities the player presses do not, so numbers that depend on an active buff read lower
 here than in game with that buff up.
 
-Checked against the game's own character window: all ten resistance totals, health, energy, offensive and
-defensive ability match to the point, as do the rolled figures on individual items, bands included.
-[Documentation/Status.md](Documentation/Status.md) records what is still approximate.
+Checked against the game's own character window: the ten resistances, health, energy, both abilities, both
+regenerations, armour region by region, every damage modifier and every pet bonus match to the point, as
+do the rolled figures on individual items, bands included. The damage panel and its damage per second are
+not modelled. [Documentation/Status.md](Documentation/Status.md) has the whole of it.
 
 ## Documentation
 
