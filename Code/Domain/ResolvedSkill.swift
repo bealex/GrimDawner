@@ -1,0 +1,152 @@
+// Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
+
+import Foundation
+
+/// One segment of the line the game draws from a skill to the modifiers along its row.
+///
+/// The game stores these as a list of tile textures, one per 80-unit step to the right of the skill; the
+/// tile's name says whether that step is a plain run or the point where a branch drops away.
+struct SkillConnector: Sendable, Hashable {
+    enum Kind: Sendable {
+        case straight
+        case branchUp
+        case branchDown
+        case transmuterStub
+    }
+
+    /// How many grid steps to the right of the skill this segment sits.
+    let step: Int
+    let kind: Kind
+
+    init(step: Int, texture: String) {
+        self.step = step
+        let name = texture.lowercased()
+
+        if name.contains("branchup") {
+            kind = .branchUp
+        } else if name.contains("branchdown") {
+            kind = .branchDown
+        } else if name.contains("transmuter") {
+            kind = .transmuterStub
+        } else {
+            kind = .straight
+        }
+    }
+}
+
+/// A named number from a skill's record, as its in-game tooltip would list it.
+struct SkillParameter: Identifiable, Sendable {
+    let id = UUID()
+    let name: String
+    let value: String
+}
+
+/// A skill as the character has it: the points spent, plus whatever else adds to it.
+/// What an item changes about a skill: the stats the catalogue knows, and the skill parameters —
+/// cooldown, duration, targets — that no stat covers.
+struct SkillChanges: Sendable {
+    var stats = StatBlock()
+    var parameters: [SkillParameter] = []
+
+    var isEmpty: Bool { stats.hasNothingToShow && parameters.isEmpty }
+}
+
+struct ResolvedSkill: Identifiable, Sendable {
+    let id = UUID()
+    let recordPath: String
+    /// The record's own class, which says whether the skill is permanently in effect.
+    let recordClass: String
+    /// The skill this one modifies, for the round nodes that hang off another skill.
+    private(set) var modifies: String?
+    let name: String
+    let description: String
+    /// Points the character actually spent.
+    let baseLevel: Int
+    /// Extra ranks from devotion.
+    let devotionBonus: Int
+    /// Extra ranks from gear — `+N to <skill>`, mastery bonuses and all-skill bonuses.
+    let itemBonus: Int
+    /// Cap on spent points.
+    let maxLevel: Int
+    /// Cap once bonuses are counted; the game calls this the ultimate level.
+    let ultimateLevel: Int
+    let tier: Int
+    /// Top-left of the skill's button, in the game's own skill-window coordinates.
+    let position: CGPoint
+    /// The button border the panel draws; round marks a modifier, square a skill of its own.
+    let frame: String
+    /// Where the icon sits inside that border.
+    let iconOffset: CGPoint
+    let iconPath: String
+    let connectors: [SkillConnector]
+    /// Cooldown, energy cost and the like, read at the skill's current rank.
+    let parameters: [SkillParameter]
+    /// Everything the skill grants at its current rank.
+    let stats: StatBlock
+
+    var bonusLevel: Int { devotionBonus + itemBonus }
+
+    var isAlwaysOn: Bool { SkillResolver.isAlwaysOn(recordClass: recordClass) }
+
+    /// The same skill, told which skill it hangs off.
+    func modifying(_ parent: String) -> ResolvedSkill {
+        var copy = self
+        copy.modifies = parent
+        return copy
+    }
+
+    var isModifier: Bool { recordClass == SkillResolver.modifierClass }
+
+    /// The rank the skill actually operates at. Bonuses only carry a skill as far as its ultimate level;
+    /// anything past that is wasted, which is why a one-point transmuter stays at one however much `+skill`
+    /// the character is wearing.
+    var totalLevel: Int {
+        guard baseLevel > 0 else { return 0 }
+
+        return min(baseLevel + bonusLevel, ultimateLevel)
+    }
+    var isLearned: Bool { baseLevel > 0 }
+    var isOverCapped: Bool { totalLevel > maxLevel }
+
+    /// Spent, from devotion, from items — the breakdown the character window implies but never shows.
+    var levelBreakdown: String { "\(baseLevel).\(devotionBonus).\(itemBonus)" }
+
+    var levelText: String {
+        guard bonusLevel > 0, baseLevel > 0 else { return "\(baseLevel)/\(maxLevel)" }
+
+        return "\(baseLevel) +\(bonusLevel)"
+    }
+}
+
+/// One mastery the character has invested in, with its panel of skills.
+struct ResolvedMastery: Identifiable, Sendable {
+    let id = UUID()
+    let recordPath: String
+    let name: String
+    let iconPath: String
+    /// Points in the mastery bar itself.
+    let level: Int
+    let maxLevel: Int
+    let skills: [ResolvedSkill]
+    /// Attributes and pools the mastery bar grants at its current level.
+    let bonuses: StatBlock
+    /// The panel geometry the game lays these skills out on.
+    let panel: MasteryPanel
+
+    var spentPoints: Int { level + skills.reduce(0) { $0 + $1.baseLevel } }
+
+    /// The skills permanently in effect: passives and toggled auras, plus the modifiers hanging off them.
+    ///
+    /// A modifier of an attack changes that attack and belongs nowhere near a character sheet; a modifier
+    /// of an aura is in effect for as long as the aura is.
+    var sheetSkills: [ResolvedSkill] {
+        let permanent = Set(skills.filter { $0.isLearned && $0.isAlwaysOn }.map { $0.recordPath.lowercased() })
+
+        return skills.filter { skill in
+            guard skill.isLearned else { return false }
+            guard !skill.isAlwaysOn else { return true }
+
+            return skill.modifies.map { permanent.contains($0.lowercased()) } ?? false
+        }
+    }
+}

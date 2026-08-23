@@ -1,0 +1,9 @@
+.DS_Store
+build/
+.build/
+DerivedData/
+*.xcodeproj
+Local.xcconfig
+
+# Local fixtures: a player's own save and screenshots of the running game. Never committed.
+Resources/

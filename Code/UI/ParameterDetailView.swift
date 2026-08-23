@@ -1,0 +1,160 @@
+// Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
+
+import SwiftUI
+
+/// What the parameters sidebar is showing.
+enum ParameterSelection: Equatable {
+    case stat(title: String, key: String)
+
+    var title: String {
+        switch self {
+            case let .stat(title, _): title
+        }
+    }
+
+    var key: String {
+        switch self {
+            case let .stat(_, key): key
+        }
+    }
+}
+
+/// One stat pulled apart: every piece of gear, skill and constellation that feeds it.
+struct ParameterDetailView: View {
+    let selection: ParameterSelection
+    let character: ResolvedCharacter
+    /// Opens a piece of gear where it is worn, since a line naming it invites a look.
+    let reveal: (ResolvedItem) -> Void
+
+    var body: some View {
+        let sources = StatSources.contributors(to: selection.key, in: character)
+
+        VStack(alignment: .leading, spacing: 14) {
+            header(total: sources.reduce(0) { $0 + $1.value })
+
+            if sources.isEmpty {
+                Text("Nothing the app reads feeds this — it comes from the character's own level.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(nil)
+            } else {
+                ForEach(StatSources.Kind.allCases, id: \.self) { kind in
+                    let group = sources.filter { $0.kind == kind }
+                    if !group.isEmpty {
+                        SectionCard(title: kind.title) {
+                            VStack(spacing: 6) {
+                                ForEach(group) { source in
+                                    Button(action: { source.item.map(reveal) }) {
+                                        StatRow(
+                                            title: source.name,
+                                            value: format(source.value),
+                                            valueColor: Theme.valueColor(source.value),
+                                            icon: source.item == nil ? nil : "arrow.up.forward.square"
+                                        )
+                                        .contentShape(.rect)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(source.item == nil)
+                                    .help(source.item == nil ? "" : "Show \(source.name) on the doll")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func header(total: Double) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(selection.title)
+                .font(.title3.bold())
+            Text(selection.key)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+            Text("Sources add up to \(format(total))")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func format(_ value: Double) -> String {
+        StatCatalog.definition(for: selection.key)?.unit.format(value)
+            ?? value.formatted(.number.precision(.fractionLength(0)))
+    }
+}
+
+/// Where one stat's value comes from, piece by piece.
+enum StatSources {
+    enum Kind: CaseIterable {
+        case gear
+        case skills
+        case devotion
+        case difficulty
+
+        var title: String {
+            switch self {
+                case .gear: "Gear"
+                case .skills: "Masteries and skills"
+                case .devotion: "Devotion"
+                case .difficulty: "Difficulty"
+            }
+        }
+    }
+
+    struct Entry: Identifiable {
+        let id = UUID()
+        let kind: Kind
+        let name: String
+        let value: Double
+        /// The gear this line is about, for selecting it in the Inventory tab.
+        var item: ResolvedItem?
+    }
+
+    static func contributors(to key: String, in character: ResolvedCharacter) -> [Entry] {
+        var entries = [Entry]()
+
+        for item in character.equippedItems {
+            let value = item.stats.value(key)
+            guard value != 0 else { continue }
+
+            entries.append(Entry(kind: .gear, name: item.displayName, value: value, item: item))
+        }
+
+        for mastery in character.masteries {
+            let value = mastery.bonuses.value(key)
+            if value != 0 {
+                entries.append(Entry(kind: .skills, name: "\(mastery.name) mastery", value: value))
+            }
+
+            for skill in mastery.sheetSkills {
+                let value = skill.stats.value(key)
+                guard value != 0 else { continue }
+
+                entries.append(Entry(kind: .skills, name: skill.name, value: value))
+            }
+        }
+
+        for set in character.sets {
+            let value = set.bonuses.value(key)
+            guard value != 0 else { continue }
+
+            entries.append(Entry(kind: .gear, name: "\(set.name) (\(set.summary))", value: value))
+        }
+
+        for constellation in character.devotion.startedConstellations {
+            let value = constellation.bonuses.value(key)
+            guard value != 0 else { continue }
+
+            entries.append(Entry(kind: .devotion, name: constellation.name, value: value))
+        }
+
+        let penalty = character.difficultyPenalty.value(key)
+        if penalty != 0 {
+            entries.append(Entry(kind: .difficulty, name: "\(character.difficulty.title) difficulty", value: penalty))
+        }
+
+        return entries.sorted { abs($0.value) > abs($1.value) }
+    }
+}

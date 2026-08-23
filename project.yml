@@ -1,0 +1,76 @@
+name: GrimDawner
+
+options:
+  bundleIdPrefix: com.lonelybytes
+  deploymentTarget:
+    macOS: "27.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  developmentLanguage: en
+  knownRegions: [ en, Base ]
+
+configFiles:
+  Debug: GrimDawner.xcconfig
+  Release: GrimDawner.xcconfig
+
+targets:
+  GrimDawner:
+    type: application
+    platform: macOS
+    sources:
+      - path: Code
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.lonelybytes.grimdawner
+        PRODUCT_NAME: GrimDawner
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_ENTITLEMENTS: Code/App/GrimDawner.entitlements
+        ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+        GENERATE_INFOPLIST_FILE: "NO"
+        ENABLE_HARDENED_RUNTIME: "YES"
+        SWIFT_EMIT_LOC_STRINGS: "YES"
+        LOCALIZATION_PREFERS_STRING_CATALOGS: "YES"
+    info:
+      path: Code/App/Info.plist
+      properties:
+        CFBundleDisplayName: GrimDawner
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
+        NSHumanReadableCopyright: "Copyright (c) 2026 Alex Babaev. MIT licence."
+        ITSAppUsesNonExemptEncryption: false
+
+  GrimDawnerTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: GrimDawner
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.lonelybytes.grimdawner.tests
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        GENERATE_INFOPLIST_FILE: "YES"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/GrimDawner.app/Contents/MacOS/GrimDawner"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  GrimDawner:
+    build:
+      targets:
+        GrimDawner: all
+        GrimDawnerTests: [ test ]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - GrimDawnerTests

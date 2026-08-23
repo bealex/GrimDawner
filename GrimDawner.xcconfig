@@ -1,0 +1,9 @@
+// GrimDawner.xcconfig
+//
+// Project-level base build settings. Committed, so it must not carry private or machine-specific
+// values — those live in the git-ignored `Local.xcconfig` pulled in by the optional include below.
+
+DEVELOPMENT_TEAM =
+
+// Optional include (note the `?`): no error if the file is missing.
+#include? "Local.xcconfig"
