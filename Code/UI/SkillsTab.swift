@@ -33,7 +33,11 @@ struct SkillsTab: View {
                 SkillDetailView(
                     skill: selected,
                     source: source(of: selected),
-                    modifications: character.skillModifications[selected.recordPath.lowercased()] ?? []
+                    modifications: character.skillModifications[selected.recordPath.lowercased()] ?? [],
+                    rankSources: character.rankSources(
+                        forSkill: selected.recordPath,
+                        in: mastery(of: selected)?.recordPath
+                    )
                 )
             } else {
                 DetailPlaceholder(
@@ -92,9 +96,13 @@ struct SkillsTab: View {
 
     /// Where a skill comes from — a mastery's name, or the gear that grants it.
     private func source(of skill: ResolvedSkill) -> String {
-        let mastery = character.masteries.first { mastery in
+        mastery(of: skill)?.name ?? "items"
+    }
+
+    /// The mastery whose panel draws this skill, which decides what `+N to <mastery>` reaches it.
+    private func mastery(of skill: ResolvedSkill) -> ResolvedMastery? {
+        character.masteries.first { mastery in
             mastery.skills.contains { $0.recordPath == skill.recordPath }
         }
-        return mastery?.name ?? "items"
     }
 }

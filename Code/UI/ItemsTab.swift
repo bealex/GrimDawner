@@ -46,10 +46,15 @@ struct ItemsTab: View {
             }
         } detail: {
             if let selected {
-                ItemDetailView(item: selected, showsRolls: false)
-                    // The query found this item by name, so the whole item is the match and none of
-                    // its stats should dim.
-                    .environment(\.quickSearch, search.matches(selected.displayName) ? QuickSearch() : search)
+                ItemDetailView(
+                    item: selected,
+                    showsRolls: false,
+                    upgrade: upgrade(of: selectedPath),
+                    selectItem: select
+                )
+                // The query found this item by name, so the whole item is the match and none of
+                // its stats should dim.
+                .environment(\.quickSearch, search.matches(selected.displayName) ? QuickSearch() : search)
             } else {
                 DetailPlaceholder(
                     title: "No item selected",
@@ -63,6 +68,16 @@ struct ItemsTab: View {
 
             select(first)
         }
+    }
+
+    /// What the selected item awakens into, when a blueprint upgrades it.
+    private func upgrade(of path: String?) -> ItemUpgrade? {
+        guard
+            let entry = items.first(where: { $0.item.path == path })?.item,
+            !entry.awakenedPath.isEmpty
+        else { return nil }
+
+        return ItemUpgrade(name: entry.awakenedName, path: entry.awakenedPath)
     }
 
     private var matches: [CataloguedItem] {
@@ -260,11 +275,16 @@ private struct ItemRow: View {
                 tierToggle
 
                 GameIcon(path: item.iconPath, size: 28, fallbackSymbol: "shippingbox")
+                    .itemQualityBadge(item.qualityMarkPath, size: 12)
 
                 Text(item.name)
                     .foregroundStyle(item.quality.color)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                if !item.upgradeIconPath.isEmpty {
+                    GameIcon(path: item.upgradeIconPath, size: 14, fallbackSymbol: "sparkles")
+                        .help("Upgrades into \(item.awakenedName) with the Ashes of Awakening")
+                }
 
                 Spacer(minLength: 8)
 

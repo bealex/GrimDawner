@@ -53,6 +53,7 @@ struct CharacterBuilder {
             devotion: devotions.map(from: save),
             itemGrantedSkills: skills.looseSkills(from: save, claimed: claimed),
             skillModifications: Self.skillModifications(of: equipped),
+            skillRankSources: Self.skillRankSources(of: equipped, sets: sets),
             doll: LayoutResolver(database: database).equipmentDoll(),
             equipment: equipment,
             weaponSets: weaponSets,
@@ -84,6 +85,47 @@ struct CharacterBuilder {
             }
         }
         return changes
+    }
+
+    /// Every `+N to skill` the gear carries, one entry per thing that grants it.
+    private static func skillRankSources(of items: [ResolvedItem], sets: [ResolvedSet])
+        -> [SkillRankSource]
+    {
+        var sources = [SkillRankSource]()
+
+        func collect(_ stats: StatBlock, name: String, iconPath: String) {
+            for (path, levels) in stats.skillBonuses where levels != 0 {
+                sources.append(SkillRankSource(
+                    name: name,
+                    iconPath: iconPath,
+                    levels: levels,
+                    reach: .skill,
+                    path: path
+                ))
+            }
+            for (path, levels) in stats.masteryBonuses where levels != 0 {
+                sources.append(SkillRankSource(
+                    name: name,
+                    iconPath: iconPath,
+                    levels: levels,
+                    reach: .mastery,
+                    path: path
+                ))
+            }
+            if stats.allSkillBonus != 0 {
+                sources.append(SkillRankSource(
+                    name: name,
+                    iconPath: iconPath,
+                    levels: stats.allSkillBonus,
+                    reach: .everySkill,
+                    path: ""
+                ))
+            }
+        }
+
+        for item in items { collect(item.stats, name: item.displayName, iconPath: item.iconPath) }
+        for set in sets { collect(set.bonuses, name: set.name, iconPath: "") }
+        return sources
     }
 
     /// Armour on the six hit-region slots, which the engine weights rather than sums.

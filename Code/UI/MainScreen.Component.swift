@@ -24,7 +24,7 @@ extension MainScreen {
                 .frame(minWidth: 980, minHeight: 640)
         }
 
-        /// ⌘1 … ⌘5 select a view and ⌘R re-reads the save folder, as a tabbed Mac app is expected to.
+        /// ⌘1 … ⌘6 select a view and ⌘R re-reads the save folder, as a tabbed Mac app is expected to.
         ///
         /// These carry only the key equivalents. They are invisible, and an invisible button still takes
         /// clicks, so pointer input and the accessibility tree both skip them — the picker is the control.
@@ -120,7 +120,12 @@ extension MainScreen {
 
             switch model.panel {
                 case .inventory:
-                    InventoryTab(character: character, search: search, selection: $model.selectedItem)
+                    InventoryTab(
+                        character: character,
+                        search: search,
+                        selection: $model.selectedItem,
+                        revealSkill: model.reveal(skillAt:)
+                    )
                 case .items:
                     ItemsTab(
                         items: model.catalogue,
@@ -140,6 +145,17 @@ extension MainScreen {
                         selectedStar: $model.selectedStar,
                         selectedConstellation: $model.selectedConstellation
                     )
+                case .affixes:
+                    AffixesTab(
+                        affixes: model.affixes,
+                        isListing: model.isListingItems,
+                        search: search,
+                        selectedKey: model.selectedAffixKey,
+                        selectedLevel: model.selectedAffixLevel,
+                        selected: model.selectedAffixes,
+                        select: model.selectAffixes
+                    )
+                    .task { model.openCatalogue() }
                 case .parameters:
                     ParametersTab(
                         character: character,

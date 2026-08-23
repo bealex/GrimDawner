@@ -99,6 +99,9 @@ struct ResolvedItem: Identifiable, Sendable {
     let prefixName: String
     let suffixName: String
     let rarity: ItemRarity
+    /// The game's own badge for what the item is — a monster infrequent, a double rare, an ascended
+    /// piece — or empty when it wears none.
+    let qualityMarkPath: String
     let itemLevel: Int
     let levelRequirement: Int
     let requirements: [String: Double]

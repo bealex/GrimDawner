@@ -41,6 +41,29 @@ struct GameArtwork: View {
     }
 }
 
+/// The game's quality badge, sat in the corner of an item's icon the way the game's own slots wear it.
+struct ItemQualityBadge: ViewModifier {
+    let path: String
+    let size: CGFloat
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .bottomLeading) {
+            if !path.isEmpty {
+                GameIcon(path: path, size: size, fallbackSymbol: "")
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+extension View {
+    /// Stamps an item's quality badge on its icon. An item that wears none is left alone.
+    func itemQualityBadge(_ path: String, size: CGFloat) -> some View {
+        modifier(ItemQualityBadge(path: path, size: size))
+    }
+}
+
 /// Draws the artwork a `.dbr` record names, falling back to a symbol when the texture is unavailable.
 struct GameIcon: View {
     let path: String

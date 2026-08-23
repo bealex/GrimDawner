@@ -9,9 +9,20 @@ struct SkillDetailView: View {
     let source: String
     /// What the worn gear changes about this skill, one entry per item that changes it.
     var modifications: [SkillModification] = []
+    /// What lifts this skill's rank, one entry per item or set that does.
+    var rankSources: [SkillRankSource] = []
 
     @Environment(\.quickSearch)
     private var search
+
+    /// Says why a bonus reaches this skill, since two of the three reach further than one skill.
+    private static func reachText(_ source: SkillRankSource) -> String {
+        switch source.reach {
+            case .skill: "\(source.name) names this skill"
+            case .mastery: "\(source.name) lifts every skill of the mastery"
+            case .everySkill: "\(source.name) lifts every skill"
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -37,6 +48,21 @@ struct SkillDetailView: View {
                         value: "+\(skill.itemBonus)",
                         valueColor: skill.itemBonus > 0 ? .green : .secondary
                     )
+                    ForEach(rankSources) { source in
+                        HStack(spacing: 6) {
+                            if !source.iconPath.isEmpty {
+                                GameIcon(path: source.iconPath, size: 16, fallbackSymbol: "shippingbox")
+                            }
+                            StatRow(
+                                title: source.name,
+                                value: "+\(source.levels)",
+                                valueColor: .green,
+                                icon: source.iconPath.isEmpty ? "circle.hexagongrid" : nil
+                            )
+                        }
+                        .padding(.leading, 12)
+                        .help(Self.reachText(source))
+                    }
 
                     Divider().padding(.vertical, 2)
 
@@ -61,6 +87,8 @@ struct SkillDetailView: View {
             SectionCard(title: "Effects", subtitle: skill.isLearned ? "at rank \(skill.totalLevel)" : "at rank 1") {
                 StatBlockView(block: skill.stats)
             }
+
+            SkillPetView(skill: skill)
 
             // Gear that changes a skill nobody has spent a point on changes nothing, so it reads faded.
             ForEach(modifications) { change in

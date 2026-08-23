@@ -127,6 +127,14 @@ struct ConstellationDetailView: View {
     let constellation: ResolvedConstellation
     let star: DevotionStar?
 
+    /// A star reads as taken or not, and says its rank when it has more than the one.
+    private static func subtitle(of star: DevotionStar) -> String {
+        let state = star.isTaken ? "taken" : "not taken"
+        guard star.skill.maxLevel > 1 else { return state }
+
+        return "\(state) · rank \(star.skill.baseLevel) / \(star.skill.maxLevel)"
+    }
+
     @Environment(\.quickSearch)
     private var search
 
@@ -159,7 +167,7 @@ struct ConstellationDetailView: View {
             }
 
             if let star {
-                SectionCard(title: star.skill.name, subtitle: star.isTaken ? "taken" : "not taken") {
+                SectionCard(title: star.skill.name, subtitle: Self.subtitle(of: star)) {
                     VStack(alignment: .leading, spacing: 10) {
                         if !star.skill.description.isEmpty {
                             Text(star.skill.description)
@@ -167,9 +175,18 @@ struct ConstellationDetailView: View {
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        if !star.skill.parameters.isEmpty {
+                            VStack(spacing: 4) {
+                                ForEach(star.skill.parameters) { parameter in
+                                    StatRow(title: parameter.name, value: parameter.value)
+                                }
+                            }
+                        }
                         StatBlockView(block: star.skill.stats)
                     }
                 }
+
+                SkillPetView(skill: star.skill)
             }
 
             SectionCard(title: "Stars", subtitle: "\(constellation.takenStars) of \(constellation.totalStars)") {

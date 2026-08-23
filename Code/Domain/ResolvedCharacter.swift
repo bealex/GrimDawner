@@ -9,6 +9,34 @@ struct SkillContext: Sendable {
     let learned: Set<String>
 }
 
+/// Ranks one worn item or set adds to a skill, and how far that reaches.
+struct SkillRankSource: Identifiable, Sendable {
+    enum Reach: Sendable {
+        /// `+N to <skill>`, which names one skill.
+        case skill
+        /// `+N to <mastery>`, which lifts every skill of that mastery.
+        case mastery
+        /// `+N to all skills`.
+        case everySkill
+    }
+
+    let id = UUID()
+    let name: String
+    let iconPath: String
+    let levels: Int
+    let reach: Reach
+    /// The skill or mastery it names, lowercased. Empty for a bonus to all skills.
+    let path: String
+
+    func reaches(skill skillPath: String, in masteryPath: String?) -> Bool {
+        switch reach {
+            case .skill: path == skillPath.lowercased()
+            case .mastery: path == masteryPath?.lowercased()
+            case .everySkill: true
+        }
+    }
+}
+
 /// What one worn item changes about one skill.
 struct SkillModification: Identifiable, Sendable {
     let id = UUID()
@@ -60,6 +88,13 @@ struct ResolvedFaction: Identifiable, Sendable {
     }
 }
 
+extension [ResolvedFaction] {
+    /// Alphabetical, by the viewer's own locale rather than by code point.
+    func sortedByName() -> [ResolvedFaction] {
+        sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+}
+
 /// A save file fully resolved against the game database: the object the whole UI reads from.
 struct ResolvedCharacter: Sendable {
     let file: CharacterFile
@@ -78,6 +113,8 @@ struct ResolvedCharacter: Sendable {
 
     /// What the worn gear changes about a skill, by the skill's record path, lowercased.
     let skillModifications: [String: [SkillModification]]
+    /// Every `+N to skill` the gear carries, kept whole so a skill can ask which of them reach it.
+    let skillRankSources: [SkillRankSource]
 
     /// Every skill the character's own masteries hold, lowercased, for telling a `+N` line about one
     /// of them from a `+N` line about a skill of some other class.
@@ -91,6 +128,13 @@ struct ResolvedCharacter: Sendable {
         Set(masteries.flatMap { mastery in
             mastery.skills.filter { $0.baseLevel > 0 }.map { $0.recordPath.lowercased() }
         })
+    }
+
+    /// What lifts one skill's rank, most generous first.
+    func rankSources(forSkill path: String, in masteryPath: String?) -> [SkillRankSource] {
+        skillRankSources
+            .filter { $0.reaches(skill: path, in: masteryPath) }
+            .sorted { $0.levels > $1.levels }
     }
 
     var skillContext: SkillContext {
@@ -111,10 +155,11 @@ struct ResolvedCharacter: Sendable {
     let difficultyPenalty: StatBlock
     let sheet: CharacterSheet
 
-    /// Standings you earn through play, which is what the game's faction window lists.
-    var reputations: [ResolvedFaction] { factions.filter(\.isReputation) }
+    /// Standings you earn through play, which is what the game's faction window lists. Both groups read
+    /// alphabetically: the save's own order is positional and says nothing to a reader.
+    var reputations: [ResolvedFaction] { factions.filter(\.isReputation).sortedByName() }
     /// The engine's hostility groups: monster families you are simply at war with.
-    var hostilityGroups: [ResolvedFaction] { factions.filter { !$0.isReputation } }
+    var hostilityGroups: [ResolvedFaction] { factions.filter { !$0.isReputation }.sortedByName() }
 
     var devotionPointsUsed: Int { devotion.takenStars }
     var playTime: Duration { .seconds(Int(save.stats.playTime)) }

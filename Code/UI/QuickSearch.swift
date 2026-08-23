@@ -46,6 +46,12 @@ struct QuickSearch: Equatable {
         return isMatch ? .match : .faded
     }
 
+    /// Colours a match and leaves everything else as it is, for lines that must stay readable whatever
+    /// is being searched for.
+    func highlight(matching candidates: String?...) -> Emphasis {
+        matches(candidates.compactMap { $0 }) ? .match : .neutral
+    }
+
     /// Whole blocks recede when nothing inside them matches, but are never coloured as one.
     func fade(unless isMatch: Bool) -> Emphasis {
         isActive && !isMatch ? .faded : .neutral
@@ -85,8 +91,11 @@ extension View {
     }
 
     /// Rings a match, for the tiles of artwork a colour change would not show on.
+    ///
+    /// A tile that recedes is darkened rather than faded: artwork turned transparent shows whatever the
+    /// panel draws behind it, which on a skill tree is the connectors between the skills.
     func quickSearch(_ emphasis: QuickSearch.Emphasis, cornerRadius: CGFloat = 6) -> some View {
-        opacity(emphasis == .faded ? 0.25 : 1)
+        colorMultiply(emphasis == .faded ? Color(white: 0.35) : .white)
             .background {
                 if emphasis == .match {
                     RoundedRectangle(cornerRadius: cornerRadius)

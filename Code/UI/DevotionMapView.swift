@@ -23,9 +23,6 @@ struct DevotionMapView: View {
     private var size: CGSize = .zero
     @State
     private var hovered: DevotionStar.ID?
-    @State
-    private var zoomAtGestureStart: CGFloat?
-
     private static let fallbackStarSize = CGSize(width: 64, height: 64)
 
     var body: some View {
@@ -45,7 +42,6 @@ struct DevotionMapView: View {
                 case .ended: hovered = nil
             }
         }
-        .gesture(magnification)
         .accessibilityLabel("Devotion map, \(map.takenStars) stars taken")
     }
 
@@ -64,21 +60,6 @@ struct DevotionMapView: View {
 
     private func pan(by translation: CGSize) {
         camera.pan(by: translation, within: map.bounds)
-    }
-
-    /// Pinching scales the sky around where the fingers started, as the wheel does around the pointer.
-    private var magnification: some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
-                let base = zoomAtGestureStart ?? camera.zoom
-                zoomAtGestureStart = base
-                let wanted = min(
-                    max(base * value.magnification, MapCamera.zoomRange.lowerBound),
-                    MapCamera.zoomRange.upperBound
-                )
-                scale(by: wanted / camera.zoom, around: value.startLocation)
-            }
-            .onEnded { _ in zoomAtGestureStart = nil }
     }
 
     // MARK: - Drawing

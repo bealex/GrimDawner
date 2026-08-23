@@ -3,7 +3,7 @@
 ## Working
 
 The save parser consumes a current save exactly. Names and icons for items, skills, factions and
-constellations resolve from the installed game's data. Five tabs render — Inventory, Items, Skills,
+constellations resolve from the installed game's data. Six tabs render — Inventory, Items, Affixes, Skills,
 Devotions, Parameters — each with a detail sidebar and the shared quick search, which starts on the first
 keystroke rather than from a field in the toolbar. The app runs dark whatever the system is set to, since
 every panel it draws is the game's own artwork.
@@ -45,8 +45,9 @@ record and shown nowhere; adding one means adding its definition.
 
 The build machine grants screen recording but not accessibility control, so screenshots work while
 synthetic clicks and keystrokes never reach the app. Selection in each tab, the quick-search overlay, the
-weapon-set switch, the devotion map's zoom and pan, the sidebar divider and panel shrinking are checked by
-eye rather than by test; the search's matching rules are covered by `QuickSearchTests`.
+weapon-set switch, the devotion map's wheel zoom, pinch, two-finger pan and middle-button drag, the
+sidebar divider and panel shrinking are checked by eye rather than by test; the search's matching rules
+are covered by `QuickSearchTests`.
 
 **Whether Nemesis is the right tier around −12000.** The band runs from the floor at −20000 up to −8000,
 which follows from reading `factionValueN` as lower bounds — consistent with 25000 being both the Revered
@@ -88,8 +89,9 @@ of their own, each reading with the condition that fires it in the game's own wo
 
 Only a skill an item brings into being is described in full. A `+N to <skill>` line and an "Enhances" line
 both point at a skill with a panel of its own: `+N` shows the reference alone, "Enhances" shows what the
-modifier changes and nothing else. A skill outside the character's masteries appears on no panel, so those
-lines name the mastery instead — `+2 to Hellfire Mine · Demolitionist`. A change to a skill the character
+modifier changes and nothing else. A line about one of the character's own skills opens that skill on its
+mastery panel; a skill of another class has no panel to open, so the line names the mastery instead —
+`+2 to Hellfire Mine · Demolitionist`. A change to a skill the character
 has spent no point on changes nothing, so it reads faded. The same changes appear under the skill itself
 in the Skills tab, one card per item that changes it. The directory has no character, so every line there
 names its mastery and none is faded.
@@ -105,6 +107,43 @@ The listing is cached under `Caches/GrimDawner/items-<fingerprint>.json`, where 
 SHA-256 of every loaded archive's name, size and modification date. A patched game hashes differently and
 is listed again, and the stale file is deleted. `Hasher` cannot be used for this — its seed changes with
 every launch, so nothing cached under it would ever be read back.
+
+A skill reads in full: its rank, its parameters at that rank, what it grants, what it adds to every pet
+(`petBonusName`), and what it summons. A summon carries the pet's own record — its life and resistances,
+with the pet's unnamed adjuster skills folded in, as the game folds them — how long it stands
+(`spawnObjectsTimeToLive`), how many stand at once (`petLimit`), and its named abilities at the ranks the
+pet record gives them. A pet's own abilities are read without summons of their own, so nothing recurses.
+
+A skill's sidebar names every item, set and mastery bonus that lifts its rank, `+N` each, beside the
+total the sheet counts. Three reaches feed it: `+N to <skill>`, `+N to <mastery>` and `+N to all skills`.
+
+Artwork that recedes is darkened rather than faded. A skill button turned transparent shows the
+connectors the panel draws beneath it, so the search's dimming and the unlearned-skill dimming both
+multiply the colour down instead of dropping the opacity.
+
+## The affix catalogue
+
+The Affixes tab lists every named prefix and suffix — 6,191 records under 386 names — swept from
+`records/items/lootaffixes/` in the same pass as the item directory and cached in the same file. The
+folder an affix sits in is what makes it a prefix or a suffix; its name is the `lootRandomizerName` tag.
+
+A name covers more than a level ladder. The game writes it once per level tier and, at each tier, once per
+kind of item it can land on, and those differ in what they grant rather than only in how much: "of
+Spellweaving" holds 42 distinct rolls at level 24 alone. Nothing in the data keys those variants — not the
+record name, whose trailing letters group records that share a level, and not the stat set — so the
+catalogue lists one line per name, the sidebar picks the level, and every roll written at that level is
+shown rather than one of them chosen arbitrarily.
+
+An affix has no copy of its own, so there is no seed and no rolled value: each figure shows as the band it
+can land in, rolled through the same `ItemRoll` path an item's prefix takes, at the affix's own
+`lootRandomizerJitter`.
+
+## Upgrading an epic piece
+
+`ItemArtifactFormula` records name what a blueprint consumes and what it produces. The 97 whose reagents
+include `craft_awakeningashes.dbr` are the awakening upgrades: `reagentBaseBaseName` is the epic piece,
+`artifactName` the awakened item it becomes. The directory carries that link on the item it upgrades,
+with the ashes' own artwork beside its name.
 
 ## Performance
 

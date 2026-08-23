@@ -22,6 +22,7 @@ extension MainScreen {
             case skills = "Skills"
             case devotions = "Devotions"
             case parameters = "Parameters"
+            case affixes = "Affixes"
 
             var id: String { rawValue }
 
@@ -33,6 +34,7 @@ extension MainScreen {
                     case .skills: "3"
                     case .devotions: "4"
                     case .parameters: "5"
+                    case .affixes: "6"
                 }
             }
 
@@ -43,6 +45,7 @@ extension MainScreen {
                     case .skills: "sparkles.rectangle.stack"
                     case .devotions: "sparkles"
                     case .parameters: "person.text.rectangle"
+                    case .affixes: "textformat.abc"
                 }
             }
         }
@@ -50,6 +53,7 @@ extension MainScreen {
         private(set) var characters: [CharacterFile] = []
         /// Every named item in the game, listed the first time the directory is opened.
         private(set) var catalogue: [DirectoryEntry] = []
+        private(set) var affixes: [AffixEntry] = []
         private(set) var catalogueState: LoadState = .idle
         private(set) var character: ResolvedCharacter?
         private(set) var saveState: LoadState = .idle
@@ -63,6 +67,11 @@ extension MainScreen {
         var selectedItem: ResolvedItem?
         var selectedCatalogueItem: ResolvedItem?
         var selectedCataloguePath: String?
+        /// Which affix name is open, which of its level tiers is being read, and the records that
+        /// tier holds — one name at one level can cover several different rolls.
+        var selectedAffixKey: String?
+        var selectedAffixLevel: Int?
+        private(set) var selectedAffixes: [ResolvedAffix] = []
         var selectedSkill: ResolvedSkill?
         var selectedStar: DevotionStar.ID?
         var selectedConstellation: ResolvedConstellation.ID?
@@ -98,7 +107,7 @@ extension MainScreen {
 
             catalogueState = .loading
             Task {
-                catalogue = await Task.detached(priority: .userInitiated) {
+                let listing = await Task.detached(priority: .userInitiated) {
                     let listed =
                         ItemCatalogueStore.load(fingerprint: database.fingerprint)
                         ?? {
@@ -107,9 +116,11 @@ extension MainScreen {
                             return built
                         }()
 
-                    return listed.items.map(DirectoryEntry.init)
+                    return (listed.items.map(DirectoryEntry.init), listed.affixes.map(AffixEntry.init))
                 }.value
 
+                catalogue = listing.0
+                affixes = listing.1
                 catalogueState = .ready
             }
         }
@@ -118,6 +129,29 @@ extension MainScreen {
         func reveal(_ item: ResolvedItem) {
             selectedItem = item
             panel = .inventory
+        }
+
+        /// Shows a skill of the character's own where its mastery panel draws it.
+        func reveal(skillAt path: String) {
+            guard
+                let skill = character?.masteries
+                    .flatMap(\.skills)
+                    .first(where: { $0.recordPath.caseInsensitiveCompare(path) == .orderedSame })
+            else { return }
+
+            selectedSkill = skill
+            panel = .skills
+        }
+
+        /// Reads every record one affix holds at one of its level tiers, with the band each figure
+        /// rolls in.
+        func selectAffixes(key: String, level: Int, paths: [String]) {
+            guard let database else { return }
+
+            let resolver = ItemResolver(database: database, skills: SkillResolver(database: database))
+            selectedAffixKey = key
+            selectedAffixLevel = level
+            selectedAffixes = paths.compactMap(resolver.affix(at:))
         }
 
         /// Reads one catalogued item in full, as it comes out of the box with no affixes on it.
@@ -213,6 +247,9 @@ extension MainScreen {
             selectedItem = nil
             selectedCatalogueItem = nil
             selectedCataloguePath = nil
+            selectedAffixes = []
+            selectedAffixKey = nil
+            selectedAffixLevel = nil
             selectedSkill = nil
             selectedStar = nil
             selectedConstellation = nil

@@ -8,6 +8,8 @@ struct InventoryTab: View {
     let search: QuickSearch
     @Binding
     var selection: ResolvedItem?
+    /// Opens one of the character's own skills on its mastery panel.
+    var revealSkill: ((String) -> Void)?
 
     @State
     private var weaponSet: Int?
@@ -35,7 +37,7 @@ struct InventoryTab: View {
             }
         } detail: {
             if let selection {
-                ItemDetailView(item: selection, wearer: character.skillContext)
+                ItemDetailView(item: selection, wearer: character.skillContext, revealSkill: revealSkill)
             } else {
                 DetailPlaceholder(title: "No item selected", hint: "Pick a piece of gear to see everything it carries.")
             }
@@ -70,6 +72,8 @@ private struct DollView: View {
     let search: QuickSearch
     @Binding
     var selection: ResolvedItem?
+    /// Opens one of the character's own skills on its mastery panel.
+    var revealSkill: ((String) -> Void)?
 
     var body: some View {
         // The doll's boxes are small next to the skill panel's, so it is given a quarter more room.
@@ -131,6 +135,7 @@ private struct DollBox: View {
                         height: slot.frame.height - 2,
                         fallbackSymbol: slot.symbolName
                     )
+                    .itemQualityBadge(item.qualityMarkPath, size: slot.frame.width * 0.34)
                 } else {
                     GameIcon(
                         path: slot.silhouette,

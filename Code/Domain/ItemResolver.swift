@@ -44,6 +44,18 @@ struct ItemResolver {
         }
 
         let rarity = rarity(base: base, parts: parts, path: item.baseName)
+        let mark = ItemQualityMark(ItemQualityMark.Parts(
+            // A rare-classified record is a monster infrequent only when it is a piece of gear; a
+            // component or an augment carries the same classification and wears no badge.
+            isMonsterInfrequent: ItemRarity(classification: base.text("itemClassification")) == .rare
+                && ItemQualityMark.isGear(recordClass: base.recordClass),
+            isDoubleRare: [ item.prefixName, item.suffixName ].allSatisfy { path in
+                database.record(path).map { ItemRarity(classification: $0.text("itemClassification")) } == .rare
+            },
+            isAscended: !item.ascendedName.isEmpty,
+            isAwakened: item.baseName.contains("/awakened/"),
+            rarity: rarity
+        ))
 
         return ResolvedItem(
             raw: item,
@@ -53,6 +65,7 @@ struct ItemResolver {
             prefixName: parts.first { $0.kind == .prefix }?.name ?? "",
             suffixName: parts.first { $0.kind == .suffix }?.name ?? "",
             rarity: rarity,
+            qualityMarkPath: mark?.texturePath ?? "",
             itemLevel: base.integer("itemLevel"),
             levelRequirement: parts.map(\.levelRequirement).max() ?? 0,
             requirements: requirements(of: base),
@@ -61,6 +74,45 @@ struct ItemResolver {
             stats: stats,
             statsLowest: lowest,
             statsHighest: highest
+        )
+    }
+
+    /// One affix read on its own, as the catalogue lists it rather than as an item wears it.
+    func affix(at path: String) -> ResolvedAffix? {
+        guard let record = database.record(path) else { return nil }
+
+        // The affix rolls at its own jitter, which is the prefix slot's business rather than the base's.
+        let sources = ItemRoll.Sources(base: ItemRoll.Table(), prefix: Self.table(of: record), seed: 0)
+
+        func block(_ draws: ItemRoll.Draws) -> StatBlock {
+            var block = StatBlock()
+            for (key, value) in ItemRoll.stats(of: sources, drawing: draws) {
+                guard StatCatalog.definition(for: key) != nil else { continue }
+
+                block.increase(key, by: value)
+            }
+            return block
+        }
+
+        var lowest = block(.lowest)
+        var highest = block(.highest)
+        var granted = [GrantedSkill]()
+        var carried = StatBlock()
+        collectSkillBonuses(from: record, into: &carried, granted: &granted)
+        collectConversions(from: record, into: &carried)
+        lowest.merge(carried.withoutCataloguedValues())
+        highest.merge(carried.withoutCataloguedValues())
+
+        return ResolvedAffix(
+            path: path,
+            name: affixName(of: record),
+            kind: path.contains("/prefix/") ? .prefix : .suffix,
+            rarity: ItemRarity(classification: record.text("itemClassification")),
+            levelRequirement: record.integer("levelRequirement"),
+            jitter: record.number("lootRandomizerJitter"),
+            statsLowest: lowest,
+            statsHighest: highest,
+            grantedSkills: granted
         )
     }
 

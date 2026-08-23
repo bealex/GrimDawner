@@ -212,6 +212,15 @@ cooldown. Those paths are the same ones the mastery panel's buttons use, so a ch
 record path. A change to a summon or a mine is a `SkillSecondary_PetModifier`, which keeps its numbers one
 step further on, at `petSkillName`.
 
+**An item wears a badge for what it is.** `ui/character/item_monsterinfrequent.tex`,
+`item_doublerare.tex`, `item_doubleraremonsterinfrequent.tex`, `item_awakened.tex` and the
+`item_ascended_*` family are 32×32 marks the game stamps on an item's slot. A monster infrequent is a
+gear record whose own `itemClassification` is `Rare`; a double rare is an item whose prefix and suffix
+are both rare-classified; an awakened item sits under `records/items/awakened/`. Which mark goes with
+which item is decided in the engine and stated nowhere in the data, so `ItemQualityMark` follows the
+texture names. `itembackground.tex` and `itembackgroundlegendary.tex` are 64×64 slot backgrounds rather
+than marks.
+
 **Factions.** Only records with `questEnabled` are reputations the player earns; the rest are the engine's
 hostility groups and the game's faction window never lists them. Eight tiers, from
 `factionValueN` / `factionTagN`, with `factionMarketDiscountN` confirming the alignment:

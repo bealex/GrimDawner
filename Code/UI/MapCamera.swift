@@ -59,10 +59,11 @@ struct MapCamera: Equatable {
     }
 }
 
-/// The mouse input a map needs and SwiftUI does not deliver: the wheel, and a middle-button drag.
+/// The pointing-device input a map needs and SwiftUI does not deliver: the wheel, a pinch, a two-finger
+/// scroll and a middle-button drag.
 ///
-/// Both come from a local monitor rather than from the view itself, so the left clicks the map selects
-/// with are left alone.
+/// All of it comes from a local monitor rather than from the view itself, so the left clicks the map
+/// selects with are left alone.
 struct MapMouseInput: NSViewRepresentable {
     /// A wheel step: how much to scale by, and the point of the view it should hold still.
     var scale: (CGFloat, CGPoint) -> Void
@@ -106,7 +107,7 @@ struct MapMouseInput: NSViewRepresentable {
             guard monitor == nil else { return }
 
             let events: NSEvent.EventTypeMask = [
-                .scrollWheel, .otherMouseDown, .otherMouseDragged, .otherMouseUp,
+                .scrollWheel, .magnify, .otherMouseDown, .otherMouseDragged, .otherMouseUp,
             ]
             monitor = NSEvent.addLocalMonitorForEvents(matching: events) { [weak self] event in
                 self?.handle(event) == true ? nil : event
@@ -130,7 +131,15 @@ struct MapMouseInput: NSViewRepresentable {
 
             switch event.type {
                 case .scrollWheel:
-                    scale?(Self.factor(of: event), point)
+                    // Two fingers on a trackpad pan the sky, as they scroll anything else; a wheel,
+                    // which reports coarse notches rather than precise deltas, zooms it. ⌘ zooms either.
+                    if event.hasPreciseScrollingDeltas, !event.modifierFlags.contains(.command) {
+                        pan?(CGSize(width: event.scrollingDeltaX, height: event.scrollingDeltaY))
+                    } else {
+                        scale?(Self.factor(of: event), point)
+                    }
+                case .magnify:
+                    scale?(1 + event.magnification, point)
                 case .otherMouseDown where event.buttonNumber == Self.middleButton:
                     lastDrag = event.locationInWindow
                 case .otherMouseDragged where event.buttonNumber == Self.middleButton:
@@ -150,10 +159,9 @@ struct MapMouseInput: NSViewRepresentable {
             return true
         }
 
-        /// A wheel notch is a coarse step; a trackpad reports a fine one many times a second.
+        /// A wheel notch is a coarse step; the fine deltas a trackpad sends arrive many times a second.
         private static func factor(of event: NSEvent) -> CGFloat {
-            let step = event.scrollingDeltaY * (event.hasPreciseScrollingDeltas ? 0.004 : 0.04)
-            return exp(step)
+            exp(event.scrollingDeltaY * (event.hasPreciseScrollingDeltas ? 0.004 : 0.04))
         }
 
         private static let middleButton = 2

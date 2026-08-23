@@ -10,6 +10,8 @@ struct SkillResolver {
     let database: GameDatabase
 
     private static let masteryMarker = "_classtraining_"
+    /// A pet record names its abilities in numbered slots; seventeen is as many as the game writes.
+    private static let petSkillSlots = 17
 
     /// Skill record classes whose bonuses apply without the player pressing anything — passives, and the
     /// toggled auras a character leaves running.
@@ -199,7 +201,8 @@ struct SkillResolver {
         record: ArzRecord,
         path: String,
         ranks: Ranks,
-        button: Button?
+        button: Button?,
+        summons: Bool = true
     ) -> ResolvedSkill {
         let baseLevel = ranks.spent
         let devotionBonus = ranks.devotion
@@ -227,8 +230,67 @@ struct SkillResolver {
             iconPath: skillIcon(record),
             connectors: Self.connectors(of: record),
             parameters: parameters(of: record, atLevel: max(rank, 1)),
+            petBonus: petBonus(of: record, atLevel: max(rank, 1)),
+            // A pet's own abilities are read without theirs, so a summon that summons cannot recurse.
+            summon: summons ? summon(of: record) : nil,
             stats: effects(of: record, atLevel: max(rank, 1))
         )
+    }
+
+    /// What a skill adds to every pet the character has, which the game prints as a block of its own.
+    private func petBonus(of record: ArzRecord, atLevel level: Int) -> StatBlock {
+        guard let bonus = database.record(record.text("petBonusName")) else { return StatBlock() }
+
+        return stats(of: bonus, atLevel: level)
+    }
+
+    /// What a skill puts on the field, for the classes that spawn one.
+    private func summon(of record: ArzRecord) -> ResolvedSummon? {
+        guard let pet = database.record(record.text("spawnObjects")) else { return nil }
+
+        var abilities = [ResolvedSkill]()
+        var stats = stats(of: pet, atLevel: 1)
+
+        for index in 1 ... Self.petSkillSlots {
+            guard
+                case let path = pet.text("skillName\(index)"),
+                !path.isEmpty,
+                let ability = database.record(path)
+            else { continue }
+
+            let level = max(pet.integer("skillLevel\(index)"), 1)
+            // A pet's unnamed skills are its own adjusters — armour, damage, resistances. The game
+            // folds them into what the pet is; only the named ones read as abilities.
+            guard
+                database.localised(ability.text("skillDisplayName")) != nil
+            else {
+                stats.merge(effects(of: ability, atLevel: level))
+                continue
+            }
+
+            abilities.append(skill(
+                record: ability,
+                path: path,
+                ranks: Ranks(spent: level),
+                button: nil,
+                summons: false
+            ))
+        }
+
+        return ResolvedSummon(
+            name: petName(pet, summonedBy: record),
+            timeToLive: record.number("spawnObjectsTimeToLive"),
+            limit: record.integer("petLimit"),
+            stats: stats,
+            skills: abilities
+        )
+    }
+
+    /// A pet record rarely names itself; the game shows the summon by the skill that calls it.
+    private func petName(_ pet: ArzRecord, summonedBy skill: ArzRecord) -> String {
+        if let name = database.localised(pet.text("description")) { return name }
+
+        return skillName(skill, path: skill.path)
     }
 
     /// What a skill does at a rank. A skill that only triggers a buff carries its numbers over there.

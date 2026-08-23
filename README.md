@@ -32,7 +32,7 @@ On first launch, pick two folders:
   point at the game folder inside the bottle.
 - **Save folder** — the game's `save` folder, or its `main` subfolder.
 
-Both are kept as security-scoped bookmarks, so they survive relaunches. ⌘1 … ⌘5 switch tabs, ⌘R re-reads
+Both are kept as security-scoped bookmarks, so they survive relaunches. ⌘1 … ⌘6 switch tabs, ⌘R re-reads
 the save folder.
 
 Every tab works the same way: click something to see it in full in the sidebar, and start typing to light
@@ -42,22 +42,33 @@ Twin Fangs.
 
 ## What it shows
 
-**Inventory** — the equipment doll on the game's own character panel, either weapon set. Selecting an item
-breaks it down part by part — base, prefix, suffix, crafting bonus, component, augment, ascendant affix —
-with what each contributes and the skills it grants.
+**Inventory** — the equipment doll on the game's own character panel, either weapon set. Each slot wears
+the game's own quality badge: a monster infrequent's gem, a double rare's pair of them, the frame an
+ascendant affix adds. Selecting an item breaks it down part by part — base, prefix, suffix, crafting
+bonus, component, augment, ascendant affix — with what each contributes and the skills it grants.
 
 **Items** — every named item in the game, around eight thousand, with components, relics and augments,
 folded so one item's level tiers read as a single line. Typing filters this list rather than dimming it,
 and matches stats as well as names: `fireres` finds everything carrying fire resistance. Filters above the
-list cover the lowest level, rarity and kind. Rolled figures show as the band a copy can land in.
+list cover the lowest level, rarity and kind. Rolled figures show as the band a copy can land in. An
+epic piece the Ashes of Awakening upgrade carries the ashes' own icon beside its name and a link to the
+awakened item it becomes.
+
+**Affixes** — every prefix and suffix a random item can roll, one line per name. The sidebar picks which
+level tier to read and lists every roll the game writes at it, with the band each figure lands in and the
+skills some of them grant. Filters for prefix or suffix and for quality; typing searches names and stats
+alike, so `aetherres` lists everything that could put aether resistance on a rare item.
 
 **Skills** — both mastery trees on the game's own panels, with class artwork, mastery bar, tier milestones
-and the connectors between a skill and its modifiers. A skill's sidebar gives its rank over its cap, its
-parameters at that rank, everything it grants, and what each worn item changes about it.
+and the connectors between a skill and its modifiers. A skill's sidebar gives its rank over its cap, which items lift
+that rank and by how much, its parameters at that rank, everything it grants, and what each worn item
+changes about it.
 
 **Devotions** — the whole sky: 110 constellations over the game's nebulas, taken stars lit and linked, the
-rest tinted by whether affinity reaches them. Clicking a star shows what it grants and what its
-constellation asks for.
+rest tinted by whether affinity reaches them. A star reads in full: its rank, its parameters at that rank,
+what it grants, what it adds to every pet, and what it summons — the pet's own life, how long it stands
+and each of its abilities. Two fingers pan it and a pinch zooms; a mouse wheel zooms
+and the middle button drags. Clicking a star shows what it grants and what its constellation asks for.
 
 **Parameters** — every number the sheet knows, grouped: attributes, offence, defence, armour per hit
 region, resistances against their caps, control resistances, damage by type, damage over time,

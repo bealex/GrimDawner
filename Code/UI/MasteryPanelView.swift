@@ -173,8 +173,10 @@ private struct SkillButton: View {
                     height: size.height - skill.iconOffset.y * 2,
                     fallbackSymbol: "sparkle"
                 )
+                // Darkened rather than faded: a transparent icon would show the connectors the panel
+                // draws underneath it.
                 .saturation(skill.isLearned ? 1 : 0)
-                .opacity(skill.isLearned ? 1 : 0.45)
+                .colorMultiply(skill.isLearned ? .white : Color(white: 0.45))
 
                 GameIcon(path: skill.frame, width: size.width, height: size.height, fallbackSymbol: "square")
 

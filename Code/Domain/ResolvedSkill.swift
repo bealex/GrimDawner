@@ -51,6 +51,20 @@ struct SkillChanges: Sendable {
     var isEmpty: Bool { stats.hasNothingToShow && parameters.isEmpty }
 }
 
+/// What a skill puts on the field: the pet it summons, how long it stands, and what it can do.
+struct ResolvedSummon: Identifiable, Sendable {
+    let id = UUID()
+    let name: String
+    /// Seconds it lives, or zero when it stands until it dies.
+    let timeToLive: Double
+    /// How many of it can stand at once.
+    let limit: Int
+    /// The pet's own record: its life, its resistances, whatever the catalogue knows.
+    let stats: StatBlock
+    /// The abilities the pet uses, at the ranks its record gives them.
+    let skills: [ResolvedSkill]
+}
+
 struct ResolvedSkill: Identifiable, Sendable {
     let id = UUID()
     let recordPath: String
@@ -81,6 +95,10 @@ struct ResolvedSkill: Identifiable, Sendable {
     let connectors: [SkillConnector]
     /// Cooldown, energy cost and the like, read at the skill's current rank.
     let parameters: [SkillParameter]
+    /// What the skill adds to every pet the character has, which the game prints as a block of its own.
+    let petBonus: StatBlock
+    /// What it summons, for the skills that put something on the field.
+    let summon: ResolvedSummon?
     /// Everything the skill grants at its current rank.
     let stats: StatBlock
 
