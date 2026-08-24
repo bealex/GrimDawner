@@ -54,9 +54,14 @@ grapheme, so `"\n"` never matches and the whole file reads as a single line.
 Twelve-byte wrapper — `"TEX"`, version byte, `u32`, `u32 payloadSize` — around a DDS whose magic reads
 `DDSR`, not `DDS `. **Mipmaps are written smallest first**, so the full-size level is the last one in the
 file, not the first: read from the front and you get a montage of the small levels with the top of the
-real image below them. Icons carry a single level and read the same either way; every creature skin does
-not. Nearly every icon is uncompressed 32-bit in **B, G, R, A** byte order; some are 24-bit BGR; a handful
-are BC1 or BC3.
+real image below them. It only shows on what carries mipmaps: 3,004 of the 3,010 icons hold a single level
+and read the same either way, while 1,700 of the creature and item skins hold nine.
+
+What a texture is differs by what it is for. **An icon is uncompressed**: 2,620 are 32-bit in **B, G, R, A**
+byte order, 374 are 24-bit BGR, and 16 are block-compressed. **A model's skin usually is not**: of the
+6,187 under `Creatures.arc` and `Items.arc`, 2,010 are DXT1, 1,316 DXT5, 544 DXT3 and 2,311 uncompressed
+32-bit. The block size follows the format — eight bytes per 4×4 block without alpha, sixteen with — and
+that is what says where one mip level ends and the next begins.
 
 Texture paths in records name their archive in the first path component: `ui/skills/...` lives in `UI.arc`
 as `skills/...`, `items/...` in `Items.arc` as `...`.
@@ -159,10 +164,11 @@ sheet runs. Reading the base alone understates a level 100 boss by a factor of t
 
 ### The model format
 
-A monster record names a `mesh` and the skin it wears, and every one of the 2,981 of them does — 785
-distinct models. `Creatures.arc` holds 510 of those, `Items.arc` 1,534, `Level Art.arc` the rest.
-Nothing in the game ships a picture of a monster: the skins are UV atlases and the UI has no portraits,
-so a picture has to be rendered.
+A monster record names a `mesh` and the skin it wears, and all 3,096 of them do — 809 distinct models,
+775 of them under `creatures/` and the rest borrowed from the level art, the effects and the items. The
+archives hold 5,588 models between them: 510 in `Creatures.arc`, 1,534 in `Items.arc`, 3,360 in
+`Level Art.arc`, 184 in `FX.arc`. Nothing in the game ships a picture of a monster — the skins are UV
+atlases and the UI has no portraits — so a picture has to be rendered.
 
 **`.msh` is Titan Quest's format, and this is what it is.** Four magic bytes, `MSH` and a version, then a
 flat list of chunks — a `uint32` id, a `uint32` byte count, and that many bytes:
@@ -174,13 +180,17 @@ flat list of chunks — a `uint32` id, a `uint32` byte count, and that many byte
 | 5 | the triangles |
 | 7 | the materials |
 | 6 | the skeleton |
-| 3, 0, 8, 13 | the source file, the attach points and the hit boxes, none of which are read |
+| 3 | the attach points, as text — see [Effects](#effects) |
+| 0, 8 | the source `.mif` it was built from, and the named hit boxes; neither is read |
+| 2, 9, 11, 12, 13 | blocks nothing here reads: 13 is two words on every model, 2 a few kilobytes on 516 of them |
 
-The vertex chunk is a format, the bytes one vertex takes, how many there are, then one word per element
-of the vertex — and those words say what the vertex holds and in what order: 0 position (12 bytes), 1
-normal (12), 2 tangent (12), 3 bitangent (12), 4 texture (8), 5 bone weights (16), 6 bone indices (4), 7 a
-second texture (8), 14 vertex colour (4). Six layouts appear across the game; the common two are 56 bytes
-unskinned and 76 skinned.
+Every model carries chunks 4, 5, 6, 7, 8, 10 and 13; the rest are optional.
+
+The vertex chunk is a format, the bytes one vertex takes, how many there are, then one word per element of
+the vertex — and those words say what the vertex holds and in what order: 0 position (12 bytes), 1 normal
+(12), 2 tangent (12), 3 bitangent (12), 4 texture (8), 5 bone weights (16, four floats), 6 bone indices
+(4, a byte each), 7 a second texture (8), 14 vertex colour (4). Exactly six layouts appear across the
+game's 5,588 models, and two of them cover nearly all: 56 bytes unskinned and 76 skinned.
 
 The triangle chunk is a count, a group count, three `uint16` indices per triangle, and then one block per
 group: **a material index, the triangle it starts at, how many triangles it covers**, a spare word, a
@@ -227,8 +237,8 @@ place in it, so it is read as one, and a bone with no side is the main hand's. `
 `…_Parent_Fix` are rigging helpers and hold nothing. 209 of the 218 models that are meant to hold
 something carry such a bone.
 
-**A model with no vertices is a blocker**, one of the game's invisible walls; `loghorrean01a_blocker.msh`
-is the only one among the creatures.
+**A model with no vertices is a blocker**, one of the game's invisible walls — eight of them across the
+archives, `loghorrean01a_blocker.msh` the only one among the creatures.
 
 **A model wears the texture its record names**, or the one its own material names, or — when neither does
 — the one beside it under the same name: `humanmale05b.msh` wears `humanmale05b_dif.tex`, and
@@ -260,7 +270,8 @@ are the bare body — `torso_default_000-01_m.msh` and its kin, skinned with `cr
 ### Animations
 
 **`.anm` is flat rather than chunked.** `ANM`, a version byte, then how many bones move, over how many
-frames, at how many frames a second — 30 for every one of the 2,021 files the game ships. Then one track
+frames, at how many frames a second — 30 for every one of the 2,021 files the game ships, 1,770 of them
+under `Creatures.arc`. Then one track
 per bone: its name, length-prefixed, and 14 floats per frame — a translation, a quaternion, a scale, and a
 second quaternion. Bones are named rather than numbered and their order is not the mesh's, so an animation
 binds to a skeleton by name.
