@@ -33,6 +33,8 @@ public struct MonsterAbility: Identifiable, Sendable {
     /// Seconds before it first uses this, and seconds between uses.
     public let delay: Double?
     public let cooldown: Double?
+    /// The animation the creature plays for it, when its record asks for one by name.
+    public let animation: MonsterAnimation?
 }
 
 /// One thing a monster can leave behind, either an item or a table of them.
@@ -107,6 +109,11 @@ public struct ResolvedMonster: Sendable {
     public let stats: StatBlock
     public let abilities: [MonsterAbility]
     public let loot: [MonsterLootSlot]
+    /// What the game puts on it and in its hands, which it does whether or not the monster drops
+    /// anything: a creature that leaves no corpse to loot still walks around holding an axe.
+    public let equipment: [MonsterLootSlot]
+    /// Everything its animation table can play it doing.
+    public let animations: [MonsterAnimation]
 
     /// True for the celestial bosses, whose record carries an adjuster that cancels the game's own
     /// ascendant-mode bonus. Neither is in effect in an ordinary fight, so neither is counted.
@@ -174,6 +181,7 @@ public struct MonsterResolver {
         let physique = scaled(block, base: bio["characterStrength"], "characterStrength")
         let cunning = scaled(block, base: bio["characterDexterity"], "characterDexterity")
         let formulas = CombatFormulas(database: database)
+        let carried = slots(of: record, atLevel: level)
 
         return ResolvedMonster(
             path: path,
@@ -213,7 +221,9 @@ public struct MonsterResolver {
             ),
             stats: block,
             abilities: all,
-            loot: loot(of: record, atLevel: level),
+            loot: carried.dropped,
+            equipment: carried.equipped,
+            animations: MonsterAnimations.of(record, in: database),
             cancelsAscendantMode: counted.count != all.count
         )
     }
@@ -320,6 +330,7 @@ public struct MonsterResolver {
 
     private func abilities(of record: ArzRecord, atLevel level: Int) -> [MonsterAbility] {
         let levels = skillLevels(of: record, atLevel: level)
+        let animations = MonsterAnimations.of(record, in: database)
         var abilities = [MonsterAbility]()
         var seen = Set<String>()
 
@@ -333,13 +344,16 @@ public struct MonsterResolver {
             guard !path.isEmpty, seen.insert(path.lowercased()).inserted else { return }
             guard let skill = skills.skill(at: path, level: levels[path.lowercased()] ?? 1) else { return }
 
+            // A skill asks for its animation by name — `GroundSlam` — and the table says which file that is.
+            let reference = database.record(path)?.text("skillSpecialAnimationName") ?? ""
             abilities.append(MonsterAbility(
                 skill: skill,
                 kind: SkillKind.phrase(forClass: skill.recordClass) ?? "Skill",
                 role: Self.role(of: skill, asked: role),
                 range: range,
                 delay: delay,
-                cooldown: cooldown
+                cooldown: cooldown,
+                animation: reference.isEmpty ? nil : animations.first { $0.reference == reference }
             ))
         }
 
@@ -401,10 +415,32 @@ public struct MonsterResolver {
 
     // MARK: - Loot
 
-    private func loot(of record: ArzRecord, atLevel level: Int) -> [MonsterLootSlot] {
-        guard record.number("dropItems") != 0 else { return [] }
+    /// Every slot the record fills, read once: what it drops and what it is wearing come from the same
+    /// tables. A monster that drops nothing is still dressed, so its equipment is read either way.
+    private func slots(of record: ArzRecord, atLevel level: Int)
+        -> (dropped: [MonsterLootSlot], equipped: [MonsterLootSlot])
+    {
+        let drops = record.number("dropItems") != 0
+        let fields = drops ? Self.lootSlots : Self.lootSlots.filter { Self.equippedFields.contains($0.field) }
+        let found = slots(of: record, atLevel: level, fields: fields)
 
-        return Self.lootSlots.compactMap { slot in
+        return (
+            drops ? found : [],
+            found.filter { Self.equippedFields.contains($0.field) && $0.chance > 0 }
+        )
+    }
+
+    /// The slots a monster wears something in, as against the ones it merely carries loot in.
+    private static let equippedFields = Set([
+        "RightHand", "LeftHand", "Head", "Chest", "Shoulders", "Legs", "Feet", "Hands",
+    ])
+
+    private func slots(
+        of record: ArzRecord,
+        atLevel level: Int,
+        fields: [(field: String, title: String)]
+    ) -> [MonsterLootSlot] {
+        fields.compactMap { slot in
             var weights = [(path: String, weight: Double)]()
             for index in 1 ... 6 {
                 let path = record.text("loot\(slot.field)Item\(index)")
@@ -502,7 +538,9 @@ public struct MonsterResolver {
         walk(path, share: 100, depth: 0)
         return
             shares
-            .sorted { $0.value > $1.value }
+            // Ties are broken by name: a dictionary hands them over in a different order every launch,
+            // and what is drawn from this list — the weapon a monster is holding — would change with it.
+            .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
             .prefix(60)
             .map { name, share in
                 MonsterLootEntry.Item(

@@ -32,7 +32,7 @@ public struct ModelRenderer {
 
     public let gameFolder: URL
 
-    private let textures: TextureStore
+    let textures: TextureStore
     private let scene: ModelScene
     private let archives: [(root: String, archive: ArcArchive)]
 
@@ -60,9 +60,19 @@ public struct ModelRenderer {
         }
     }
 
-    /// Reads one model out of the archives, whichever holds it. A record names a model by its root —
-    /// `creatures/enemies/…` — and the archive that root belongs to holds it without that first step.
+    /// Reads one model out of the archives, whichever holds it.
     public func mesh(at path: String) throws -> MshFile {
+        try MshFile(try data(at: path))
+    }
+
+    /// Reads one animation out of the archives.
+    public func animation(at path: String) throws -> AnmFile {
+        try AnmFile(try data(at: path))
+    }
+
+    /// A record names a file by its root — `creatures/enemies/…` — and the archive that root belongs to
+    /// holds it without that first step.
+    func data(at path: String) throws -> [UInt8] {
         let key = path.lowercased().replacingOccurrences(of: "\\", with: "/")
         guard let separator = key.firstIndex(of: "/") else { throw Failure.noSuchModel(path) }
 
@@ -70,7 +80,7 @@ public struct ModelRenderer {
         let entry = String(key[key.index(after: separator)...])
 
         for opened in archives where opened.root == root && opened.archive.contains(entry) {
-            return try MshFile(try opened.archive.data(named: entry))
+            return try opened.archive.data(named: entry)
         }
         throw Failure.noSuchModel(path)
     }
@@ -105,11 +115,15 @@ public struct ModelRenderer {
     }
 
     /// Everything a monster is drawn from, read and dressed — one skin per material each model names.
-    public func models(of assembly: ModelAssembly) -> [(mesh: MshFile, textures: [CGImage?])] {
+    public func models(of assembly: ModelAssembly) -> [DrawnModel] {
         assembly.parts.compactMap { part in
             guard let mesh = try? mesh(at: part.mesh), !mesh.isEmpty else { return nil }
 
-            return (mesh, skins(for: mesh, at: part.mesh, preferring: part.texture))
+            return DrawnModel(
+                mesh: mesh,
+                textures: skins(for: mesh, at: part.mesh, preferring: part.texture),
+                hand: part.hand
+            )
         }
     }
 
@@ -127,13 +141,32 @@ public struct ModelRenderer {
         }
     }
 
-    /// A whole monster, drawn at the size asked for.
+    /// A whole monster, drawn at the size asked for — held on one frame of an animation, if one is given.
     @MainActor
-    public func image(of assembly: ModelAssembly, size: CGSize) throws -> CGImage {
+    public func image(
+        of assembly: ModelAssembly,
+        size: CGSize,
+        playing animation: AnmFile? = nil,
+        at frame: Int = 0,
+        showing effects: [ModelEffect] = []
+    ) throws -> CGImage {
         let models = models(of: assembly)
         guard !models.isEmpty else { throw Failure.noSuchModel(assembly.parts.first?.mesh ?? "") }
 
-        return try render(scene.scene(for: models), size: size)
+        return try render(
+            scene.scene(for: models, playing: animation, at: frame, showing: effects), size: size
+        )
+    }
+
+    /// Every frame of an animation, drawn in order — what an animated picture of it is made of.
+    @MainActor
+    public func frames(of assembly: ModelAssembly, size: CGSize, playing animation: AnmFile) throws -> [CGImage] {
+        let models = models(of: assembly)
+        guard !models.isEmpty else { throw Failure.noSuchModel(assembly.parts.first?.mesh ?? "") }
+
+        return try (0 ..< animation.frameCount).map { frame in
+            try render(scene.scene(for: models, playing: animation, at: frame), size: size)
+        }
     }
 
     /// One model, drawn at the size asked for.
@@ -142,7 +175,7 @@ public struct ModelRenderer {
         let mesh = try mesh(at: path)
 
         return try render(
-            scene.scene(for: [ (mesh, skins(for: mesh, at: path, preferring: texture)) ]),
+            scene.scene(for: [ DrawnModel(mesh: mesh, textures: skins(for: mesh, at: path, preferring: texture)) ]),
             size: size
         )
     }
@@ -158,6 +191,35 @@ public struct ModelRenderer {
             throw Failure.renderFailed
         }
         return rendered
+    }
+
+    /// Writes frames out as one animated PNG. A GIF would do as well were it not for the background:
+    /// these are drawn against nothing, and a GIF can only say *transparent* about a whole pixel.
+    public static func write(_ frames: [CGImage], to url: URL, framesPerSecond: Int) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        guard
+            !frames.isEmpty,
+            let destination = CGImageDestinationCreateWithURL(
+                url as CFURL,
+                UTType.png.identifier as CFString,
+                frames.count,
+                nil
+            )
+        else { throw Failure.renderFailed }
+
+        CGImageDestinationSetProperties(destination, [
+            kCGImagePropertyPNGDictionary: [ kCGImagePropertyAPNGLoopCount: 0 ],
+        ] as CFDictionary)
+        let delay = 1.0 / Double(max(framesPerSecond, 1))
+        for frame in frames {
+            CGImageDestinationAddImage(destination, frame, [
+                kCGImagePropertyPNGDictionary: [ kCGImagePropertyAPNGDelayTime: delay ],
+            ] as CFDictionary)
+        }
+        guard CGImageDestinationFinalize(destination) else { throw Failure.renderFailed }
     }
 
     /// Writes an image out as a PNG, which is what the offline run produces.

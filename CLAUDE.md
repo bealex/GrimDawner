@@ -88,7 +88,7 @@ Engine/Sources/GrimDawnerEngine/
     Database    .arz / .arc / .tex readers, LZ4, memory-mapped byte access, folder bookmarks
     Domain      save records -> named items, masteries, constellations, factions, monsters
     Stats       stat catalogue, accumulator, formula evaluator, engine
-Mesh/           the .msh model reader, which depends on nothing
+Mesh/           the .msh model and .anm animation readers, which depend on nothing
 Render/         SceneKit scene and renderer, plus the render-monsters command
 Code/UI         SwiftUI views
 Code/App        the app itself

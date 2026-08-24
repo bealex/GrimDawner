@@ -75,7 +75,10 @@ middle button drags.
 at a level and a difficulty, since everything it has is an equation of both: what it is worth in a fight,
 its attacks with their ranges and timings, its passives, and what it drops from each equipment slot with
 the odds. Double-clicking opens it in a window of its own, with its whole sheet, its attacks, its loot,
-and its **model** — the game's own, drawn live: drag to turn it, scroll to move in.
+and its **model** — the game's own, drawn live, dressed in its own gear and holding a weapon rolled from
+the tables it draws one from. Pick an attack and it plays that attack's animation with the effects the
+skill throws; pick a passive and it wears its aura. Half and quarter speed make the moment a blow lands
+readable, and the frames it lands on are listed beside it. Drag to turn it, scroll to move in.
 
 **Stats** — every number the sheet knows, grouped: attributes, offence, defence, armour per hit region,
 resistances against their caps, control resistances, damage by type, damage over time, retaliation,
@@ -94,8 +97,8 @@ The app is those packages plus `Code/UI` and `Code/App`.
 | `Engine/…/Database` | Readers for the `.arz` record database and `.arc` archives, a pure-Swift LZ4 block decompressor and a `.tex` decoder. Archives are memory-mapped; records and icons decode lazily and are memoised. |
 | `Engine/…/Domain` | Resolves save records into named items, mastery panels and constellations. |
 | `Engine/…/Stats` | The stat catalogue, the accumulator, an evaluator for the game's stored formulas, and the engine that produces the sheet. |
-| `Mesh/` | Reads the game's `.msh` models: Titan Quest's format, undocumented, worked out for this project. |
-| `Render/` | Builds a SceneKit scene from a model and draws it, and ships `render-monsters` for doing the whole roster offline. |
+| `Mesh/` | Reads the game's `.msh` models and `.anm` animations: Titan Quest's formats, undocumented, worked out for this project. |
+| `Render/` | Builds a SceneKit scene from a model, skins it to its skeleton and draws it, and ships `render-monsters` for doing the whole roster offline. |
 | `Code/UI` | SwiftUI views over the resolved character. |
 
 Icons are the game's own art. A record names a texture by a path whose first component is the archive it
@@ -148,8 +151,8 @@ The formats are not published by the game's authors. What this implementation wa
 - **The game's own tooltips and character window**, used as the ground truth every character number was
   checked against.
 
-The `.msh` model format is documented nowhere; [GameData.md](Documentation/GameData.md#the-model-format)
-is this project's own reading of it.
+The `.msh` and `.anm` formats are documented nowhere;
+[GameData.md](Documentation/GameData.md#the-model-format) is this project's own reading of them.
 
 ## Licence
 

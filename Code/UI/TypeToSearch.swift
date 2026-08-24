@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
-import GrimDawnerEngine
 import AppKit
+import GrimDawnerEngine
 import SwiftUI
 
 /// Starts a quick search on the first keystroke, with no field to click into first.

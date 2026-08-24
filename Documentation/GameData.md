@@ -173,7 +173,8 @@ flat list of chunks — a `uint32` id, a `uint32` byte count, and that many byte
 | 4 | the vertices |
 | 5 | the triangles |
 | 7 | the materials |
-| 3, 0 | the skeleton, which a still does not need |
+| 6 | the skeleton |
+| 3, 0, 8, 13 | the source file, the attach points and the hit boxes, none of which are read |
 
 The vertex chunk is a format, the bytes one vertex takes, how many there are, then one word per element
 of the vertex — and those words say what the vertex holds and in what order: 0 position (12 bytes), 1
@@ -187,6 +188,17 @@ bounding box, and the bones it hangs off — that bone list is what makes the bl
 creature is two or three groups, its body and the vines growing through it, and each wears its own
 material; painting them all with the first puts a plant's skin on a monster's chest.
 
+**A vertex's four bone slots index the group's own bone list, not the skeleton** — a list of at most 27,
+which is why the same vertex in two groups has to be written twice to be skinned. A slot whose weight is
+zero holds 255, which is no bone at all.
+
+The skeleton chunk is a count and then 88 bytes per bone: a 32-byte name, the run of children it claims
+(the first child's index and how many follow it), and where it sits in its parent — three rows of a
+rotation and then the translation, which are the transform's columns. Chaining those down the hierarchy
+gives the bind pose the vertices are written in. **The order is the mesh's own**: a head, a body and a
+breastplate carry the same rig in different orders, and often only part of it, so bones are matched by
+name and nothing else.
+
 The material chunk is a count, then for each material a shader path and its slots, every string written as
 its length and then its bytes. **A slot's value is a path for a texture and a number for anything else** —
 a specular colour, a glow strength — and nothing says which, so the pairing is: a name ending in `Texture`
@@ -197,10 +209,23 @@ that one folds two materials into one.
 coordinates are written to match; a model drawn upside down wears its face inside out, which is how a
 wrong guess announces itself.
 
-**Vertices are stored in the bind pose**, so a model draws without its skeleton — a still needs neither
-the bones nor the `.anm` animations beside them. Every model shares that pose, which is why a helmet and a
-pair of shoulders drawn in one scene land where they belong. A weapon does not: it is modelled at the
-origin and hung off a hand bone, so it needs the skeleton this reader skips.
+**Vertices are stored in the bind pose**, so a still needs no skeleton at all. Every model shares that
+pose, which is why a helmet and a pair of shoulders drawn in one scene land where they belong. A weapon
+does not: it carries no bones of its own and is modelled at the origin, so it is drawn as a child of the
+hand bone and hangs where that hand is.
+
+**The parts of one monster do not always agree about the rig.** A head, a helmet and a breastplate each
+carry their own copy of it, and 148 of the game's 432 assembled monsters hold a part whose bones stand
+somewhere else — a helmet's `Bip01 Head` a whole head's length off, a harpy's wing finger nearly two units.
+The bind poses still line up as models, since each is drawn where its own rig puts it; it is only skinning
+that has to know, and a part skinned against another part's bind pose comes out facing backwards.
+
+**Every rig names its weapon bone differently**: `Bip01 R Weapon` and `Bip01 L Weapon` on anything on the
+player's skeleton, `BN_RWeapon`, `Weapon_R`, `WeaponAttatch_R_0_jnt`, `Weapon_Joint_R0_0_jnt`, or a lone
+`Bone_Weapon` on a creature that only ever holds one thing. The side is a token of the name rather than a
+place in it, so it is read as one, and a bone with no side is the main hand's. `Weapon_R_Parent` and
+`…_Parent_Fix` are rigging helpers and hold nothing. 209 of the 218 models that are meant to hold
+something carry such a bone.
 
 **A model with no vertices is a blocker**, one of the game's invisible walls; `loghorrean01a_blocker.msh`
 is the only one among the creatures.
@@ -209,10 +234,108 @@ is the only one among the creatures.
 — the one beside it under the same name: `humanmale05b.msh` wears `humanmale05b_dif.tex`, and
 `aetherialabomination01a_phase1.msh` falls back to `aetherialabomination01a_dif.tex`.
 
-**A human is assembled from what it wears.** Its record names a head and nothing else; the body comes from
-the armour it equips, each piece naming `armorMaleMesh` and `armorFemaleMesh`, and the creature's own
-`characterGenderProfile` says which. A monster with no armour equipped is a head on its own — where the
-game finds the bare body is not yet known.
+**What a monster wears is not what it drops.** `dropItems = 0` says a creature leaves nothing to loot,
+and 294 of the first 400 armed records say it — but they still walk around holding an axe.
+`chanceToEquip<Slot>` is what says a slot is filled, and the `loot<Slot>Item<N>` tables are what it is
+filled from, whether or not anything of it survives the corpse. 1,056 records are meant to hold something
+in the right hand.
+
+**A weapon is a roll, not a record.** Nothing says which axe a monster carries, only which tables it draws
+from, so drawing one means rolling it: entries weighed by `chanceToEquip<Slot>Item<N>`, items weighed by
+their own share. A class ending in `2h` fills both hands. `WeaponArmor_Shield` and `WeaponArmor_Offhand`
+are the left hand's.
+
+**A human is assembled from what it wears.** Its record names a head and nothing else; the body is the
+gear it is dressed in, which `default<Slot>Piece` names for each of Head, Shoulders, Chest, Legs, Feet and
+Hands — 2,771 monster records carry them, and every human names all six. Each piece names an
+`armorMaleMesh` and an `armorFemaleMesh`, and the creature's `characterGenderProfile` says which to draw;
+`armorNativeMesh` stands in where a piece has one shape for both. Reading the loot tables instead is what
+leaves a human as a bare head: what a monster drops is not what it is wearing.
+
+The player is dressed the same way. `records/creatures/pc/malepc01.dbr` and its female counterpart name a
+head mesh and the `defaultChestPiece`, `defaultLegsPiece`, `defaultFeetPiece` and `defaultHandsPiece` that
+are the bare body — `torso_default_000-01_m.msh` and its kin, skinned with `creatures/pc/hero02_legs_dif.tex`
+— which is where the game finds a character wearing nothing.
+
+### Animations
+
+**`.anm` is flat rather than chunked.** `ANM`, a version byte, then how many bones move, over how many
+frames, at how many frames a second — 30 for every one of the 2,021 files the game ships. Then one track
+per bone: its name, length-prefixed, and 14 floats per frame — a translation, a quaternion, a scale, and a
+second quaternion. Bones are named rather than numbered and their order is not the mesh's, so an animation
+binds to a skeleton by name.
+
+**Reading a key took three corrections, and each hid behind the one before it.** All three look plausible
+in a still and give themselves away the moment something moves.
+
+- **Its turn is both quaternions**, the second laid over the first. A quarter of the animations write a
+  second that is not an identity, which is why it reads as spare until something uses it: a wight's spine
+  jumps 90° between one frame and the next when only the first is read — calm legs under a torso having a
+  fit — and 27° when both are. Combining is smoother in 159 animations and rougher in none.
+- **The turn is stored the other way round**, stating how the bone's own frame moves under the pose rather
+  than how the pose moves the bone, so it is read conjugated. Taken as written every joint bends backwards:
+  a limb's swing out of line with the limb above it is signed, and a knee's is never forwards.
+- **The translation is not where the bone is.** A skeleton is rigid — a bone stays the distance from its
+  parent the mesh gives it — and taking it as an offset pulls a rhino's pelvis a metre out of its spine and
+  stretches a human's limbs. It carries the creature's travel through the world, which the game moves the
+  creature by. The scale beside it is real: a lashing tongue is written as one.
+
+A key is laid over the bind pose rather than replacing it, so a bone's pose is its bind transform times its
+turn, and an animation whose bones barely move is written as identities.
+
+**An animation faces wherever the game had the creature facing**, which is rarely where the bind pose
+faces: a combat idle stands side-on, a walk sets off at an angle. Nothing states that turn — it is simply
+in the keys — so a camera that holds still watches the creature from behind.
+
+**What follows the tracks is plain text**, the only part of the format that is not fixed-width:
+
+```
+CallbackPoint { name = "RightHandHit" frame = 11 }
+CreateEntity  { frame = 1 entity = "records/fx/Creatures/AetherCreatureSpawn_FX01.dbr" attach = "Target" }
+```
+
+A callback is the moment the game hangs a sound, a blow or a particle start on; a `CreateEntity` spawns an
+effect at a point of the rig. A handful of files end in a blank line instead.
+
+### Effects
+
+**An effect ends at a picture, three steps down.** The record is an `EffectEntity` whose `effectFile` names
+a particle system under `fx/particlesystems/…`, and the `.pfx` is binary with its texture written into it
+as a length and then a path — the same way a mesh writes a material's. The particles themselves are a
+format of their own and unread, so that texture is what an effect can be drawn as.
+
+**A skill names its effects in four places.** A passive carries its aura in `charFxPakSelfNames`, a pack
+naming both the points of the model to hang effects on (`particleEffectAttachPoints`) and the effects
+themselves (`particleEffectNames`); a cast names what it throws in `particleEffectName1…N` and
+`radiusEffectName`, and what it fires in `skillProjectileName`, whose record carries its own flight and
+impact effects.
+
+**A particle texture carries no transparency.** It is painted on black and added to what is behind it, so
+its own brightness is what says where it is see-through — drawn as it is, an effect is a black square with
+a spark inside. A particle system also names the map it warps the picture behind it by (`…_distort…`),
+which is not a picture at all and is taken last.
+
+**A model names the points an effect hangs from.** Chunk 3 is text, one block per point: a name, the bone
+it hangs from, and where it sits in that bone.
+
+```
+AttachPoint { name = "Mouth" parent = "Bip01 Head" origin = (…) xAxis = (…) yAxis = (…) zAxis = (…) }
+```
+
+A human names 19 of them, a yeti 14 — `Mouth`, `HeadEffect`, `FXForward`, `SpecialHit01` — and an
+animation asks for them by name: the yeti's fire breath is spawned at its `Mouth`.
+
+### Which animation a creature plays
+
+**A creature names a table rather than files.** `charAnimationTableName` points at a
+`charanimationtable.tpl` record whose fields are the whole vocabulary — `unarmedWalkAnim`,
+`unarmedAttackAnim2`, `unarmedDieAnim1`, `unarmedSpecialAnim7`. A table written for the player holds one
+set per weapon class it can hold (`sword2h…`, `ranged1h…`, `dHanded…`), so an app that draws no weapon
+reads the unarmed set.
+
+**An attack finds its own animation by name.** A skill record's `skillSpecialAnimationName` — `GroundSlam`,
+`Roar`, `Nova` — matches the table's `unarmedSpecialAnimRef7`, and `unarmedSpecialAnim7` beside it is the
+file. 2,063 skill records name one, which is what lets a monster be drawn doing a particular attack.
 
 ### Window layouts
 

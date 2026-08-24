@@ -4,9 +4,11 @@ import Foundation
 import GrimDawnerEngine
 import GrimDawnerRender
 
-/// Renders the game's monsters to PNGs, one per model.
+/// Renders the game's monsters to PNGs, one per model, or to animated PNGs of what they do.
 ///
 /// Usage: render-monsters <game folder> <output folder> [--limit N] [--size 512] [--name <substring>]
+///        [--animations] — one animated PNG per attack a monster has an animation for, in a folder of
+///        its own, rather than one still.
 @MainActor
 func run() async throws {
     var arguments = Array(CommandLine.arguments.dropFirst())
@@ -25,6 +27,7 @@ func run() async throws {
     let verbose = arguments.contains("--verbose")
     let exposure = option("--exposure").flatMap(Double.init)
     let onBlack = arguments.contains("--background")
+    let animated = arguments.contains("--animations")
 
     guard arguments.count >= 2 else {
         print("usage: render-monsters <game folder> <output folder> [--limit N] [--size 512] [--name text]")
@@ -64,7 +67,8 @@ func run() async throws {
 
         // Records drawn the same way are one picture; a region's copy of a monster is not another one.
         let signature = ([ name, record.text("mesh"), record.text("baseTexture") ]
-            + ModelAssembly.wornFields.map { record.text("loot\($0)Item1") })
+            + ModelAssembly.wornFields.map { record.text("default\($0)Piece") + record.text("loot\($0)Item1") }
+            + ModelAssembly.heldFields.map { record.text("loot\($0.field)Item1") })
             .joined(separator: "|")
         guard seen.insert(signature).inserted else { return }
 
@@ -83,18 +87,34 @@ func run() async throws {
         guard let resolved = resolver.monster(at: monster.path, level: 100) else { continue }
 
         let assembly = ModelAssembly.of(resolved, in: database)
-        let file = output.appending(path: "\(Naming.fileName(for: monster.name, mesh: resolved.meshPath)).png")
+        let name = Naming.fileName(for: monster.name, mesh: resolved.meshPath)
         do {
-            let image = try renderer.image(of: assembly, size: CGSize(width: size, height: size))
-            try ModelRenderer.write(image, to: file)
-            drawn += 1
-            if verbose { print("  \(monster.name): \(assembly.parts.map(\.mesh).joined(separator: ", "))") }
+            if animated {
+                for animation in Naming.attackAnimations(of: resolved) {
+                    let played = try renderer.animation(at: animation.path)
+                    let frames = try renderer.frames(
+                        of: assembly, size: CGSize(width: size, height: size), playing: played
+                    )
+                    try ModelRenderer.write(
+                        frames,
+                        to: output.appending(path: "\(name)/\(animation.title).png"),
+                        framesPerSecond: played.framesPerSecond
+                    )
+                    drawn += 1
+                    if verbose { print("  \(monster.name) · \(animation.title): \(frames.count) frames") }
+                }
+            } else {
+                let image = try renderer.image(of: assembly, size: CGSize(width: size, height: size))
+                try ModelRenderer.write(image, to: output.appending(path: "\(name).png"))
+                drawn += 1
+                if verbose { print("  \(monster.name): \(assembly.parts.map(\.mesh).joined(separator: ", "))") }
+            }
         } catch {
             failed.append("\(monster.name): \(error.localizedDescription)")
         }
     }
 
-    print("drawn \(drawn) in \(Int(-started.timeIntervalSinceNow))s, \(failed.count) failed")
+    print("drawn \(drawn) \(animated ? "animations" : "monsters") in \(Int(-started.timeIntervalSinceNow))s, \(failed.count) failed")
     for failure in failed.prefix(20) { print("  \(failure)") }
 }
 
@@ -104,6 +124,16 @@ enum Naming {
         let stem = mesh.split(separator: "/").last?.replacingOccurrences(of: ".msh", with: "") ?? "model"
         let readable = name.replacingOccurrences(of: "/", with: "-")
         return "\(readable) · \(stem)"
+    }
+
+    /// What to draw a monster doing: every animation one of its attacks asks for by name, and the first
+    /// of its own, which is it standing about.
+    static func attackAnimations(of monster: ResolvedMonster) -> [MonsterAnimation] {
+        var found = monster.animations.prefix(1).map { $0 }
+        for animation in monster.attacks.compactMap(\.animation) where !found.contains(animation) {
+            found.append(animation)
+        }
+        return found
     }
 }
 

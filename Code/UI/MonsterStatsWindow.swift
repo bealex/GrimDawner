@@ -161,7 +161,7 @@ struct MonsterStatsWindow: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            MonsterModelView(monster: monster, renderer: self.model.modelRenderer, database: self.model.records)
+            MonsterModelPane(monster: monster, renderer: self.model.modelRenderer, database: self.model.records)
                 .help("Drag to turn the model, scroll to move in")
         }
     }

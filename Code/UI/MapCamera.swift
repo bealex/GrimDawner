@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
-import GrimDawnerEngine
 import AppKit
 import CoreGraphics
+import GrimDawnerEngine
 import SwiftUI
 
 /// Where the devotion map is looking: how far in, and at what point of the sky.

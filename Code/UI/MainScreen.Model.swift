@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
-import GrimDawnerEngine
-import GrimDawnerRender
 import AppKit
 import Foundation
+import GrimDawnerEngine
+import GrimDawnerRender
 import SwiftUI
 
 enum MainScreen {}

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
-import GrimDawnerEngine
 import AppKit
+import GrimDawnerEngine
 import SwiftUI
 
 /// Runs the title bar across the whole window instead of one strip per column.

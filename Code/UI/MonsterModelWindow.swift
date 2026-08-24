@@ -16,7 +16,7 @@ struct MonsterModelWindow: View {
     var body: some View {
         Group {
             if let monster = model.selectedMonster, !monster.meshPath.isEmpty, model.modelRenderer != nil {
-                MonsterModelView(monster: monster, renderer: model.modelRenderer)
+                MonsterModelPane(monster: monster, renderer: model.modelRenderer, database: model.records)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .navigationTitle(monster.name)
                     .navigationSubtitle(subtitle(monster))

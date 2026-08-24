@@ -129,23 +129,64 @@ shows its own description, and what a skill summons is named inside it and opens
 
 ## The models
 
-`Mesh` reads the game's `.msh` models and `Render` draws them, each a package of its own.
-[GameData.md](GameData.md#the-model-format) has the format, which is undocumented and was worked out here.
-Every model the game ships reads; `render-monsters` draws the whole roster — 2,036 monsters, each with
-whatever armour it wears — as PNGs with a transparent background in about half a minute:
+`Mesh` reads the game's `.msh` models and `.anm` animations, `Render` draws them, each a package of its
+own. [GameData.md](GameData.md#the-model-format) has both formats, which are undocumented and were worked
+out here. Every model and every animation the game ships reads; `render-monsters` draws the whole roster —
+each monster dressed in the gear its record puts on it — as PNGs with a transparent background in about
+half a minute:
 
 ```sh
 cd Render && swift run -c release render-monsters "<game folder>" <output> --size 512
+cd Render && swift run -c release render-monsters "<game folder>" <output> --animations
 ```
 
-`SceneConfiguration` is the whole look: where the camera stands, how bright the rig is, whether there is a
-background and a floor at all. The app draws that same scene live rather than from a picture — the monster
-sidebar, the model tab of its window, and a window of its own, each a drag to turn and a scroll to move
-in.
+`--animations` writes an animated PNG per attack instead, in a folder per monster: a GIF cannot say
+*transparent* about part of a pixel, and these are drawn against nothing. One picture is drawn per monster
+that is drawn differently — 1,990 of the 2,115 records, since a region's own copy of a monster is the same
+picture. `SceneConfiguration` is the whole look: where the camera stands, how bright the rig is, whether
+there is a background and a floor at all.
 
-**What is not drawn.** Weapons, which hang off a hand bone the reader skips. The bare body of a human
-wearing no armour, which the game finds somewhere this does not. And animation: the `.anm` files beside
-the models are a format of their own, unread.
+The app draws that same scene live rather than from a picture — the monster sidebar, the model tab of its
+window, and a window of its own, each a drag to turn and a scroll to move in.
+
+**An attack is picked as one thing.** The model menu lists the creature's attacks above its raw animations,
+and picking one plays the animation that attack asks for *and* shows what its skill throws. A second menu
+shows any one skill's effects on their own, which is how a passive's aura is looked at, and playback runs
+at full, half or quarter speed — which is what makes a two-frame difference between two casts readable.
+Along the top is what the animation calls out and when: each effect it spawns, and the frames a blow lands
+on.
+
+**A creature is assembled and then posed.** Every part is skinned to a rig merged from all of them — a
+head, a body and a breastplate each carry their own copy of the same bones — so a shoulder moves the
+pauldron on it. Each part is skinned against **its own** bind pose, though: the copies do not always agree,
+and 148 of the 432 assembled monsters hold a part whose bones stand somewhere else. What plays is the
+unarmed set of the creature's table, since the animations that hold a weapon pose a hand around one.
+
+**A monster holds what it is meant to be holding.** No record says which weapon that is — only which
+tables it draws one from — so one is rolled the way the game weighs those tables, from a stream primed with
+the creature's own record path: the same monster keeps the same axe between launches, and two monsters
+drawing from one table rarely hold the same thing. A two-handed weapon fills both hands. Of the first 300
+records meant to carry something, 298 are drawn carrying it.
+
+**The camera turns with the head.** An animation faces wherever the game had the creature facing, which is
+rarely the bind pose, so a camera that holds still watches it from behind. How far the head has turned is
+added to the camera's own angle — the head rather than the body, because a fighting stance twists the hips
+22° and the shoulders 45° while keeping the head on the enemy, and following the shoulders points the face
+away. A creature with no head bone is measured by the turn that best carries its whole bind skeleton onto
+the posed one.
+
+**An effect drifts rather than hangs.** Only the picture is the game's: particles rise and fade from the
+point the effect hangs on, and the drift is this app's. Particles need a view that keeps drawing, so an
+offline render holds the picture still instead — `SceneConfiguration.emitsEffects` says which.
+
+**Three readings of a key were measured rather than eyeballed**, each hidden behind the one before it and
+each plausible in a still. [GameData.md](GameData.md#animations) has them; what pins them here are tests
+that state what a body cannot do — a knee does not bend forwards, a bone does not lengthen, a spine does
+not turn 90° in a thirtieth of a second.
+
+**What is not drawn.** The particles themselves, which are a format of their own, and an effect that names
+a model rather than a particle system. The travel a key carries, so a walk plays on the spot. And nothing
+blends one frame into the next, so a loop restarts rather than easing round.
 
 ## The catalogues
 
