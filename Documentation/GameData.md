@@ -326,6 +326,10 @@ its own brightness is what says where it is see-through — drawn as it is, an e
 a spark inside. A particle system also names the map it warps the picture behind it by (`…_distort…`),
 which is not a picture at all and is taken last.
 
+**An effect record names its own bone in `boneList`** — but 3,886 of the 4,077 that fill it in name the
+same pair of weapon bones, which most creatures do not have. That is a stamp rather than a placement; what
+is left over (`Bip01 Spine1`, `Bip01 R Hand`) is real.
+
 **A model names the points an effect hangs from.** Chunk 3 is text, one block per point: a name, the bone
 it hangs from, and where it sits in that bone.
 
@@ -333,8 +337,10 @@ it hangs from, and where it sits in that bone.
 AttachPoint { name = "Mouth" parent = "Bip01 Head" origin = (…) xAxis = (…) yAxis = (…) zAxis = (…) }
 ```
 
-A human names 19 of them, a yeti 14 — `Mouth`, `HeadEffect`, `FXForward`, `SpecialHit01` — and an
-animation asks for them by name: the yeti's fire breath is spawned at its `Mouth`.
+A human names 19 of them, a yeti 14, the questing beast 24 — `Mouth`, `HeadEffect`, `FXForward`,
+`SpecialHit01` — and an animation asks for them by name: the yeti's fire breath is spawned at its `Mouth`.
+**`FXCentered` is where a creature's own middle is**, which is not the middle of its bounding box: a tail
+drags that six units behind the questing beast, and an effect centred there hangs in the air beside it.
 
 ### Which animation a creature plays
 

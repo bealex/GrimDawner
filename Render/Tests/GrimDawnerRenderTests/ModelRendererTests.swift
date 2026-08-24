@@ -353,6 +353,52 @@ struct ModelRendererTests {
         #expect(cast.contains { $0.image != nil })
     }
 
+    /// An effect that names no point of its own is centred on the creature, which is not the middle of
+    /// its bounding box: N'erfatal's tail drags that six units behind it, and what it channels was hung
+    /// out there in the air.
+    @MainActor
+    @Test
+    func centresAnEffectOnTheCreatureRatherThanItsBox() throws {
+        guard let folder = Self.gameFolder else { return }
+
+        let database = try GameDatabase(gameFolder: folder)
+        let skills = SkillResolver(database: database)
+        let resolver = MonsterResolver(
+            database: database, skills: skills, items: ItemResolver(database: database, skills: skills)
+        )
+        let renderer = ModelRenderer(gameFolder: folder)
+        let monster = try #require(
+            resolver.monster(at: "records/creatures/enemies/special/beaver_01.dbr", level: 100)
+        )
+        let channel = try #require(monster.animations.first { $0.title == "Channel" })
+
+        let effects = monster.abilities
+            .filter { $0.animation?.path == channel.path }
+            .flatMap { renderer.effects(ofSkillAt: $0.skill.recordPath, in: database) }
+        #expect(effects.contains { $0.attachment.isEmpty }, "this one names no point of its own")
+
+        let models = renderer.models(of: ModelAssembly.of(monster, in: database))
+        let scene = ModelScene().scene(for: models, playing: try renderer.animation(at: channel.path), at: 0,
+                                       showing: effects)
+
+        func planes(_ node: SCNNode) -> [SIMD3<Float>] {
+            let own = node.geometry is SCNPlane
+                ? [ SIMD3(node.simdWorldTransform.columns.3.x, node.simdWorldTransform.columns.3.y,
+                          node.simdWorldTransform.columns.3.z) ]
+                : []
+            return own + node.childNodes.flatMap { planes($0) }
+        }
+        let drawn = planes(scene.rootNode)
+        #expect(!drawn.isEmpty, "the effect should be somewhere")
+
+        let mesh = try renderer.mesh(at: monster.meshPath)
+        let box = (mesh.bounds.minimum + mesh.bounds.maximum) / 2
+        for place in drawn {
+            // The body stands around the origin; the box's middle is dragged back by the tail.
+            #expect(abs(place.z) < abs(box.z), "hung at \(place), the box's middle is \(box)")
+        }
+    }
+
     private static func pixels(of image: CGImage) -> Data {
         image.dataProvider?.data as Data? ?? Data()
     }

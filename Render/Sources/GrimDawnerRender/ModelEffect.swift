@@ -84,7 +84,7 @@ public extension ModelRenderer {
                 ModelEffect(
                     name: Self.readableName(of: path),
                     frame: nil,
-                    attachment: attachment,
+                    attachment: attachment.isEmpty ? Self.bone(named: record) : attachment,
                     recordPath: path.lowercased(),
                     image: image(ofParticles: particles)
                 ),
@@ -170,6 +170,16 @@ public extension ModelRenderer {
             bytes[index + 3] = brightest
         }
         return context.makeImage() ?? image
+    }
+
+    /// The bone an effect record hangs itself off, when it names one worth having.
+    ///
+    /// `boneList` is filled in on 4,077 of the game's 4,733 effect records, and 3,886 of those say the
+    /// same thing — the pair of weapon bones a creature usually has neither of. That is a stamp rather
+    /// than a decision, so it is ignored; what is left is a real placement.
+    private static func bone(named record: ArzRecord) -> String {
+        (record["boneList"]?.texts ?? [])
+            .first { ![ "bone_r_weapon", "bone_l_weapon" ].contains($0.lowercased()) } ?? ""
     }
 
     /// `records/fx/skillsother/itemskills/firebreathfx01.dbr` reads as *Fire Breath*.

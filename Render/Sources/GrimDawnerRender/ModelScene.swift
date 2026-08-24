@@ -92,7 +92,7 @@ public struct ModelScene {
         let drawn = models.filter { !$0.mesh.isEmpty }
         // The rig is needed to pose the models and to hang a weapon off a hand; a still with neither
         // draws every vertex where it already stands, and building one would change nothing.
-        let rigged = animation != nil || drawn.contains { $0.hand != nil }
+        let rigged = animation != nil || drawn.contains { $0.hand != nil } || !effects.isEmpty
         let skeleton = rigged
             ? ModelSkeleton(meshes: drawn.filter { $0.hand == nil }.map(\.mesh)).nonEmpty
             : nil
@@ -135,10 +135,7 @@ public struct ModelScene {
             for effect in effects {
                 guard let image = effect.image else { continue }
 
-                let attachment = attachments.first { $0.name.lowercased() == effect.attachment.lowercased() }
-                // A point of the model when the effect names one, and the middle of the creature when
-                // it does not: what a cast throws is centred on whoever throws it.
-                let placed = attachment.flatMap { skeleton?.node(for: $0) }
+                let placed = place(effect, among: attachments, of: skeleton)
                 let node = spark(
                     image,
                     at: placed?.transform ?? middle(of: drawn),
@@ -163,6 +160,37 @@ public struct ModelScene {
             scene.rootNode.addChildNode(ground(under: centre, minimum: minimum.y, radius: radius))
         }
         return scene
+    }
+
+    /// Where an effect hangs.
+    ///
+    /// The name it carries is a point of the model or a bone of the rig, and an effect that names
+    /// neither is one the game centres on the creature — which is not the middle of its bounding box: a
+    /// tail or a wing drags that well off the body. The models themselves say where their middle is,
+    /// and a creature that does not is held by the bone the rest of it hangs from.
+    private func place(
+        _ effect: ModelEffect,
+        among attachments: [MshFile.Attachment],
+        of skeleton: ModelSkeleton?
+    ) -> (parent: SCNNode, transform: simd_float4x4)? {
+        func attachment(_ name: String) -> (parent: SCNNode, transform: simd_float4x4)? {
+            guard
+                let found = attachments.first(where: { $0.name.lowercased() == name.lowercased() })
+            else { return nil }
+
+            return skeleton?.node(for: found)
+        }
+
+        if !effect.attachment.isEmpty {
+            if let found = attachment(effect.attachment) { return found }
+            if let bone = skeleton?.bone(named: effect.attachment) {
+                return (bone, matrix_identity_float4x4)
+            }
+        }
+        for name in [ "FXCentered", "FXUnParentedCenter", "Upper Body", "Target" ] {
+            if let found = attachment(name) { return found }
+        }
+        return skeleton?.trunk().map { ($0, matrix_identity_float4x4) }
     }
 
     /// The middle of the models, where an effect that names no point of its own is shown.
@@ -254,7 +282,9 @@ public struct ModelScene {
         plane.firstMaterial?.blendMode = .add
         plane.firstMaterial?.isDoubleSided = true
         plane.firstMaterial?.writesToDepthBuffer = false
-        plane.firstMaterial?.readsFromDepthBuffer = true
+        // Drawn over the creature rather than inside it: an effect centred on a body sits in its chest,
+        // and the game's own are added over what they cover.
+        plane.firstMaterial?.readsFromDepthBuffer = false
         return plane
     }
 

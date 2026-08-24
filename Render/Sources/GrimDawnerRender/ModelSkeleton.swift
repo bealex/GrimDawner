@@ -44,6 +44,20 @@ final class ModelSkeleton {
         return (bones[index], attachment.transform)
     }
 
+    /// One bone by name.
+    func bone(named name: String) -> SCNNode? {
+        indices[name].map { bones[$0] } ?? bones.first { $0.name?.lowercased() == name.lowercased() }
+    }
+
+    /// The bone the body hangs from: the first one that branches, which on every rig is the hips.
+    /// A creature centres what it casts on itself, and this is where itself is.
+    func trunk() -> SCNNode? {
+        var walking = bones.first
+        while let node = walking, node.childNodes.count == 1 { walking = node.childNodes.first }
+
+        return walking ?? bones.first
+    }
+
     /// The bone a weapon hangs off, which every rig names differently: `Bip01 R Weapon` on a human,
     /// `BN_LWeapon`, `Weapon_Joint_R0_0_jnt`, or a lone `Bone_Weapon` on a creature that holds one thing.
     ///
