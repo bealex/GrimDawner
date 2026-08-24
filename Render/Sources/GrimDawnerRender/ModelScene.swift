@@ -136,12 +136,15 @@ public struct ModelScene {
                 guard let image = effect.image else { continue }
 
                 let placed = place(effect, among: attachments, of: skeleton)
+                // What hangs off a hand or a head is a hand's worth of effect; what is centred on the
+                // creature is the creature's worth.
+                let scale = effect.attachment.isEmpty ? radius(of: drawn) : radius(of: drawn) / 2
                 let node = spark(
                     image,
                     at: placed?.transform ?? middle(of: drawn),
                     of: effect,
                     in: animation,
-                    size: radius(of: drawn),
+                    size: scale,
                     frame: frame,
                     speed: speed
                 )

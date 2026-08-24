@@ -315,11 +315,13 @@ a particle system under `fx/particlesystems/…`, and the `.pfx` is binary with 
 as a length and then a path — the same way a mesh writes a material's. The particles themselves are a
 format of their own and unread, so that texture is what an effect can be drawn as.
 
-**A skill names its effects in four places.** A passive carries its aura in `charFxPakSelfNames`, a pack
-naming both the points of the model to hang effects on (`particleEffectAttachPoints`) and the effects
-themselves (`particleEffectNames`); a cast names what it throws in `particleEffectName1…N` and
-`radiusEffectName`, and what it fires in `skillProjectileName`, whose record carries its own flight and
-impact effects.
+**A skill names its effects in four places**, and only three of them are the creature's. A passive carries
+its aura in `charFxPakSelfNames`, a pack naming both the points of the model to hang effects on
+(`particleEffectAttachPoints`) and the effects themselves (`particleEffectNames`); a cast's own flash is
+`particleEffectName1…N` and what it spreads around itself is `radiusEffectName`. The fourth,
+`skillProjectileName`, names a projectile, and the flight and impact effects inside that record belong to
+the thing in flight — hung on the caster they read as a swarm of meteors circling a beast that is merely
+standing there.
 
 **A particle texture carries no transparency.** It is painted on black and added to what is behind it, so
 its own brightness is what says where it is see-through — drawn as it is, an effect is a black square with

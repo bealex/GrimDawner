@@ -399,6 +399,39 @@ struct ModelRendererTests {
         }
     }
 
+    /// What a skill fires is not what the creature wears: a projectile's flight and impact effects
+    /// belong to the thing in flight, and hung on the caster they read as meteors circling a beast that
+    /// is standing still.
+    @MainActor
+    @Test
+    func leavesAProjectilesOwnEffectsOnTheProjectile() throws {
+        guard let folder = Self.gameFolder else { return }
+
+        let database = try GameDatabase(gameFolder: folder)
+        let skills = SkillResolver(database: database)
+        let resolver = MonsterResolver(
+            database: database, skills: skills, items: ItemResolver(database: database, skills: skills)
+        )
+        let renderer = ModelRenderer(gameFolder: folder)
+        let monster = try #require(
+            resolver.monster(at: "records/creatures/enemies/special/beaver_01.dbr", level: 100)
+        )
+        let falling = try #require(
+            monster.abilities.first { $0.animation?.title == "Sacrifice" }
+        )
+
+        let skill = try #require(database.record(falling.skill.recordPath))
+        let projectile = try #require(database.record(skill.text("skillProjectileName")))
+        #expect(!projectile.text("projectileFlightFX").isEmpty, "this one does fire something")
+
+        let shown = renderer.effects(ofSkillAt: falling.skill.recordPath, in: database)
+        #expect(!shown.isEmpty, "its own cast effect is still shown")
+        #expect(
+            !shown.contains { $0.recordPath == projectile.text("projectileFlightFX").lowercased() },
+            "but not what the projectile wears"
+        )
+    }
+
     private static func pixels(of image: CGImage) -> Data {
         image.dataProvider?.data as Data? ?? Data()
     }

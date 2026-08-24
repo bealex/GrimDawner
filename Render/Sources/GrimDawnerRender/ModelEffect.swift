@@ -43,12 +43,16 @@ public extension ModelRenderer {
         }
     }
 
-    /// What a skill looks like on the creature that has it.
+    /// What a skill looks like **on the creature that has it**.
     ///
     /// A passive carries its aura in `charFxPakSelfNames`, a pack that names both the points of the model
-    /// to hang effects on and the effects themselves. What a cast throws is `particleEffectName1…N`, and
-    /// what it fires is a projectile whose own flight effect is named inside it. Each of those ends at an
-    /// `EffectEntity`, and that names the particle system whose texture is what can be drawn.
+    /// to hang effects on and the effects themselves; a cast's own flash is `particleEffectName1…N` and
+    /// what it spreads around itself is `radiusEffectName`. Each of those ends at an `EffectEntity`, and
+    /// that names the particle system whose texture is what can be drawn.
+    ///
+    /// What a skill *fires* is left out. `skillProjectileName` names a projectile, and its flight and
+    /// impact effects belong to the thing in flight rather than to the creature that threw it: hung on
+    /// the caster they read as a swarm of meteors circling a beast that is merely standing there.
     func effects(ofSkillAt path: String, in database: GameDatabase) -> [ModelEffect] {
         guard let skill = database.record(path) else { return [] }
 
@@ -58,11 +62,6 @@ public extension ModelRenderer {
         }
         for key in skill.fieldOrder where key.hasPrefix("particleEffectName") || key == "radiusEffectName" {
             found += effects(inside: skill.text(key), at: "", in: database, depth: 0)
-        }
-        if let projectile = database.record(skill.text("skillProjectileName")) {
-            for key in [ "projectileFlightFX", "projectileExplodingImpactFX" ] {
-                found += effects(inside: projectile.text(key), at: "", in: database, depth: 0)
-            }
         }
 
         var seen = Set<String>()
