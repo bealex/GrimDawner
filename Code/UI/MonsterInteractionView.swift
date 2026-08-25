@@ -147,6 +147,9 @@ private struct ReductionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
+                Text(reduction.text)
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(Theme.accent)
                 if reduction.isWasteful {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption)
@@ -156,9 +159,6 @@ private struct ReductionView: View {
                     .font(.callout.weight(.medium))
                     .foregroundStyle(reduction.isWasteful ? Color.red : .primary)
                 Spacer(minLength: 8)
-                Text(reduction.text)
-                    .font(.callout.monospacedDigit())
-                    .foregroundStyle(Theme.accent)
             }
 
             if reduction.isWasteful {

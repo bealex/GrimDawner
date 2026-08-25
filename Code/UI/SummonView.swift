@@ -36,7 +36,7 @@ struct SummonView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if !ability.parameters.isEmpty {
-                        Text(ability.parameters.map { "\($0.name) \($0.value)" }.joined(separator: " · "))
+                        Text(ability.parameters.map { "\($0.value) \($0.name)" }.joined(separator: " · "))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }

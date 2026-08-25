@@ -138,6 +138,48 @@ extension Theme {
         return Accent(word: word, color: match.tint)
     }
 
+    /// The damage type a line's own name says, as the token the icons are kept under.
+    ///
+    /// Read off the name rather than the stat key so that every line about a type wears that type's
+    /// mark, whoever built the line and whether or not it knew its own key. The words are the game's
+    /// own: *Burn* is fire, *Frostburn* cold, *Electrocute* lightning.
+    static func damageToken(inTitle title: String) -> String? {
+        // A conversion names two types and is about neither until it lands, so it wears the mark of what
+        // it turns into: everything to the left of the arrow is what is being spent.
+        let named = title.range(of: convertsTo).map { String(title[$0.upperBound...]) } ?? title
+        return typesNamed(in: named).first?.token
+    }
+
+    /// Every damage type a line's own name says, in the order it says them.
+    static func damageAccents(inTitle title: String) -> [Accent] {
+        typesNamed(in: title).map { Accent(word: $0.word, color: $0.tint) }
+    }
+
+    /// A damage type a piece of text names, and the word it names it with.
+    private struct NamedType {
+        let place: String.Index
+        let token: String
+        let word: String
+        let tint: Color
+    }
+
+    /// The types a piece of text names, earliest first. Ordering by where each word falls keeps a line
+    /// naming two of them out of the hands of whatever order this table happens to be written in.
+    private static func typesNamed(in text: String) -> [NamedType] {
+        damageTokens
+            .compactMap { token -> NamedType? in
+                let found = token.words
+                    .compactMap { word in
+                        text.range(of: word, options: .caseInsensitive).map { (place: $0.lowerBound, word: word) }
+                    }
+                    .min { $0.place < $1.place }
+                guard let found else { return nil }
+
+                return NamedType(place: found.place, token: token.token, word: found.word, tint: token.tint)
+            }
+            .sorted { $0.place < $1.place }
+    }
+
     /// The damage type a stat key names, as the token the icons are kept under.
     static func damageToken(forStatKey key: String) -> String? {
         guard damageFamilies.contains(where: { key.hasPrefix($0) }) else { return nil }
@@ -157,11 +199,13 @@ struct StatRow: View {
     let title: String
     let value: String
     var valueColor: Color = .primary
-    /// The words of the title that name a damage type, each in that type's colour.
+    /// The words of the title that name a damage type, each in that type's colour. Left empty, the line
+    /// finds them in its own name, so the same stat reads the same colour wherever it is shown.
     var accents: [Theme.Accent] = []
     var icon: String?
-    /// The game's own mark for the damage type this line names, drawn beside the figure rather than
-    /// beside the name: the mark is about the number.
+    /// The game's own mark for the damage type this line names, drawn at the end of the line. Left
+    /// unset, the line finds its own from the type its name says, so the same stat wears the same mark
+    /// wherever it is shown.
     var iconPath: String?
     /// The artwork of the thing the line is named after, drawn before its name — an item's own icon.
     var titleIconPath: String?
@@ -172,18 +216,33 @@ struct StatRow: View {
 
     @Environment(\.quickSearch)
     private var search
+    @Environment(\.damageIcons)
+    private var damageIcons
 
     private var emphasis: QuickSearch.Emphasis {
         highlights ? search.emphasis(matching: title) : .neutral
     }
 
+    /// The mark this line wears: the one it was given, or the one its own name asks for.
+    private var mark: String? {
+        if let iconPath, !iconPath.isEmpty { return iconPath }
+
+        return Theme.damageToken(inTitle: title).flatMap { damageIcons[$0] }
+    }
+
+    /// The colours this line reads in: the ones it was given, or the ones its own name asks for.
+    private var tints: [Theme.Accent] {
+        accents.isEmpty ? Theme.damageAccents(inTitle: title) : accents
+    }
+
     /// The title with each accented word in its damage type's colour, and the rest left alone.
     private var titleText: Text {
-        guard emphasis != .match, !accents.isEmpty else { return Text(title) }
+        let tints = tints
+        guard emphasis != .match, !tints.isEmpty else { return Text(title) }
 
         var text = Text("")
         var rest = Substring(title)
-        for accent in accents {
+        for accent in tints {
             guard let range = rest.range(of: accent.word, options: .caseInsensitive) else { continue }
 
             text = text + Text(rest[..<range.lowerBound]) + Text(rest[range]).foregroundStyle(accent.color)
@@ -193,7 +252,15 @@ struct StatRow: View {
     }
 
     var body: some View {
+        // The figure leads, the way the game's own tooltips word a bonus: "+86% Aether Damage". The
+        // number keeps its own width and the name takes the slack, so a long name truncates only when
+        // it has run out of room.
         HStack(spacing: 8) {
+            Text(value)
+                .monospacedDigit()
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+                .fixedSize()
             if let titleIconPath, !titleIconPath.isEmpty {
                 GameIcon(path: titleIconPath, size: 18, fallbackSymbol: "shippingbox")
             }
@@ -204,8 +271,6 @@ struct StatRow: View {
                     .frame(width: 14)
                     .accessibilityHidden(true)
             }
-            // The name takes the slack and the number keeps its own width, so a long name truncates
-            // only when it has run out of room rather than whenever the number is short.
             titleText
                 .foregroundStyle(emphasis == .match ? Theme.match : Color.secondary)
                 .fontWeight(emphasis == .match ? .semibold : .regular)
@@ -220,20 +285,15 @@ struct StatRow: View {
                     .lineLimit(1)
                     .fixedSize()
             }
-            if let iconPath, !iconPath.isEmpty {
-                GameIcon(path: iconPath, size: 13, fallbackSymbol: "circle.fill")
+            if let mark, !mark.isEmpty {
+                GameIcon(path: mark, size: 13, fallbackSymbol: "circle.fill")
                     .accessibilityHidden(true)
             }
-            Text(value)
-                .monospacedDigit()
-                .foregroundStyle(valueColor)
-                .lineLimit(1)
-                .fixedSize()
         }
         .font(.callout)
         .opacity(emphasis == .faded ? 0.25 : 1)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title): \(value)")
+        .accessibilityLabel("\(value) \(title)")
     }
 }
 
