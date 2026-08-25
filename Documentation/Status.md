@@ -18,6 +18,11 @@ Armor Rating opening the same region-by-region account the game's popup gives.
 
 ## The stat engine
 
+**A figure and its band read as one number.** An item nobody owns has no roll to show, only the band
+each figure rolls in. A minimum and a maximum are two ends of one number: ends that roll alike make one
+band, ends that roll apart make one span. [GameData.md](GameData.md#the-item-randomiser) says why so
+much of the game's damage has a minimum and nothing else.
+
 **A stat line leads with its figure**, the way the game's own tooltips word a bonus: `+86% Aether Damage`,
 not `Aether Damage +86%`. The name takes the slack after it, and whatever qualifies the figure — the band
 an item's roll came from, how much of a resistance stands over the cap — sits at the end, with the damage type's mark and whatever

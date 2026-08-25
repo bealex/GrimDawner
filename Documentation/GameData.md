@@ -570,6 +570,11 @@ record of what every pet is given; each rolls from the item's seed in its own st
 takes draws from the item's own figures nor gives them any. `characterTotalSpeedModifier` there raises a
 pet's attack, cast and run speed together.
 
+**A damage line with no maximum is a flat figure.** A record can carry `offensive<Type>Min` on its own:
+a Veilmarked Spear grants `offensiveElementalMin = 12` and no maximum at all. The spread between the two
+ends is then nothing, so the roll writes the maximum equal to the minimum, and the item gives a flat 12.
+Read the two ends apart and you print one number twice.
+
 `characterManaRegen` is read straight from the record and takes no draw, as `ItemRoll.fixedFields` says.
 A component and an augment do not roll at all — the game prints their figures without a band — and a
 weapon's own damage is written rather than rolled.
