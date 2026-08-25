@@ -19,11 +19,14 @@ extension MainScreen {
         }
 
         enum Panel: String, CaseIterable, Identifiable {
+            // The character's own views come first and the game's own reference after them, since a
+            // reader opens the app for a character. `allCases` is what the picker draws, so this is the
+            // order the tabs appear in.
             case inventory = "Inventory"
-            case items = "Items"
             case skills = "Skills"
             case devotions = "Devotions"
             case parameters = "Stats"
+            case items = "Items"
             case affixes = "Affixes"
             case monsters = "Monsters"
 
@@ -33,10 +36,10 @@ extension MainScreen {
             var shortcut: KeyEquivalent {
                 switch self {
                     case .inventory: "1"
-                    case .items: "2"
-                    case .skills: "3"
-                    case .devotions: "4"
-                    case .parameters: "5"
+                    case .skills: "2"
+                    case .devotions: "3"
+                    case .parameters: "4"
+                    case .items: "5"
                     case .affixes: "6"
                     case .monsters: "7"
                 }
@@ -45,10 +48,10 @@ extension MainScreen {
             var symbolName: String {
                 switch self {
                     case .inventory: "shield.lefthalf.filled"
-                    case .items: "list.bullet.rectangle"
                     case .skills: "sparkles.rectangle.stack"
                     case .devotions: "sparkles"
                     case .parameters: "person.text.rectangle"
+                    case .items: "list.bullet.rectangle"
                     case .affixes: "textformat.abc"
                     case .monsters: "pawprint"
                 }

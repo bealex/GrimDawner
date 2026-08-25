@@ -306,26 +306,21 @@ struct GrantedSkillView: View {
         }
     }
 
-    /// What has to happen for it to fire, the rank the item runs it at, and — where the character takes
-    /// nothing from the line — why. A skill of a mastery they never took needs no explanation: the
-    /// mastery's name is already beside it.
+    /// What has to happen for it to fire, and — where the character takes nothing from the line — why.
+    /// A skill of a mastery they never took needs no explanation: the mastery's name is already beside
+    /// it.
+    ///
+    /// The rank an item runs a granted ability at is left out. It is the item's to decide, the reader
+    /// cannot move it, and every figure below is already worked out at it, so printing it says nothing
+    /// the numbers have not.
     private var condition: String? {
         [
             granted.trigger,
-            granted.kind == .granted ? rank : nil,
             isAvailable && !group.isReachable ? "no points spent on it" : nil,
         ]
         .compactMap { $0 }
         .joined(separator: " · ")
         .nilWhenEmpty
-    }
-
-    /// The rank the item runs a granted ability at, out of as many as the skill has.
-    private var rank: String? {
-        guard granted.level > 0 else { return nil }
-
-        let highest = granted.skill?.maxLevel ?? 0
-        return highest > 1 ? "rank \(granted.level) of \(highest)" : "rank \(granted.level)"
     }
 
     var body: some View {
