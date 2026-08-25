@@ -81,7 +81,7 @@ struct MonsterAbilityView: View {
                 }
             }
             if !ability.skill.stats.hasNothingToShow {
-                StatBlockView(block: ability.skill.stats, groupSpacing: 4)
+                StatBlockView(block: ability.skill.stats)
             }
             if let summon = ability.skill.summon {
                 summonRow(summon)

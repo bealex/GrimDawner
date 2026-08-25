@@ -417,8 +417,11 @@ struct StatBlockView: View {
     var highest: StatBlock?
     /// False shows a rolled figure as its band alone, for an item nobody owns a copy of.
     var showsRolls = true
-    /// How far apart the groups sit. A card small enough reads better with its lines running together.
-    var groupSpacing: CGFloat = 10
+    /// How far apart the groups sit. A stat block reads as one list of what a thing does, so the groups
+    /// run together at the spacing the lines themselves use: a gap between damage and defence separates
+    /// nothing a reader was looking for. What does earn a gap is a skill's own block, and that is spaced
+    /// where it is built rather than here.
+    var groupSpacing: CGFloat = 4
 
     @Environment(\.damageIcons)
     private var damageIcons
