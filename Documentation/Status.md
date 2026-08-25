@@ -227,11 +227,11 @@ that is exactly what it is worth.
 ## One item in full
 
 Double-clicking an item — on the doll or in the directory — opens it in a window with three tabs.
-**Item** is what the sidebar shows. **Loot** is every monster that can drop it, which the game states
-nowhere: the tables run the other way, so the whole roster is walked once and kept on disk, and a switch
-tells the monsters worth hunting from the ones whose tables merely reach it. *Aether Cluster* comes off
-an Aetherial Sentinel a quarter of the time; a legendary has sixty-five sources and none of them above
-one in a hundred.
+**Item** is what the sidebar shows. **Loot** is every monster that can drop it, with a switch that tells
+the ones worth hunting from the ones whose tables merely reach the thing. *Aether Cluster* comes off an
+Aetherial Sentinel a quarter of the time; a legendary has sixty-five sources and not one of them above a
+hundredth. [GameData.md](GameData.md#who-drops-an-item) says why answering this costs a walk of the
+whole roster and how the answer is kept.
 
 **Affixes** lists what the item can roll and shows what it becomes. Picking a prefix and a suffix builds
 the item the way the game builds a dropped one and reads it back, so the panel is the real thing rather
@@ -240,11 +240,17 @@ sure to carry. [GameData.md](GameData.md#which-affixes-an-item-can-roll) has whe
 
 ## Character against monster
 
-The monster window's **Interaction** tab reads one of your characters against the monster in front of it:
-what your swing lands on it, what its swing lands on you, and what your build takes off it before either.
-Every figure is the game's own arithmetic out of `combatformulas.dbr` at the monster's own level and
-difficulty — [GameData.md](GameData.md#the-fight-itself) has the equations. What it does not model is a
-particular skill: this is weapon damage against that monster's defences, the floor a build stands on.
+The monster window's **Interaction** tab reads one of your characters against the monster in front of it.
+The two sides sit side by side — what your swing lands on it, what its swing lands on you — with what
+your build takes off it underneath. Every figure is the game's own arithmetic out of
+`combatformulas.dbr` at the monster's own level and difficulty;
+[GameData.md](GameData.md#the-fight-itself) has the equations.
+
+It opens on weapon damage, the floor a build stands on, and any of the character's attacks can be read
+in its place: the skill's own flat damage at the rank it is held, raised by the same bonuses the sheet
+raises everything by. Skills that only buff are left out of the list, having nothing to land. **What a
+skill takes from the weapon it is swung with is not modelled**, so a weapon-damage skill reads low — the
+same gap that leaves the sheet's own Damage Per Second blank.
 
 **The reductions are the interesting part.** The game applies the *largest* of each and drops the rest, so
 a build carrying two sources of one is paying for a line that never fires. Each is listed with every
