@@ -20,8 +20,8 @@ Armor Rating opening the same region-by-region account the game's popup gives.
 
 **A stat line leads with its figure**, the way the game's own tooltips word a bonus: `+86% Aether Damage`,
 not `Aether Damage +86%`. The name takes the slack after it, and whatever qualifies the figure — the band
-an item's roll came from, how much of a resistance stands over the cap — sits at the end with the damage
-type's mark. Every line finds that mark and that colour from its own name, so a type reads the same
+an item's roll came from, how much of a resistance stands over the cap — sits at the end, with the damage type's mark and whatever
+symbol stands for the line. Every line finds that mark and that colour from its own name, so a type reads the same
 wherever it appears; a conversion wears the mark of what it turns into, since that is what you end up
 dealing.
 

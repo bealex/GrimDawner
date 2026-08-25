@@ -202,6 +202,7 @@ struct StatRow: View {
     /// The words of the title that name a damage type, each in that type's colour. Left empty, the line
     /// finds them in its own name, so the same stat reads the same colour wherever it is shown.
     var accents: [Theme.Accent] = []
+    /// A symbol standing for what the line is about, drawn at the end of it with the type's own mark.
     var icon: String?
     /// The game's own mark for the damage type this line names, drawn at the end of the line. Left
     /// unset, the line finds its own from the type its name says, so the same stat wears the same mark
@@ -264,13 +265,6 @@ struct StatRow: View {
             if let titleIconPath, !titleIconPath.isEmpty {
                 GameIcon(path: titleIconPath, size: 18, fallbackSymbol: "shippingbox")
             }
-            if let icon {
-                Image(systemName: icon)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 14)
-                    .accessibilityHidden(true)
-            }
             titleText
                 .foregroundStyle(emphasis == .match ? Theme.match : Color.secondary)
                 .fontWeight(emphasis == .match ? .semibold : .regular)
@@ -284,6 +278,13 @@ struct StatRow: View {
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .fixedSize()
+            }
+            if let icon {
+                Image(systemName: icon)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 14)
+                    .accessibilityHidden(true)
             }
             if let mark, !mark.isEmpty {
                 GameIcon(path: mark, size: 13, fallbackSymbol: "circle.fill")
