@@ -79,7 +79,8 @@ struct SkillsTab: View {
                                 title: skill.name,
                                 value: skill.levelBreakdown,
                                 valueColor: skill.bonusLevel > 0 ? .green : .primary,
-                                highlights: false
+                                highlights: false,
+                                isNamed: true
                             )
                         }
                         .padding(.vertical, 2)

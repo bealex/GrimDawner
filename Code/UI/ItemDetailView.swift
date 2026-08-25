@@ -88,8 +88,13 @@ struct ItemDetailView: View {
                     Button {
                         selectItem?(upgrade.path)
                     } label: {
-                        StatRow(title: "Awakens into \(upgrade.name)", value: "", icon: "arrow.up.forward.square")
-                            .contentShape(.rect)
+                        StatRow(
+                            title: "Awakens into \(upgrade.name)",
+                            value: "",
+                            icon: "arrow.up.forward.square",
+                            isNamed: true
+                        )
+                        .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                     .disabled(selectItem == nil)
@@ -170,46 +175,56 @@ struct GrantedSkillView: View {
     /// of another class, or an ability the item itself grants — has no panel to open.
     private var opensPanel: Bool { isOwn && granted.kind != .granted && reveal != nil }
 
+    /// What the item grants, as one line: the skill's own artwork, what it does, and whose it is.
+    private var line: some View {
+        HStack(spacing: 6) {
+            if let icon = granted.skill?.iconPath, !icon.isEmpty {
+                GameIcon(path: icon, size: 18, fallbackSymbol: granted.symbolName)
+            } else {
+                Image(systemName: granted.symbolName)
+                    .font(.caption2)
+                    .foregroundStyle(Theme.accent)
+                    .accessibilityHidden(true)
+            }
+            Text(granted.summary)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                // A skill line says what the item does; a search for something else must not fade it
+                // out of the card.
+                .quickSearchText(search.highlight(matching: granted.title))
+            // A skill outside the character's masteries appears on no panel, so the line says whose it
+            // is instead of pointing at one.
+            if granted.kind != .granted, !isOwn, let mastery = granted.mastery {
+                Text(mastery)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            if opensPanel {
+                Image(systemName: "arrow.up.forward.square")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Button {
-                reveal?(granted.recordPath)
-            } label: {
-                HStack(spacing: 6) {
-                    if let icon = granted.skill?.iconPath, !icon.isEmpty {
-                        GameIcon(path: icon, size: 18, fallbackSymbol: granted.symbolName)
-                    } else {
-                        Image(systemName: granted.symbolName)
-                            .font(.caption2)
-                            .foregroundStyle(Theme.accent)
-                            .accessibilityHidden(true)
-                    }
-                    Text(granted.summary)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                        // A skill line says what the item does; a search for something else must not
-                        // fade it out of the card.
-                        .quickSearchText(search.highlight(matching: granted.title))
-                    // A skill outside the character's masteries appears on no panel, so the line says
-                    // whose it is instead of pointing at one.
-                    if granted.kind != .granted, !isOwn, let mastery = granted.mastery {
-                        Text(mastery)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    if opensPanel {
-                        Image(systemName: "arrow.up.forward.square")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .accessibilityHidden(true)
-                    }
+            // Only a skill with a panel to open becomes a button: a disabled one is drawn greyed, and a
+            // skill of another class is no less part of what the item grants for having nowhere to go.
+            if opensPanel {
+                Button {
+                    reveal?(granted.recordPath)
+                } label: {
+                    line.contentShape(.rect)
                 }
-                .contentShape(.rect)
+                .buttonStyle(.plain)
+                .pointerStyle(.link)
+                .help("Show \(granted.title) on its mastery panel")
+            } else {
+                line
             }
-            .buttonStyle(.plain)
-            .disabled(!opensPanel)
-            .help(opensPanel ? "Show \(granted.title) on its mastery panel" : "")
 
             // Only a skill the item brings into being is described here: `+N` and "Enhances" lines
             // point at a skill whose own panel says what it does.

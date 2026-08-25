@@ -179,7 +179,8 @@ private struct ReductionView: View {
                         value: reduction.unit.format(source.value),
                         valueColor: isApplied ? .secondary : .red,
                         titleIconPath: source.item?.iconPath,
-                        highlights: false
+                        highlights: false,
+                        isNamed: true
                     )
                     .opacity(isApplied ? 1 : 0.6)
                 }

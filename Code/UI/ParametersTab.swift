@@ -41,6 +41,9 @@ struct ParametersTab: View {
         } detail: {
             if let selection {
                 ParameterDetailView(selection: selection, character: character, reveal: reveal)
+                    // The query narrows the sheet, which is what is being searched. The sidebar is the
+                    // answer to a line already picked out of it, so nothing in it dims.
+                    .environment(\.quickSearch, QuickSearch())
             } else {
                 DetailPlaceholder(
                     title: "No stat selected",
@@ -281,20 +284,20 @@ struct ParametersTab: View {
 
         return Button(action: { selection = .stat(title: kind.title, key: kind.resistanceKey) }) {
             HStack(spacing: 6) {
-                Text(kind.title)
-                    .foregroundStyle(kind.color)
-                Spacer(minLength: 6)
-                if let icon = damageIcons[Theme.damageToken(forStatKey: kind.resistanceKey) ?? ""] {
-                    GameIcon(path: icon, size: 15, fallbackSymbol: "circle.fill")
-                }
                 Text("\(whole(min(value, maximum)))%")
                     .monospacedDigit()
                     .foregroundStyle(value < 0 ? .red : .primary)
+                Text(kind.title)
+                    .foregroundStyle(kind.color)
+                Spacer(minLength: 6)
                 if value > maximum {
                     Text(Theme.overCap(value - maximum))
                         .font(.caption2)
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
+                }
+                if let icon = damageIcons[Theme.damageToken(forStatKey: kind.resistanceKey) ?? ""] {
+                    GameIcon(path: icon, size: 15, fallbackSymbol: "circle.fill")
                 }
             }
             .font(.callout)
@@ -303,7 +306,7 @@ struct ParametersTab: View {
         .buttonStyle(.plain)
         .quickSearchText(search.emphasis(matching: kind.title))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(kind.title) resistance \(Int(value)) percent, cap \(Int(maximum))")
+        .accessibilityLabel("\(Int(value)) percent \(kind.title) resistance, cap \(Int(maximum))")
     }
 
     /// Blocking, dodge and deflection, as the game's own Defense panel opens.
@@ -401,6 +404,11 @@ struct ParametersTab: View {
                 ForEach(types, id: \.self) { type in
                     Button(action: { selection = .stat(title: type.title, key: type.modifierKey) }) {
                         HStack(spacing: 8) {
+                            Text(Self.damageText(
+                                flat: sheet.flatDamage[type] ?? 0,
+                                percent: sheet.damageModifiers[type] ?? 0
+                            ))
+                            .monospacedDigit()
                             Text(type.title)
                                 .foregroundStyle(type.color)
                             Spacer(minLength: 6)
@@ -411,11 +419,6 @@ struct ParametersTab: View {
                                     .fill(type.color)
                                     .frame(width: 8, height: 8)
                             }
-                            Text(Self.damageText(
-                                flat: sheet.flatDamage[type] ?? 0,
-                                percent: sheet.damageModifiers[type] ?? 0
-                            ))
-                            .monospacedDigit()
                         }
                         .font(.callout)
                         .contentShape(.rect)
@@ -423,7 +426,7 @@ struct ParametersTab: View {
                     .buttonStyle(.plain)
                     .quickSearchText(search.emphasis(matching: type.title))
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(type.title) damage plus \(Int(sheet.damageModifiers[type] ?? 0)) percent")
+                    .accessibilityLabel("Plus \(Int(sheet.damageModifiers[type] ?? 0)) percent \(type.title) damage")
                 }
             }
         }
@@ -467,13 +470,14 @@ struct ParametersTab: View {
                     ForEach(character.sets) { set in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
+                                Text(set.summary)
+                                    .font(.caption)
+                                    .monospacedDigit()
+                                    .foregroundStyle(.secondary)
                                 Text(set.name)
                                     .font(.callout.weight(.semibold))
                                     .foregroundStyle(set.isComplete ? Theme.accent : .primary)
-                                Text(set.summary)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
 
                             if set.bonuses.hasNothingToShow, set.grantedSkills.isEmpty {
@@ -544,7 +548,8 @@ struct ParametersTab: View {
                                 title: faction.name,
                                 value: faction.tier,
                                 valueColor: faction.isHostile ? .red : .secondary,
-                                highlights: false
+                                highlights: false,
+                                isNamed: true
                             )
                         }
                         .quickSearchText(search.emphasis(matching: faction.name))
@@ -562,11 +567,11 @@ struct ParametersTab: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text(faction.name)
-                        .foregroundStyle(.secondary)
                     Text(faction.tier)
                         .foregroundStyle(faction.isHostile ? .red : .primary)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    Text(faction.name)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .font(.callout)
 
@@ -582,7 +587,7 @@ struct ParametersTab: View {
         }
         .quickSearchText(search.emphasis(matching: faction.name, faction.tier))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(faction.name): \(faction.tier), \(faction.valueText)")
+        .accessibilityLabel("\(faction.tier) \(faction.name), \(faction.valueText)")
     }
 
     // MARK: - Pieces
@@ -633,12 +638,12 @@ struct ParametersTab: View {
     private func attributeRow(_ title: String, _ attribute: CharacterSheet.Attribute, key: String) -> some View {
         Button(action: { selection = .stat(title: title, key: key) }) {
             HStack(spacing: 8) {
-                Text(title)
-                    .foregroundStyle(.secondary)
                 Text(whole(attribute.total))
                     .monospacedDigit()
                     .fontWeight(.medium)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                Text(title)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 if attribute.bonus != 0 {
                     Text("(+\(whole(attribute.bonus)))")
                         .monospacedDigit()
@@ -652,7 +657,7 @@ struct ParametersTab: View {
         .buttonStyle(.plain)
         .quickSearchText(search.emphasis(matching: title))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title) \(Int(attribute.total)), base \(Int(attribute.base))")
+        .accessibilityLabel("\(Int(attribute.total)) \(title), base \(Int(attribute.base))")
     }
 
     /// The game truncates the figures it prints on the character sheet rather than rounding them.

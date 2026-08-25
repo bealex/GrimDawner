@@ -110,7 +110,8 @@ extension Theme {
     /// Which damage family a stat key names, and the words a title says it with. Longest token first,
     /// so `Lightning` never reads as `Light`.
     private static let damageTokens: [(token: String, words: [String], tint: Color)] = [
-        ("Physical", [ "Physical" ], DamageType.physical.color),
+        // A type's over-time name is the same type: Internal Trauma is physical, Burn is fire.
+        ("Physical", [ "Physical", "Internal Trauma" ], DamageType.physical.color),
         ("Pierce", [ "Pierce" ], DamageType.pierce.color),
         ("Bleeding", [ "Bleeding" ], ResistanceKind.bleeding.color),
         ("Fire", [ "Fire", "Burn" ], DamageType.fire.color),
@@ -214,6 +215,10 @@ struct StatRow: View {
     var range: String?
     /// False where an enclosing row already answers for the search, so a match is ringed once.
     var highlights = true
+    /// True where the line is named after a thing rather than after a statistic. A name is its own: an
+    /// item called *Screams of the Aether* is not a line about aether, so a named line takes neither the
+    /// damage colour nor the mark that a stat's name earns.
+    var isNamed = false
 
     @Environment(\.quickSearch)
     private var search
@@ -227,13 +232,16 @@ struct StatRow: View {
     /// The mark this line wears: the one it was given, or the one its own name asks for.
     private var mark: String? {
         if let iconPath, !iconPath.isEmpty { return iconPath }
+        guard !isNamed else { return nil }
 
         return Theme.damageToken(inTitle: title).flatMap { damageIcons[$0] }
     }
 
     /// The colours this line reads in: the ones it was given, or the ones its own name asks for.
     private var tints: [Theme.Accent] {
-        accents.isEmpty ? Theme.damageAccents(inTitle: title) : accents
+        guard accents.isEmpty else { return accents }
+
+        return isNamed ? [] : Theme.damageAccents(inTitle: title)
     }
 
     /// The title with each accented word in its damage type's colour, and the rest left alone.

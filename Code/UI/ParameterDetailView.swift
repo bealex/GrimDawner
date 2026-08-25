@@ -45,25 +45,39 @@ struct ParameterDetailView: View {
                         SectionCard(title: kind.title) {
                             VStack(spacing: 6) {
                                 ForEach(group) { source in
-                                    Button(action: { source.item.map(reveal) }) {
-                                        StatRow(
-                                            title: source.name,
-                                            value: format(source.value),
-                                            valueColor: Theme.valueColor(source.value),
-                                            icon: source.item == nil ? nil : "arrow.up.forward.square",
-                                            titleIconPath: source.item?.iconPath
-                                        )
-                                        .contentShape(.rect)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(source.item == nil)
-                                    .help(source.item == nil ? "" : "Show \(source.name) on the doll")
+                                    row(source)
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+
+    /// One source of the figure. A line only becomes a button where there is a piece of gear to open:
+    /// a disabled button is drawn greyed, and a mastery or a constellation is no less real a source for
+    /// having no doll to be shown on.
+    @ViewBuilder
+    private func row(_ source: StatSources.Entry) -> some View {
+        let line = StatRow(
+            title: source.name,
+            value: format(source.value),
+            valueColor: Theme.valueColor(source.value),
+            icon: source.item == nil ? nil : "arrow.up.forward.square",
+            titleIconPath: source.item?.iconPath,
+            isNamed: true
+        )
+
+        if let item = source.item {
+            Button(action: { reveal(item) }) {
+                line.contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .pointerStyle(.link)
+            .help("Show \(source.name) on the doll")
+        } else {
+            line
         }
     }
 

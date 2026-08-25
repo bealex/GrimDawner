@@ -38,7 +38,8 @@ struct SkillDetailView: View {
                 title: source.name,
                 value: "+\(source.levels)",
                 valueColor: .green,
-                icon: source.iconPath.isEmpty ? "circle.hexagongrid" : nil
+                icon: source.iconPath.isEmpty ? "circle.hexagongrid" : nil,
+                isNamed: true
             )
         }
 
