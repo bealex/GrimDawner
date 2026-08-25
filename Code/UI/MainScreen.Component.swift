@@ -116,6 +116,15 @@ extension MainScreen {
             }
         }
 
+        @Environment(\.openWindow)
+        private var openWindow
+
+        /// Opens one item in the window that reads it in full.
+        private func openItem(_ path: String) {
+            model.openItem(at: path)
+            openWindow(id: ItemDetailWindow.id)
+        }
+
         @ViewBuilder
         private func content(for character: ResolvedCharacter) -> some View {
             let search = QuickSearch(model.search)
@@ -128,7 +137,8 @@ extension MainScreen {
                         selection: $model.selectedItem,
                         renderer: model.modelRenderer,
                         database: model.records,
-                        revealSkill: model.reveal(skillAt:)
+                        revealSkill: model.reveal(skillAt:),
+                        openItem: openItem
                     )
                 case .items:
                     ItemsTab(
@@ -137,7 +147,8 @@ extension MainScreen {
                         search: search,
                         selectedPath: model.selectedCataloguePath,
                         selected: model.selectedCatalogueItem,
-                        select: model.selectCatalogued
+                        select: model.selectCatalogued,
+                        open: openItem
                     )
                     .task { model.openCatalogue() }
                 case .skills:

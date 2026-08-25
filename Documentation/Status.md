@@ -224,6 +224,20 @@ numbers; a component describes its skill the same way an item does. What the cha
 comes first, and a rank or an enhancement aimed at a skill nobody has spent a point on reads faded, since
 that is exactly what it is worth.
 
+## One item in full
+
+Double-clicking an item — on the doll or in the directory — opens it in a window with three tabs.
+**Item** is what the sidebar shows. **Loot** is every monster that can drop it, which the game states
+nowhere: the tables run the other way, so the whole roster is walked once and kept on disk, and a switch
+tells the monsters worth hunting from the ones whose tables merely reach it. *Aether Cluster* comes off
+an Aetherial Sentinel a quarter of the time; a legendary has sixty-five sources and none of them above
+one in a hundred.
+
+**Affixes** lists what the item can roll and shows what it becomes. Picking a prefix and a suffix builds
+the item the way the game builds a dropped one and reads it back, so the panel is the real thing rather
+than two lists added together. Every figure reads at the bottom of its band, which is what the item is
+sure to carry. [GameData.md](GameData.md#which-affixes-an-item-can-roll) has where the pool comes from.
+
 ## Character against monster
 
 The monster window's **Interaction** tab reads one of your characters against the monster in front of it:

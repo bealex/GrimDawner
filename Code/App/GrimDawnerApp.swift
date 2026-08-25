@@ -27,6 +27,12 @@ struct GrimDawnerApp: App {
         }
         .defaultSize(width: 1180, height: 820)
 
+        Window("Item", id: ItemDetailWindow.id) {
+            ItemDetailWindow(model: model)
+                .preferredColorScheme(.dark)
+        }
+        .defaultSize(width: 760, height: 720)
+
         Window("Model", id: MonsterModelWindow.id) {
             MonsterModelWindow(model: model)
                 .preferredColorScheme(.dark)

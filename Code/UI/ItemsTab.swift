@@ -15,6 +15,8 @@ struct ItemsTab: View {
     let selectedPath: String?
     let selected: ResolvedItem?
     let select: (String) -> Void
+    /// Opens an item in a window of its own, which is what a double click is for.
+    var open: ((String) -> Void)?
 
     @State
     private var filter = DirectoryFilter()
@@ -179,7 +181,8 @@ struct ItemsTab: View {
                             item: group.item,
                             detail: group.levels,
                             isSelected: group.variants.contains { $0.path == selectedPath },
-                            select: { select(group.item.path) }
+                            select: { select(group.item.path) },
+                            open: { open?(group.item.path) }
                         )
                         .id(group.item.path)
                     }
@@ -238,6 +241,7 @@ private struct ItemRow: View {
     let detail: String
     let isSelected: Bool
     let select: () -> Void
+    let open: () -> Void
 
     var body: some View {
         Button(action: select) {
@@ -273,7 +277,12 @@ private struct ItemRow: View {
             .background(isSelected ? Theme.accent.opacity(0.18) : .clear, in: .rect(cornerRadius: 6))
         }
         .buttonStyle(.plain)
+        // The button keeps the single click; the double click runs alongside it rather than replacing
+        // it, so one selects and two open the window.
+        .simultaneousGesture(TapGesture(count: 2).onEnded(open))
+        .help("Double-click to open \(item.name) in a window of its own")
         .accessibilityLabel("\(item.name), \(item.kind), \(detail)")
+        .accessibilityAction(named: "Open in a window", open)
     }
 }
 

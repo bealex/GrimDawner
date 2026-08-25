@@ -87,6 +87,14 @@ extension MainScreen {
         var selectedStar: DevotionStar.ID?
         var selectedConstellation: ResolvedConstellation.ID?
         var selectedParameter: ParameterSelection?
+        /// The item the details window is reading. Kept apart from the sidebars' own selections, since
+        /// either of them can open it and neither should move it afterwards.
+        private(set) var detailItem: ResolvedItem?
+        /// Every monster that drops each item, which nothing in the game states and which takes a walk
+        /// of the whole roster to work out.
+        private(set) var drops: ItemDropIndex?
+        private(set) var dropState: LoadState = .idle
+        private(set) var dropProgress: Double = 0
         private(set) var selectedMonsterPath: String?
         private(set) var selectedMonster: ResolvedMonster?
         /// The level a monster is read at; monsters scale, so nothing about one is known without it.
@@ -191,6 +199,59 @@ extension MainScreen {
                 monsterLevel = character?.level ?? monsterLevel
                 monsterDifficulty = character?.difficulty ?? monsterDifficulty
                 monsterState = .ready
+            }
+        }
+
+        /// Opens one item in the details window, whichever list asked for it.
+        func openItem(at path: String) {
+            guard let database else { return }
+
+            let resolver = ItemResolver(database: database, skills: SkillResolver(database: database))
+            detailItem = resolver.resolve(Gdc.Item(baseName: path))
+        }
+
+        /// The same item with a prefix and a suffix on it, for reading what an affix would do to it.
+        func item(at path: String, prefix: String?, suffix: String?) -> ResolvedItem? {
+            guard let database else { return nil }
+
+            var entry = Gdc.Item(baseName: path)
+            entry.prefixName = prefix ?? ""
+            entry.suffixName = suffix ?? ""
+            // A seed of nothing rolls every figure at the bottom of its band, which is the honest thing
+            // to show for an item nobody owns: what it is guaranteed to carry.
+            return ItemResolver(database: database, skills: SkillResolver(database: database)).resolve(entry)
+        }
+
+        /// Which affixes an item can roll. The first call walks the loot tables; the database keeps
+        /// the answer, so every item asked about after that is quick.
+        func affixPool(forItemAt path: String) async -> ItemAffixPool {
+            guard let database else { return ItemAffixPool(prefixes: [], suffixes: []) }
+
+            return await Task.detached(priority: .userInitiated) {
+                ItemAffixPool.of(itemAt: path, in: database)
+            }.value
+        }
+
+        /// Works out which monsters drop what, from the cache where this version has been walked before.
+        ///
+        /// Nothing in the game runs this way round, so answering it means reading every monster's tables
+        /// — ten seconds or so the first time, and nothing on every launch after it.
+        func loadDrops() {
+            guard case .idle = dropState, let database else { return }
+
+            dropState = .loading
+            Task {
+                let index = await Task.detached(priority: .userInitiated) {
+                    ItemDropIndexStore.load(fingerprint: database.fingerprint)
+                        ?? {
+                            let built = ItemDropIndex.build(from: database)
+                            ItemDropIndexStore.save(built)
+                            return built
+                        }()
+                }.value
+
+                drops = index
+                dropState = .ready
             }
         }
 

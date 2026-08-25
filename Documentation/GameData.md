@@ -412,6 +412,29 @@ in the same units, a creature standing two or three of them tall. A wave states 
 `waveDistance` out, `waveStartWidth` and `waveEndWidth` across, `waveTime` to cross it. Nothing else in
 a skill record says how big what it throws is; the `.pfx` particle systems carry the rest and are not read.
 
+### Which affixes an item can roll
+
+An item's own record says nothing about them. The loot table that produces it does: a
+`LootItemTable_DynWeight` lists items in `lootName1…N` and, beside them, the affix tables anything
+rolled off it draws from — `prefixTableName1…N` and `suffixTableName1…N` for the magic band,
+`rarePrefixTableName1…N` and `rareSuffixTableName1…N` for the rare one, each with its own weight and
+level range. Those name `LootRandomizerTable` records, whose `randomizerName1…N` are the affixes
+themselves: `LootRandomizer` records carrying the stats, an `itemClassification` and a
+`lootRandomizerJitter`. An item listed by several tables can roll anything any of them offers — a plain
+one-handed sword reaches 306 prefixes and 396 suffixes, most of them the same name written once per
+level tier.
+
+### Who drops an item
+
+Nothing states it. The tables run from a monster to what it leaves behind, so the only way to answer it
+is to walk every monster that drops anything — 1,453 of them — and record what its tables can reach.
+That takes about ten seconds, so it is done once per installed version and kept beside the item and
+monster listings.
+
+The answer is filed under the item's **name** rather than its record, since the game writes one record
+per level tier and a table names whichever tier suits its own band. Where a monster reaches one item
+down several paths those chances add, being chances of the same kill.
+
 ### The fight itself
 
 `records/game/combatformulas.dbr` holds the arithmetic for one side hitting the other. The app evaluates

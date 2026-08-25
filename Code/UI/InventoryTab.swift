@@ -16,6 +16,8 @@ struct InventoryTab: View {
     var database: GameDatabase?
     /// Opens one of the character's own skills on its mastery panel.
     var revealSkill: ((String) -> Void)?
+    /// Opens a worn piece in a window of its own.
+    var openItem: ((String) -> Void)?
 
     @State
     private var weaponSet: Int?
@@ -35,6 +37,7 @@ struct InventoryTab: View {
                                 selection: $selection,
                                 renderer: renderer,
                                 database: database,
+                                openItem: openItem,
                                 swapWeaponSet: swapWeaponSet
                             )
                         }
@@ -82,6 +85,7 @@ private struct DollView: View {
     var selection: ResolvedItem?
     let renderer: ModelRenderer?
     let database: GameDatabase?
+    var openItem: ((String) -> Void)?
     let swapWeaponSet: () -> Void
 
     var body: some View {
@@ -98,7 +102,8 @@ private struct DollView: View {
                         item: item,
                         isSelected: item != nil && selection?.id == item?.id,
                         emphasis: search.emphasis(isMatch: matches(item)),
-                        select: { selection = item }
+                        select: { selection = item },
+                        open: { item.map { openItem?($0.raw.baseName) } }
                     )
                     .position(x: slot.frame.midX, y: slot.frame.midY)
                 }
@@ -247,6 +252,8 @@ private struct DollBox: View {
     let isSelected: Bool
     let emphasis: QuickSearch.Emphasis
     let select: () -> Void
+    /// Opens the worn piece in a window of its own, which is what a double click is for.
+    var open: (() -> Void)?
 
     @State
     private var isHovered = false
@@ -278,6 +285,7 @@ private struct DollBox: View {
         }
         .buttonStyle(.plain)
         .disabled(item == nil)
+        .simultaneousGesture(TapGesture(count: 2).onEnded { if item != nil { open?() } })
         .scaleEffect(isHovered && item != nil ? 1.04 : 1)
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .onHover { isHovered = $0 }
