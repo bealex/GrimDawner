@@ -118,7 +118,10 @@ extension Theme {
         ("Cold", [ "Cold", "Frostburn" ], DamageType.cold.color),
         ("Lightning", [ "Lightning", "Electrocute" ], DamageType.lightning.color),
         ("Poison", [ "Poison", "Acid" ], DamageType.acid.color),
-        ("Life", [ "Vitality", "Life" ], DamageType.vitality.color),
+        // "Life" is the database's stem for vitality, never a word the app prints for it: everything it
+        // shows says "Vitality". The titles that do say Life — Life Steal, Life Leech — are health
+        // leeching and have nothing to do with vitality damage.
+        ("Life", [ "Vitality" ], DamageType.vitality.color),
         ("Aether", [ "Aether" ], DamageType.aether.color),
         ("Chaos", [ "Chaos" ], DamageType.chaos.color),
         ("Elemental", [ "Elemental" ], DamageType.elemental.color),
