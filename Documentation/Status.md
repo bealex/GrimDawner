@@ -10,8 +10,8 @@ since every panel it draws is the game's own artwork.
 
 Panels are drawn at the game's own pixel coordinates from its UI records — the equipment doll, both
 mastery trees, the devotion sky — and are never scaled up, only shrunk to fit a narrow window. The
-equipment panel carries the game's own weapon-swap button where the game puts it, and a character in the
-box the game renders its model in. Clicking that character — which is also what the tab opens on — reads
+equipment panel carries the game's own weapon-swap button where the game puts it, and the character's own
+model in the box the game renders it in. Clicking that character — which is also what the tab opens on — reads
 the sheet into the sidebar: the attributes, the pools, the combat stats and the resistance grid, with
 Armor Rating opening the same region-by-region account the game's popup gives.
 [GameData.md](GameData.md#window-layouts) says which record holds what.
@@ -93,9 +93,6 @@ threshold and the cap. If the game shows *Hated* there instead, the boundaries a
 
 - `elementalinfusion1` has modifiers but no `skillConnectionOn` list, so its branch is not drawn.
 - Two factions point at `faction_user3.tex`, which the game ships as a blank white placeholder.
-- The doll's centre box shows a stand-in figure rather than the character. The game renders the character's
-  own model there, posed and dressed in what it wears; the app draws models but does not assemble a
-  player's gear onto one.
 
 ## The monster listing
 
@@ -168,6 +165,25 @@ the creature's own record path: the same monster keeps the same axe between laun
 drawing from one table rarely hold the same thing. A two-handed weapon fills both hands. Of the first 300
 records meant to carry something, 298 are drawn carrying it.
 
+**Much of the roster is not a creature.** *Blizzard* and *Cave-In* are weather with a health bar, *Floor
+Spikes* are a floor, *Warding Totem* is a totem. The listing badges each one and filters by kind;
+[GameData.md](GameData.md#what-a-monster-actually-is) says how the game states it.
+
+**A phased boss is several monsters.** The stages of one fight are chained through `poolToSpawnOnDeath`,
+and each is its own line — *Ixall, Phantom of the Korvan Wastes (Phase 1)* and *(Phase 2)* are a different
+model, different skills, and loot on the second alone.
+
+**An effect is drawn the size the game says it is.** `skillTargetRadius` for an area skill, `waveDistance`
+for a wave. The reach spreads the drift instead of inflating one spark, so a nova covering seven units is
+many sparks over that ground while a hand's flash stays a hand's flash. A wave sweeps forward from the
+point it hangs on. Where nothing states a size, the creature's own is used.
+
+**The character is a creature like any other.** The doll's centre box holds the player's own model,
+assembled the same way a monster is, and dressed in what the character is actually wearing: a default
+piece fills a slot only where nothing is worn. The weapons are the set the doll is showing, so the swap
+button changes hands, and what plays is the idle the game's own character window plays for the way those
+hands are full. [GameData.md](GameData.md#the-players-own-creature) has the records behind all of it.
+
 **The camera turns with the head.** An animation faces wherever the game had the creature facing, which is
 rarely the bind pose, so a camera that holds still watches it from behind. How far the head has turned is
 added to the camera's own angle — the head rather than the body, because a fighting stance twists the hips
@@ -187,6 +203,19 @@ not turn 90° in a thirtieth of a second.
 **What is not drawn.** The particles themselves, which are a format of their own, and an effect that names
 a model rather than a particle system. The travel a key carries, so a walk plays on the spot. And nothing
 blends one frame into the next, so a loop restarts rather than easing round.
+
+## Character against monster
+
+The monster window's **Interaction** tab reads one of your characters against the monster in front of it:
+what your swing lands on it, what its swing lands on you, and what your build takes off it before either.
+Every figure is the game's own arithmetic out of `combatformulas.dbr` at the monster's own level and
+difficulty — [GameData.md](GameData.md#the-fight-itself) has the equations. What it does not model is a
+particular skill: this is weapon damage against that monster's defences, the floor a build stands on.
+
+**The reductions are the interesting part.** The game applies the *largest* of each and drops the rest, so
+a build carrying two sources of one is paying for a line that never fires. Each is listed with every
+source feeding it — gear, components, augments, masteries, individual skills, constellations — and a
+wasteful one is flagged in red with how much of it is doing nothing.
 
 ## The catalogues
 

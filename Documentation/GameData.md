@@ -356,6 +356,124 @@ reads the unarmed set.
 `Roar`, `Nova` — matches the table's `unarmedSpecialAnimRef7`, and `unarmedSpecialAnim7` beside it is the
 file. 2,063 skill records name one, which is what lets a monster be drawn doing a particular attack.
 
+**A weapon's record class names its animation set.** The part after the underscore is the set's own name
+where the table has one: `WeaponMelee_Sword2h` is `sword2h`, `WeaponHunting_Ranged1h` is `ranged1h`. The
+one-handed melee classes — `Sword`, `Axe`, `Mace`, `Dagger`, `Scepter` — have no set each and share
+`sHanded`, `dHanded` when a second one is held; two `Ranged1h` are `dualRanged`. What fills the other hand
+suffixes the set: `WeaponArmor_Shield` gives `sHandedShield`, `WeaponArmor_Offhand` gives
+`sHandedOffhand`.
+
+**`…MenuIdleAnim` is the pose the character window holds.** Every set names one, and it is the animation
+the game plays behind the equipment doll rather than the `LongIdle` it plays in the world.
+
+### What a "monster" actually is
+
+Much of the roster is not a creature. The game spawns hazards, traps and scenery as monsters so they can
+be hit and can hit back, and where it keeps the model says which: `creatures/anomalies` is weather and gas
+with no body at all (*Blizzard*, *Cave-In*, *Whirlwind*, *Ugdenbog Gas Cloud* — six of the eight wear
+`system/textures/invisible.tex`), `fx/meshfx` is a trap (*Floor Spikes*, *Flare Mine*, *Obsidian Anomaly*),
+and `level art/…` or `items/chests/…` is scenery (*Warding Totem*, *Dermapteran Cluster*, *Training
+Dummy*). 47 of the roster's records are one of those.
+
+A record that names a `default<Slot>Piece` is a creature whatever its own model is, since only a creature
+is dressed. That clause carries one record: the Avatar of Mogdrogen's `mesh` is a headdress under
+`items/dlc`, and without it the game's own god would be filed as furniture.
+
+### Several stages of one fight
+
+A boss that changes shape is written as one record per stage, chained through death:
+`poolToSpawnOnDeath` names a `spawnondeathpool.tpl` record whose `name1..N` are what can take the dying
+creature's place, weighted by `weight1..N`. Where the record it spawns carries the same name, that is the
+next phase; a different name is an add. *Ixall, Phantom of the Korvan Wastes* is `nemesis_eldritch_02a` (armour,
+holding a sword) dying into `nemesis_eldritch_02b` (a wraith, a different mesh and different skills).
+
+The stages differ in what they drop, and the base game's copy of Ixall's second stage names no loot table
+at all: the necklaces the monster database prints for it are on the Shattered Realm copy of the same
+record, under `records/endlessdungeon/creatures/…`, through `lootMisc1Item1`.
+
+### How a weapon is held
+
+A weapon mesh carries no bones: its vertices are authored in the frame of the bone the rig hangs it off,
+so drawing it is a matter of parenting it there and nothing else. The `Anchor1` / `Anchor2` attachments
+several of them carry are unrotated points along the item: the two ends, for what the game strings
+between them. They say nothing about placement.
+
+Which way a weapon points is the mesh's own business, and the families differ. Measured from the origin
+it hangs by, all 141 caster meshes and all 118 one-handed swords reach along **−Z**, which on a rig whose
+weapon bone maps local −Z to world down is the blade hanging from the fist. Focus meshes follow no such
+convention at all — 48 reach along −X, 29 along −Z, 22 along +Y, 11 along +X and 10 along +Z — since a
+focus is an ornament and each is modelled the way it is meant to sit. Nothing in the item record rotates
+one, so a focus that reads oddly in the hand reads that way in the game too.
+
+### How far a skill's effect reaches
+
+`skillTargetRadius` is the ground an area skill covers — 0.1 to 50, on 1,371 skills — and the models are
+in the same units, a creature standing two or three of them tall. A wave states its sweep instead:
+`waveDistance` out, `waveStartWidth` and `waveEndWidth` across, `waveTime` to cross it. Nothing else in
+a skill record says how big what it throws is; the `.pfx` particle systems carry the rest and are not read.
+
+### The fight itself
+
+`records/game/combatformulas.dbr` holds the arithmetic for one side hitting the other. The app evaluates
+the record; nothing here is transcribed.
+
+**Whether it lands.** `probabilityToHitEquation` takes the attacker's offensive ability and the
+defender's defensive ability and produces one figure. `pthMinimum` (55) is the floor the app reads it
+against, and the figure is capped at 100 to read as a chance.
+
+**How hard.** `pthThreshold1..6` (70, 90, 105, 120, 130, 135) and `pthDamageModifier1..6` (1.0 to 1.5)
+are six bands: a blow landing past a threshold is multiplied by that band's modifier. The app shows the
+highest band a pairing reaches; how often each is rolled is the game's own business and is not guessed at.
+
+**What stops it.** Two armour equations, picked by whether the blow is bigger than the armour:
+`physicalDamageDefenseEquationDGP` is `(protection × (1 − absorption)) + (damage − protection)` for a
+blow that gets through, `physcialDamageDefenseEquationDLEP` — the game's own spelling — is
+`damage × (1 − absorption)` for one the armour swallows. The absorption share itself is
+`armorDefensiveAbsorption` on `gameengine.dbr`, raised by whatever `defensiveAbsorptionModifier` a record
+adds.
+
+### What one side takes off the other
+
+Three families lower what a target brings, and the game treats them differently:
+
+| written as | field | stacks |
+| --- | --- | --- |
+| Reduced target's Damage | `offensiveTotalDamageReductionPercent…` | no — largest applies |
+| Reduced target's Offensive Ability | `offensiveSlowOffensiveReduction…` | no |
+| Reduced target's Defensive Ability | `offensiveSlowDefensiveReduction…` | no |
+| % Reduced target's Resistances | `offensive<Type>ResistanceReductionPercent…` | no |
+| Reduced target's Resistances | `offensive<Type>ResistanceReductionAbsolute…` | no |
+| -X% \<type\> Resistance | a negative `defensive<Type>Resistance` on the debuff applied | yes |
+
+`<Type>` is `Total` for the ones aimed at everything, or a damage family — `Elemental`, `Physical`. The
+first five are what a build carries against a target, and carrying two of one wastes the smaller: 236
+records name the damage reduction, 120 the flat resistance reduction, 50 the defensive-ability one.
+
+The last is the only one that adds up, and it cannot be told apart from the character's own resistance:
+Flame Jet's buff carries `defensiveElementalResistance = -40` under the same key a ring uses for +40 of
+its own. Reading it off a character would list that character's own gear as though it were aimed at the
+enemy, so the app leaves it out.
+
+### Reduction in duration
+
+`defensive<Type>Duration` is how much shorter a damage over time lasts **on** the character — what the
+game words as *Reduction in Burn Duration*. It is the defensive twin of `offensiveSlow<Type>Duration…`,
+which lengthens what the character inflicts, and the two are easy to mistake for one another. The stems
+follow the over-time family: `defensivePhysicalDuration` is internal trauma, `defensiveLifeDuration`
+vitality decay, `defensiveBleedingDuration` bleeding.
+
+### The player's own creature
+
+`records/creatures/pc/malepc01.dbr` and `femalepc01.dbr` are the two `Player`-class records, and no record
+names either: the save's `male` flag picks one by its `characterGenderProfile`. A third `Player` record
+sits under `records/sandbox` as a leftover test pose, so a search for one stays inside `creatures/pc`.
+
+A player record reads like any other creature: `mesh` is the body, `charAnimationTableName` its table, and
+`default<Slot>Piece` what the game dresses it in where a slot is empty — which is what puts hair on a bare
+female head, since `femalepc01` names `defaultHeadPiece` and `malepc01` names none. `playerTextures` is
+the default skin; the one actually picked at creation is in the save's own character-info block, and the
+two agree only until the player changes it.
+
 ### Window layouts
 
 Every panel the app draws is the game's own, at the game's own pixel coordinates.

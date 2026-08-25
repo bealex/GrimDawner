@@ -52,6 +52,22 @@ public struct ResolvedConstellation: Identifiable, Sendable {
     public let availableTint: DevotionTint
     public let lockedTint: DevotionTint
 
+    /// The patch of sky it covers: every star of it, with room for the sprite each is drawn as. A star's
+    /// position is the top-left of that sprite, so the box has to grow past the last of them.
+    public var bounds: CGRect {
+        let points = stars.map(\.position)
+        guard let first = points.first else { return CGRect(origin: position, size: .zero) }
+
+        var box = points.dropFirst().reduce(CGRect(origin: first, size: .zero)) {
+            $0.union(CGRect(origin: $1, size: .zero))
+        }
+        box = box.insetBy(dx: -Self.starRoom, dy: -Self.starRoom)
+        return box
+    }
+
+    /// How much room to leave around the outermost stars, which is a star sprite's own size over.
+    private static let starRoom: CGFloat = 96
+
     public var takenStars: Int { stars.count { $0.isTaken } }
     public var totalStars: Int { stars.count }
     public var isComplete: Bool { takenStars == totalStars }

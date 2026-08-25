@@ -22,6 +22,8 @@ struct MonsterModelView: NSViewRepresentable {
     var speed: Double = 1
     /// A skill whose own effects are shown on the creature, on top of what the animation spawns.
     var skill: String?
+    /// What it is made to hold, in place of what its own loot tables roll.
+    var hands = ModelAssembly.Hands()
 
     func makeNSView(context: Context) -> SCNView {
         let view = SCNView()
@@ -33,7 +35,9 @@ struct MonsterModelView: NSViewRepresentable {
     }
 
     func updateNSView(_ view: SCNView, context: Context) {
-        let shown = "\(monster.path)|\(animation?.path ?? "")|\(speed)|\(skill ?? "")"
+        let shown =
+            "\(monster.path)|\(animation?.path ?? "")|\(speed)|\(skill ?? "")"
+            + "|\(hands.right ?? "-")|\(hands.left ?? "-")"
         guard context.coordinator.shown != shown else { return }
 
         context.coordinator.shown = shown
@@ -56,7 +60,7 @@ struct MonsterModelView: NSViewRepresentable {
         guard let renderer else { return nil }
 
         let assembly =
-            database.map { ModelAssembly.of(monster, in: $0) }
+            database.map { ModelAssembly.of(monster, in: $0, holding: hands) }
             ?? ModelAssembly(parts: [ .init(mesh: monster.meshPath, texture: monster.texturePath) ])
         let models = renderer.models(of: assembly)
         guard !models.isEmpty else { return nil }
@@ -66,7 +70,8 @@ struct MonsterModelView: NSViewRepresentable {
         // The view keeps drawing while an animation plays, which is what lets an effect emit.
         configuration.emitsEffects = true
         let played = animation.flatMap { try? renderer.animation(at: $0.path) }
-        var effects = played.map { renderer.effects(of: $0, in: database) } ?? []
+        // The animation says what to throw and where; only the skill being watched says how far it goes.
+        var effects = played.map { renderer.effects(of: $0, in: database, thrownBy: skill) } ?? []
         if let skill, let database { effects += renderer.effects(ofSkillAt: skill, in: database) }
 
         return ModelScene(configuration: configuration).scene(
@@ -97,6 +102,8 @@ struct MonsterModelPane: View {
     @State
     private var skill: String?
     @State
+    private var hands = ModelAssembly.Hands()
+    @State
     private var moments = [Moment]()
 
     /// A frame of the animation the game calls something out on.
@@ -115,18 +122,23 @@ struct MonsterModelPane: View {
             database: database,
             animation: chosen,
             speed: speed,
-            skill: skill
+            skill: skill,
+            hands: hands
         )
         .overlay(alignment: .topLeading) {
             if !moments.isEmpty { happenings }
         }
         .overlay(alignment: .bottom) {
-            if !monster.animations.isEmpty { controls }
+            VStack(spacing: 0) {
+                weapons
+                if !monster.animations.isEmpty { controls }
+            }
         }
         // Opens on the creature's first animation, and on the new one's when the monster changes.
         .task(id: monster.path) {
             chosen = monster.animations.first
             skill = nil
+            hands = ModelAssembly.Hands()
         }
         .task(id: chosen?.path) { moments = read(chosen) }
     }
@@ -183,6 +195,39 @@ struct MonsterModelPane: View {
             .disabled(chosen == nil)
         }
         .padding(8)
+    }
+
+    /// What each hand holds. A record names only the tables a weapon is rolled from, so the model opens
+    /// on one roll of them; these say which of the things it might be carrying to draw instead.
+    @ViewBuilder
+    private var weapons: some View {
+        if let database {
+            HStack(spacing: 8) {
+                handPicker(.right, title: "Right hand", in: database)
+                handPicker(.left, title: "Left hand", in: database)
+            }
+            .padding(8)
+        }
+    }
+
+    @ViewBuilder
+    private func handPicker(_ hand: ModelAssembly.Hand, title: String, in database: GameDatabase) -> some View {
+        let candidates = ModelAssembly.candidates(for: hand, of: monster, in: database)
+        if !candidates.isEmpty {
+            Picker(title, selection: Binding(get: { hands[hand] }, set: { hands[hand] = $0 })) {
+                Text("\(title): rolled").tag(String?.none)
+                Text("\(title): empty").tag(String?.some(""))
+                Divider()
+                ForEach(candidates, id: \.path) { candidate in
+                    Text(candidate.name.isEmpty ? candidate.path : candidate.name)
+                        .tag(String?.some(candidate.path))
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(maxWidth: 220)
+            .help("Which of the weapons this monster's tables can give it to put in its \(title.lowercased())")
+        }
     }
 
     /// The creature's attacks that have an animation of their own, so one pick both plays what it does

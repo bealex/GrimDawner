@@ -79,7 +79,7 @@ public struct StatDefinition: Sendable {
 public enum StatCatalog {
     public static let everyStat: [StatDefinition] =
         attributes + defence + resistances
-        + controlResistances + offence + damage + damageOverTime + retaliation + utility
+        + controlResistances + durationReductions + offence + damage + damageOverTime + retaliation + utility
 
     private static let byKey: [String: StatDefinition] = Dictionary(
         everyStat.map { ($0.key, $0) },
@@ -153,6 +153,31 @@ public enum StatCatalog {
         StatDefinition("defensiveAllMaxResist", "All Max Resistances", .resistances, .percent, order: 20),
     ]
 
+    /// How much shorter a damage over time lasts on the character — what the game words as "Reduction in
+    /// Burn Duration". The offensive twin of each of these lengthens what the character inflicts, and
+    /// the two are easy to mistake for one another: this one is defensive and appears on gear and stars
+    /// that shorten what is done to you.
+    private static let durationReductions: [StatDefinition] =
+        perDamageType(DamageType.overTimeCases) { index, type in
+            [
+                StatDefinition(
+                    type.overTimeDurationReductionKey,
+                    "Reduction in \(type.overTimeTitle) Duration",
+                    .controlResistances,
+                    .percent,
+                    order: 20 + index
+                )
+            ]
+        } + [
+            StatDefinition(
+                "defensiveSlowLifeLeachDuration",
+                "Reduction in Life Leech Duration",
+                .controlResistances,
+                .percent,
+                order: 30
+            )
+        ]
+
     private static let controlResistances: [StatDefinition] = [
         StatDefinition("defensiveStun", "Stun Resistance", .controlResistances, .percent, order: 0),
         StatDefinition("defensiveFreeze", "Freeze Resistance", .controlResistances, .percent, order: 1),
@@ -225,41 +250,75 @@ public enum StatCatalog {
             StatDefinition("retaliationTotalDamageModifier", "Total Retaliation Damage", .retaliation, .percent)
         ]
 
-    private static let utility: [StatDefinition] = [
-        StatDefinition("skillCooldownReduction", "Skill Cooldown Reduction", .utility, .percent, order: 0),
-        StatDefinition("skillManaCostReduction", "Skill Energy Cost", .utility, .percent, order: 1),
-        StatDefinition("characterLightRadius", "Light Radius", .utility, .flat, order: 2),
-        StatDefinition("characterIncreasedExperience", "Experience Gained", .utility, .percent, order: 3),
-        StatDefinition("characterGlobalReqReduction", "Requirements", .utility, .percent, order: 4),
-        StatDefinition(
-            "characterArmorStrengthReqReduction",
-            "Armor Physique Requirement",
-            .utility,
-            .percent,
-            order: 5
-        ),
-        StatDefinition(
-            "offensiveTotalResistanceReductionAbsoluteMin",
-            "Reduced Target's Resistances",
-            .utility,
-            .flat,
-            order: 6
-        ),
-        StatDefinition(
-            "offensiveTotalResistanceReductionPercentMin",
-            "Reduced Target's Resistances",
-            .utility,
-            .percent,
-            order: 7
-        ),
-        StatDefinition(
-            "offensiveTotalDamageReductionPercentMin",
-            "Reduced Target's Damage",
-            .utility,
-            .percent,
-            order: 8
-        ),
-    ]
+    private static let utility: [StatDefinition] =
+        [
+            StatDefinition("skillCooldownReduction", "Skill Cooldown Reduction", .utility, .percent, order: 0),
+            StatDefinition("skillManaCostReduction", "Skill Energy Cost", .utility, .percent, order: 1),
+            StatDefinition("characterLightRadius", "Light Radius", .utility, .flat, order: 2),
+            StatDefinition("characterIncreasedExperience", "Experience Gained", .utility, .percent, order: 3),
+            StatDefinition("characterGlobalReqReduction", "Requirements", .utility, .percent, order: 4),
+            StatDefinition(
+                "characterArmorStrengthReqReduction",
+                "Armor Physique Requirement",
+                .utility,
+                .percent,
+                order: 5
+            ),
+            StatDefinition(
+                "offensiveTotalResistanceReductionAbsoluteMin",
+                "Reduced Target's Resistances",
+                .utility,
+                .flat,
+                order: 6
+            ),
+            StatDefinition(
+                "offensiveTotalResistanceReductionPercentMin",
+                "Reduced Target's Resistances",
+                .utility,
+                .percent,
+                order: 7
+            ),
+            StatDefinition(
+                "offensiveTotalDamageReductionPercentMin",
+                "Reduced Target's Damage",
+                .utility,
+                .percent,
+                order: 8
+            ),
+            StatDefinition(
+                "offensiveSlowOffensiveReductionMin",
+                "Reduced Target's Offensive Ability",
+                .utility,
+                .flat,
+                order: 9
+            ),
+            StatDefinition(
+                "offensiveSlowDefensiveReductionMin",
+                "Reduced Target's Defensive Ability",
+                .utility,
+                .flat,
+                order: 10
+            ),
+        ]
+        + perDamageType { index, type in
+            // The same two reductions again, aimed at one family rather than at everything.
+            [
+                StatDefinition(
+                    "offensive\(type.rawValue)ResistanceReductionAbsoluteMin",
+                    "Reduced Target's \(type.title) Resistance",
+                    .utility,
+                    .flat,
+                    order: 11 + index * 2
+                ),
+                StatDefinition(
+                    "offensive\(type.rawValue)ResistanceReductionPercentMin",
+                    "Reduced Target's \(type.title) Resistance",
+                    .utility,
+                    .percent,
+                    order: 12 + index * 2
+                ),
+            ]
+        }
 
     /// Builds one definition set per damage type, numbering them so each type keeps its place in the group.
     private static func perDamageType(

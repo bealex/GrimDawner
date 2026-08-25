@@ -18,8 +18,6 @@ struct ItemsTab: View {
 
     @State
     private var filter = DirectoryFilter()
-    @State
-    private var order = DirectoryOrder.name
     /// The row the arrow keys last walked to, which is the only thing that scrolls the list.
     @State
     private var walkedTo: String?
@@ -108,7 +106,8 @@ struct ItemsTab: View {
     }
 
     /// The game writes one record per level tier of the same item, so the tiers read as one entry.
-    private var groups: [CatalogueGroup] { order.sort(Self.grouped(matches)) }
+    /// The directory reads alphabetically, which is the only order a reader can look something up in.
+    private var groups: [CatalogueGroup] { Self.grouped(matches) }
 
     private static func grouped(_ items: [CataloguedItem]) -> [CatalogueGroup] {
         var order = [String]()
@@ -119,7 +118,10 @@ struct ItemsTab: View {
             if variants[key] == nil { order.append(key) }
             variants[key, default: []].append(item)
         }
-        return order.map { CatalogueGroup(id: $0, variants: variants[$0] ?? []) }
+        return
+            order
+            .map { CatalogueGroup(id: $0, variants: variants[$0] ?? []) }
+            .sorted { $0.item.name.localizedStandardCompare($1.item.name) == .orderedAscending }
     }
 
     private var header: some View {
@@ -135,8 +137,6 @@ struct ItemsTab: View {
             .frame(width: 190, alignment: .leading)
 
             if !isListing {
-                DirectoryOrderPicker(order: $order)
-
                 DirectoryFilterBar(
                     filter: $filter,
                     rarities: availableRarities,
@@ -336,52 +336,6 @@ struct ArrowKeys: NSViewRepresentable {
 
         private static let upArrow: UInt16 = 126
         private static let downArrow: UInt16 = 125
-    }
-}
-
-/// How the directory is ordered.
-enum DirectoryOrder: String, CaseIterable, Identifiable {
-    case name = "Name"
-    case level = "Level"
-
-    var id: String { rawValue }
-
-    /// Level order runs deepest first — what a finished character can wear is the interesting end — and
-    /// falls back to the name so items of one level keep a stable order.
-    func sort(_ groups: [CatalogueGroup]) -> [CatalogueGroup] {
-        switch self {
-            case .name: groups
-            case .level:
-                groups.sorted { first, second in
-                    let left = first.item.levelRequirement
-                    let right = second.item.levelRequirement
-                    guard
-                        left != right
-                    else {
-                        return first.item.name.localizedStandardCompare(second.item.name) == .orderedAscending
-                    }
-
-                    return left > right
-                }
-        }
-    }
-}
-
-/// The control that picks it.
-private struct DirectoryOrderPicker: View {
-    @Binding
-    var order: DirectoryOrder
-
-    var body: some View {
-        Picker("Sort", selection: $order) {
-            ForEach(DirectoryOrder.allCases) { order in
-                Text(order.rawValue).tag(order)
-            }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .fixedSize()
-        .help("Order the directory by name or by the level an item asks for")
     }
 }
 

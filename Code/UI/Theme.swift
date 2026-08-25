@@ -29,6 +29,9 @@ enum Theme {
 struct SectionCard<Content: View>: View {
     let title: String
     var subtitle: String?
+    /// The artwork of the thing the card is named after, drawn before its name. A card titled with an
+    /// item wears that item's own icon there rather than repeating the picture inside itself.
+    var iconPath: String?
     @ViewBuilder
     var content: Content
 
@@ -38,6 +41,10 @@ struct SectionCard<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
+                if let iconPath, !iconPath.isEmpty {
+                    GameIcon(path: iconPath, size: 20, fallbackSymbol: "shippingbox")
+                        .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 3 }
+                }
                 Text(title)
                     .font(.headline)
                     .quickSearchText(search.matches(title) ? .match : .neutral)
@@ -156,6 +163,8 @@ struct StatRow: View {
     /// The game's own mark for the damage type this line names, drawn beside the figure rather than
     /// beside the name: the mark is about the number.
     var iconPath: String?
+    /// The artwork of the thing the line is named after, drawn before its name — an item's own icon.
+    var titleIconPath: String?
     /// The band the value may roll in, for the stats an item rolls from its seed.
     var range: String?
     /// False where an enclosing row already answers for the search, so a match is ringed once.
@@ -185,6 +194,9 @@ struct StatRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
+            if let titleIconPath, !titleIconPath.isEmpty {
+                GameIcon(path: titleIconPath, size: 18, fallbackSymbol: "shippingbox")
+            }
             if let icon {
                 Image(systemName: icon)
                     .font(.caption)

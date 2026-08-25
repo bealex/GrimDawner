@@ -114,20 +114,15 @@ struct ItemDetailView: View {
             }
 
             ForEach(item.parts.filter { $0.kind != .base }) { part in
-                SectionCard(title: part.title, subtitle: part.subtitle) {
-                    HStack(alignment: .top, spacing: 10) {
-                        if !part.iconPath.isEmpty {
-                            GameIcon(path: part.iconPath, size: 30, fallbackSymbol: "circle.hexagonpath")
+                SectionCard(title: part.title, subtitle: part.subtitle, iconPath: part.iconPath) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        // An ascendant affix has no bonuses of its own, only the skill it changes.
+                        if !part.stats.hasNothingToShow || part.grantedSkills.isEmpty {
+                            StatBlockView(block: part.stats)
                         }
-                        VStack(alignment: .leading, spacing: 8) {
-                            // An ascendant affix has no bonuses of its own, only the skill it changes.
-                            if !part.stats.hasNothingToShow || part.grantedSkills.isEmpty {
-                                StatBlockView(block: part.stats)
-                            }
-                            grantedSkills(part.grantedSkills)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        grantedSkills(part.grantedSkills)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
 

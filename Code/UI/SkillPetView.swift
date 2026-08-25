@@ -18,44 +18,9 @@ struct SkillPetView: View {
         }
 
         if let summon = skill.summon {
-            SectionCard(title: summon.name, subtitle: Self.subtitle(of: summon)) {
-                VStack(alignment: .leading, spacing: 10) {
-                    if !summon.stats.hasNothingToShow {
-                        StatBlockView(block: summon.stats)
-                    }
-                    ForEach(summon.skills) { ability in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(ability.name)
-                                .font(.caption.weight(.semibold))
-                            if !ability.description.isEmpty {
-                                Text(ability.description)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            if !ability.parameters.isEmpty {
-                                Text(ability.parameters.map { "\($0.name) \($0.value)" }.joined(separator: " · "))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if !ability.stats.hasNothingToShow {
-                                StatBlockView(block: ability.stats)
-                            }
-                        }
-                    }
-                }
+            SectionCard(title: summon.name, subtitle: SummonView.subtitle(of: summon)) {
+                SummonView(summon: summon)
             }
         }
-    }
-
-    /// Reads as "6 at once · 24s", leaving out whichever the record does not limit.
-    private static func subtitle(of summon: ResolvedSummon) -> String? {
-        let parts = [
-            summon.limit > 0 ? "\(summon.limit) at once" : nil,
-            summon.timeToLive > 0 ? "\(Int(summon.timeToLive))s" : nil,
-        ]
-        .compactMap { $0 }
-
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

@@ -14,6 +14,9 @@ struct MapCamera: Equatable {
     var centre: CGPoint = .zero
     /// False asks the map to frame the sky again the next time it knows how large it is.
     var isFramed = false
+    /// A patch of sky to move to. The map takes it the moment it knows how large it is and clears it,
+    /// which is what lets something that has no idea of the view's size — a menu — ask to go there.
+    var focus: CGRect?
 
     /// The map point drawn at a point of the view.
     func mapPoint(_ point: CGPoint, in size: CGSize) -> CGPoint {

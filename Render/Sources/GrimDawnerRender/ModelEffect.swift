@@ -22,23 +22,64 @@ public struct ModelEffect: Sendable, Identifiable {
     public let attachment: String
     public let recordPath: String
     public let image: CGImage?
+    /// How far the effect reaches, in the model's own units, where the skill that throws it says so.
+    /// Nothing for one nothing sizes — an animation's own puff, or an aura a passive simply carries.
+    public let radius: Float?
+    /// Whether it runs forward from where it hangs rather than sitting on it. A wave skill — a breath, a
+    /// flame arc — states how far it sweeps, and drawn on the caster it is a spark in a fist instead.
+    public var isWave = false
+}
+
+/// How far a skill throws what it shows, and whether it sweeps forward.
+///
+/// An area skill states the ground it covers in `skillTargetRadius`. A wave states its sweep instead —
+/// `waveDistance` out and `waveStartWidth` across — and nothing else in the record says how big it is.
+struct SkillReach {
+    let radius: Float?
+    let isWave: Bool
+
+    init(_ skill: ArzRecord) {
+        let wave = Float(skill["waveDistance"]?.numbers.max() ?? 0)
+        if wave > 0 {
+            radius = wave / 2
+            isWave = true
+            return
+        }
+
+        let area = Float(skill["skillTargetRadius"]?.numbers.max() ?? 0)
+        radius = area > 0 ? area : nil
+        isWave = false
+    }
 }
 
 public extension ModelRenderer {
     /// What an animation spawns, in the order the animation calls for it.
-    func effects(of animation: AnmFile, in database: GameDatabase?) -> [ModelEffect] {
-        animation.events.compactMap { event in
+    ///
+    /// The animation says what to spawn and where, never how big: only the skill that plays it knows
+    /// that. Given the skill being watched, what it spawns is drawn the size that skill states.
+    func effects(of animation: AnmFile, in database: GameDatabase?, thrownBy skill: String? = nil)
+        -> [ModelEffect] {
+        let thrown = skill.flatMap { database?.record($0) }.map(SkillReach.init)
+
+        return animation.events.compactMap { event in
             guard event.kind == .entity else { return nil }
 
             let path = event.name.replacingOccurrences(of: "\\", with: "/").lowercased()
             let particles = database?.record(path)?.text("effectFile") ?? ""
+            // A wave belongs to the point the game hangs it out in front on; the flash in the hand that
+            // threw it is a flash in a hand, and sizing that to the sweep fills the frame with it.
+            let reach = thrown.flatMap {
+                !$0.isWave || event.attachment.lowercased().contains("forward") ? $0 : nil
+            }
 
             return ModelEffect(
                 name: Self.readableName(of: path),
                 frame: event.frame,
                 attachment: event.attachment,
                 recordPath: path,
-                image: particles.isEmpty ? nil : image(ofParticles: particles)
+                image: particles.isEmpty ? nil : image(ofParticles: particles),
+                radius: reach?.radius,
+                isWave: reach?.isWave ?? false
             )
         }
     }
@@ -56,12 +97,16 @@ public extension ModelRenderer {
     func effects(ofSkillAt path: String, in database: GameDatabase) -> [ModelEffect] {
         guard let skill = database.record(path) else { return [] }
 
+        // What the skill covers is what its effect is drawn the size of. A passive that simply sits on
+        // the creature states none, and is sized against the creature instead.
+        let reach = SkillReach(skill)
+
         var found = [ModelEffect]()
         for pack in skill["charFxPakSelfNames"]?.texts ?? [] {
-            found += effects(inside: pack, at: "", in: database, depth: 0)
+            found += effects(inside: pack, at: "", reaching: reach, in: database, depth: 0)
         }
         for key in skill.fieldOrder where key.hasPrefix("particleEffectName") || key == "radiusEffectName" {
-            found += effects(inside: skill.text(key), at: "", in: database, depth: 0)
+            found += effects(inside: skill.text(key), at: "", reaching: reach, in: database, depth: 0)
         }
 
         var seen = Set<String>()
@@ -72,6 +117,7 @@ public extension ModelRenderer {
     private func effects(
         inside path: String,
         at attachment: String,
+        reaching reach: SkillReach,
         in database: GameDatabase,
         depth: Int
     ) -> [ModelEffect] {
@@ -85,7 +131,9 @@ public extension ModelRenderer {
                     frame: nil,
                     attachment: attachment.isEmpty ? Self.bone(named: record) : attachment,
                     recordPath: path.lowercased(),
-                    image: image(ofParticles: particles)
+                    image: image(ofParticles: particles),
+                    radius: reach.radius,
+                    isWave: reach.isWave
                 ),
             ]
         }
@@ -97,6 +145,7 @@ public extension ModelRenderer {
             effects(
                 inside: name,
                 at: points.indices.contains(index) ? points[index] : (points.first ?? attachment),
+                reaching: reach,
                 in: database,
                 depth: depth + 1
             )

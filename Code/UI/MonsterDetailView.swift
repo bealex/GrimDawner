@@ -55,24 +55,15 @@ struct MonsterDetailView: View {
                     }
                 }
             }
-            if !monster.loot.isEmpty {
-                SectionCard(title: "Loot", subtitle: "what it carries") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(monster.loot) { slot in
-                            MonsterLootView(slot: slot)
-                        }
-                    }
-                }
-            }
         }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(monster.name)
+            Text(monster.title)
                 .font(.title3.bold())
                 .foregroundStyle(monster.rank.color)
-                .quickSearchText(search.emphasis(matching: monster.name))
+                .quickSearchText(search.emphasis(matching: monster.title))
             Text(subtitle)
                 .font(.caption)
                 .foregroundStyle(.secondary)

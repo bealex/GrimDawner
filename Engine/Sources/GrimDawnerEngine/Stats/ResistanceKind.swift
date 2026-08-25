@@ -37,6 +37,22 @@ public enum ResistanceKind: String, CaseIterable, Sendable {
     /// The name where a grid has no room for the full one.
     public var shortTitle: String { self == .acid ? "Poison" : title }
 
+    /// The resistance that stands against a damage type. Every type has one; only bleeding has no type.
+    public init?(damage: DamageType) {
+        switch damage {
+            case .physical: self = .physical
+            case .pierce: self = .pierce
+            case .fire: self = .fire
+            case .cold: self = .cold
+            case .lightning: self = .lightning
+            case .acid: self = .acid
+            case .vitality: self = .vitality
+            case .aether: self = .aether
+            case .chaos: self = .chaos
+            case .elemental: return nil
+        }
+    }
+
     /// The `.dbr` stem the game uses, which differs from the display name for several of these.
     private var stem: String {
         switch self {

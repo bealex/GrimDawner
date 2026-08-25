@@ -160,10 +160,13 @@ private struct MonsterRow: View {
     var body: some View {
         Button(action: select) {
             HStack(spacing: 10) {
-                Text(monster.name)
+                Text(monster.title)
                     .foregroundStyle(monster.rank.color)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                if !monster.kind.isCreature {
+                    MonsterKindBadge(kind: monster.kind)
+                }
                 if !monster.variant.isEmpty {
                     Text(monster.variant)
                         .font(.caption2)
@@ -193,28 +196,29 @@ private struct MonsterRow: View {
         // The button keeps the single click; the double click runs alongside it rather than replacing
         // it, so one selects and two open the window.
         .simultaneousGesture(TapGesture(count: 2).onEnded(open))
-        .quickSearch(search.emphasis(matching: monster.name), cornerRadius: 5)
-        .help("Double-click to open \(monster.name) in a window of its own")
-        .accessibilityLabel("\(monster.name), \(monster.rank.title), \(monster.race)")
+        .quickSearch(search.emphasis(matching: monster.title), cornerRadius: 5)
+        .help("Double-click to open \(monster.title) in a window of its own")
+        .accessibilityLabel("\(monster.title), \(monster.kind.title), \(monster.rank.title), \(monster.race)")
         .accessibilityAction(named: "Open in a window", open)
     }
 }
 
 /// What the listing is being narrowed to, beyond whatever is typed in the search field.
 struct MonsterFilter: Equatable {
-    var name = ""
     var ranks: Set<MonsterRank> = []
     /// The race, not the faction: a monster's faction is who it fights beside, and the nemeses all
     /// carry the same one whatever they are. What a player means by "a beast" is the race.
     var race: String?
+    /// Whether to show only living things, or only one sort of the scenery the game spawns as monsters.
+    var kind: MonsterKind?
 
-    var isActive: Bool { !name.isEmpty || !ranks.isEmpty || race != nil }
+    var isActive: Bool { !ranks.isEmpty || race != nil || kind != nil }
 
     func admits(_ monster: CataloguedMonster) -> Bool {
         guard ranks.isEmpty || ranks.contains(monster.rank) else { return false }
         guard race == nil || race == monster.race else { return false }
 
-        return name.isEmpty || monster.name.localizedCaseInsensitiveContains(name)
+        return kind == nil || kind == monster.kind
     }
 }
 
@@ -225,26 +229,6 @@ private struct MonsterFilterBar: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            HStack(spacing: 4) {
-                Image(systemName: "magnifyingglass")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                TextField("Name", text: $filter.name)
-                    .textFieldStyle(.plain)
-                    .frame(width: 130)
-                if !filter.name.isEmpty {
-                    Button(action: { filter.name = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.tertiary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 7)
-            .padding(.vertical, 4)
-            .background(Theme.panel, in: .rect(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Theme.subtleBorder))
-
             ForEach(MonsterRank.allCases, id: \.self) { rank in
                 RankToggle(rank: rank, isOn: binding(for: rank))
             }
@@ -259,6 +243,17 @@ private struct MonsterFilterBar: View {
             .labelsHidden()
             .frame(width: 175)
             .help("What the game's own \"damage to\" bonuses call it")
+
+            Picker("Kind", selection: $filter.kind) {
+                Text("Everything").tag(MonsterKind?.none)
+                ForEach(MonsterKind.allCases, id: \.self) { kind in
+                    Text(kind.title).tag(MonsterKind?.some(kind))
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .frame(width: 130)
+            .help("Much of the roster is not a creature: weather, traps and scenery the game spawns as one")
 
             if filter.isActive {
                 Button("Clear") { filter = MonsterFilter() }
@@ -316,6 +311,32 @@ extension MonsterRank {
             case .quest: Color(red: 0.62, green: 0.85, blue: 0.55)
             case .boss: Color(red: 0.98, green: 0.55, blue: 0.30)
             case .superBoss: Color(red: 0.90, green: 0.35, blue: 0.85)
+        }
+    }
+}
+
+/// What a line of the roster is, where it is not a creature: the game spawns weather, traps and scenery
+/// as monsters, and a reader looking at *Blizzard* deserves to be told which.
+private struct MonsterKindBadge: View {
+    let kind: MonsterKind
+
+    var body: some View {
+        Text(kind.title)
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(Theme.panel, in: .capsule)
+            .overlay(Capsule().stroke(Theme.subtleBorder))
+            .help(hint)
+    }
+
+    private var hint: String {
+        switch kind {
+            case .creature: "A living thing"
+            case .anomaly: "Weather or gas the game spawns as a monster: it has no body, only an effect"
+            case .trap: "A thing placed on the ground that goes off"
+            case .object: "Scenery the game spawns as a monster so it can be broken"
         }
     }
 }

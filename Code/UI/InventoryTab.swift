@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
 import GrimDawnerEngine
+import GrimDawnerRender
 import SwiftUI
 
 /// The equipment doll, laid out on the game's own character panel, with the sheet beside it.
@@ -9,6 +10,10 @@ struct InventoryTab: View {
     let search: QuickSearch
     @Binding
     var selection: ResolvedItem?
+    /// Draws the character's own model in the middle of the doll.
+    var renderer: ModelRenderer?
+    /// The records, for the gear the model is dressed in.
+    var database: GameDatabase?
     /// Opens one of the character's own skills on its mastery panel.
     var revealSkill: ((String) -> Void)?
 
@@ -28,6 +33,8 @@ struct InventoryTab: View {
                                 weaponSet: shownWeaponSet,
                                 search: search,
                                 selection: $selection,
+                                renderer: renderer,
+                                database: database,
                                 swapWeaponSet: swapWeaponSet
                             )
                         }
@@ -73,6 +80,8 @@ private struct DollView: View {
     let search: QuickSearch
     @Binding
     var selection: ResolvedItem?
+    let renderer: ModelRenderer?
+    let database: GameDatabase?
     let swapWeaponSet: () -> Void
 
     var body: some View {
@@ -115,8 +124,16 @@ private struct DollView: View {
 
     private var portrait: some View {
         Button(action: { selection = nil }) {
-            PortraitView(backdrop: doll.portraitBackground, size: doll.portrait.size, isSelected: selection == nil)
-                .contentShape(.rect)
+            PortraitView(
+                backdrop: doll.portraitBackground,
+                size: doll.portrait.size,
+                isSelected: selection == nil,
+                character: character,
+                weaponSet: weaponSet,
+                renderer: renderer,
+                database: database
+            )
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .pointerStyle(.link)
@@ -143,22 +160,24 @@ private struct DollView: View {
     }
 }
 
-/// A character standing where the game renders its 3D model, over the backdrop the game renders it
-/// against.
+/// The character's own model where the game renders it, over the backdrop the game renders it against.
 private struct PortraitView: View {
     let backdrop: String
     let size: CGSize
     /// Ringed while the sidebar is reading the character rather than a piece of gear.
     let isSelected: Bool
+    let character: ResolvedCharacter
+    let weaponSet: WeaponSet?
+    let renderer: ModelRenderer?
+    let database: GameDatabase?
 
     var body: some View {
         ZStack {
+            // The game lights its own backdrop from in front of the model; drawn flat it is a pale wall
+            // that the gear disappears into, so it is taken down to something the model stands out of.
             GameArtwork(path: backdrop, size: size)
-            Image("CharacterModel")
-                .resizable()
-                .interpolation(.high)
-                .aspectRatio(contentMode: .fill)
-                .frame(width: size.width, height: size.height)
+                .colorMultiply(Color(white: 0.3))
+            model
         }
         .frame(width: size.width, height: size.height)
         .clipped()
@@ -167,6 +186,14 @@ private struct PortraitView: View {
                 .stroke(isSelected ? Theme.accent : .clear, lineWidth: 2)
         )
         .accessibilityHidden(true)
+    }
+
+    /// The model sits inside the button that shows the character's own stats, and an `SCNView` takes
+    /// every click that lands on it.
+    private var model: some View {
+        CharacterModelView(character: character, weaponSet: weaponSet, renderer: renderer, database: database)
+            .frame(width: size.width, height: size.height)
+            .allowsHitTesting(false)
     }
 }
 

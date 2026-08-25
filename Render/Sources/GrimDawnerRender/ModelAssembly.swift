@@ -11,7 +11,7 @@ import GrimDawnerEngine
 /// modelled at the origin and hung off a hand.
 public struct ModelAssembly: Sendable {
     /// Which hand a weapon is held in.
-    public enum Hand: Sendable {
+    public enum Hand: Hashable, Sendable {
         case right
         case left
     }
@@ -34,11 +34,39 @@ public struct ModelAssembly: Sendable {
 
     public init(parts: [Part]) { self.parts = parts }
 
-    /// The slots a worn model comes from, in the order they are drawn.
-    public static let wornFields = [ "Head", "Shoulders", "Chest", "Legs", "Feet", "Hands" ]
+    /// The slots a worn model comes from, in the order they are drawn: the record field a creature
+    /// names its default piece in, and the gear slot a character wears its own in.
+    public static let wornSlots: [(field: String, slot: EquipmentSlot)] = [
+        ("Head", .head), ("Shoulders", .shoulders), ("Chest", .chest),
+        ("Legs", .legs), ("Feet", .feet), ("Hands", .hands),
+    ]
+
+    public static var wornFields: [String] { wornSlots.map(\.field) }
 
     /// The slots a weapon comes from.
     public static let heldFields: [(field: String, hand: Hand)] = [ ("RightHand", .right), ("LeftHand", .left) ]
+
+    /// What to put in a monster's hands in place of what its own tables roll.
+    ///
+    /// A record names only the tables a weapon is drawn from, so what a monster holds is a roll. Naming
+    /// a record here holds that one instead; naming the empty string holds nothing; leaving a hand unset
+    /// rolls it as the game would.
+    public struct Hands: Sendable, Equatable {
+        public var right: String?
+        public var left: String?
+
+        public init(right: String? = nil, left: String? = nil) {
+            self.right = right
+            self.left = left
+        }
+
+        public subscript(hand: Hand) -> String? {
+            get { hand == .right ? right : left }
+            set { if hand == .right { right = newValue } else { left = newValue } }
+        }
+
+        public var isEmpty: Bool { right == nil && left == nil }
+    }
 
     /// Reads a monster's record for everything it is drawn from.
     ///
@@ -50,14 +78,25 @@ public struct ModelAssembly: Sendable {
     /// draws from and that it equips what it rolls. So one is drawn from those tables the way the game
     /// weighs them, from a stream primed with the creature's own record path — the same monster keeps the
     /// same weapon, and two monsters drawing from one table rarely hold the same thing.
-    public static func of(_ monster: ResolvedMonster, in database: GameDatabase) -> ModelAssembly {
+    /// Naming a weapon in `hands` overrides the roll for that hand, which is what lets a reader see the
+    /// same monster with each of the things it might be carrying.
+    public static func of(_ monster: ResolvedMonster, in database: GameDatabase, holding hands: Hands = Hands())
+        -> ModelAssembly {
         var parts = [Part]()
+        let creature = database.record(monster.path)
+        let isFemale = creature?.text("characterGenderProfile").lowercased() == "female"
+
+        // A dressed creature's own model is its head, and every human record but one names the head its
+        // gender wears. The Avatar of Mogdrogen names its wolf-skull headdress there, which leaves the
+        // rig with nothing to put a face on, so the head goes under whatever the record named.
+        if let creature, isDressed(creature), monster.meshPath.lowercased().hasPrefix("items/"),
+           case let head = playerRecord(male: !isFemale, in: database)?.text("mesh") ?? "", !head.isEmpty {
+            parts.append(Part(mesh: head, texture: ""))
+        }
         if !monster.meshPath.isEmpty {
             parts.append(Part(mesh: monster.meshPath, texture: monster.texturePath))
         }
 
-        let creature = database.record(monster.path)
-        let isFemale = creature?.text("characterGenderProfile").lowercased() == "female"
         for slot in wornFields {
             let dressed = creature?.text("default\(slot)Piece") ?? ""
             let path = dressed.isEmpty ? carried(slot, of: monster) : dressed
@@ -69,10 +108,13 @@ public struct ModelAssembly: Sendable {
         var draws = ItemRoll.Random(seed: seed(of: monster.path))
         var bothHands = false
         for held in heldFields {
+            // The roll is drawn whatever is chosen, so choosing for one hand does not change the other.
+            let slot = monster.equipment.first { $0.field == held.field }
+            let roll = slot.map { rolled(from: $0, drawing: &draws) } ?? nil
             guard
                 !bothHands,
-                let slot = monster.equipment.first(where: { $0.field == held.field }),
-                let path = rolled(from: slot, drawing: &draws),
+                let path = hands[held.hand] ?? roll,
+                !path.isEmpty,
                 let weapon = database.record(path),
                 weapon.recordClass.hasPrefix("Weapon"),
                 !weapon.text("mesh").isEmpty
@@ -88,6 +130,27 @@ public struct ModelAssembly: Sendable {
     /// The likeliest entry of an equipment slot, which is what the game rolls most often.
     private static func carried(_ slot: String, of monster: ResolvedMonster) -> String {
         monster.equipment.first { $0.field == slot }?.entries.first?.items.first?.recordPath ?? ""
+    }
+
+    /// Every weapon a monster might be holding in one hand, which is what a reader can pick between.
+    public static func candidates(for hand: Hand, of monster: ResolvedMonster, in database: GameDatabase)
+        -> [(path: String, name: String)] {
+        guard
+            let field = heldFields.first(where: { $0.hand == hand })?.field,
+            let slot = monster.equipment.first(where: { $0.field == field })
+        else { return [] }
+
+        var seen = Set<String>()
+        return slot.entries.flatMap(\.items).compactMap { item in
+            guard
+                seen.insert(item.recordPath.lowercased()).inserted,
+                let weapon = database.record(item.recordPath),
+                weapon.recordClass.hasPrefix("Weapon"),
+                !weapon.text("mesh").isEmpty
+            else { return nil }
+
+            return (item.recordPath, item.name)
+        }
     }
 
     /// One item out of a slot, each entry and each item within it weighed as the game weighs it.
@@ -113,8 +176,32 @@ public struct ModelAssembly: Sendable {
         return elements.last
     }
 
+    /// Whether the record puts armour on the creature, which is what says it is drawn on a human rig.
+    static func isDressed(_ creature: ArzRecord) -> Bool {
+        wornFields.contains { !creature.text("default\($0)Piece").isEmpty }
+    }
+
+    /// The creature the game plays as, which is the `Player` record of the gender asked for.
+    ///
+    /// No record names it, so it is looked for rather than written down. The search stays inside the
+    /// player's own folder: the game ships a third `Player` record under `records/sandbox`, left over
+    /// from a test pose.
+    static func playerRecord(male: Bool, in database: GameDatabase) -> ArzRecord? {
+        var found: ArzRecord?
+        database.sweep(prefix: "records/creatures/pc/") { _, record in
+            guard
+                found == nil,
+                record.recordClass == "Player",
+                record.text("characterGenderProfile").lowercased() == (male ? "male" : "female")
+            else { return }
+
+            found = record
+        }
+        return found
+    }
+
     /// One armour record's model and skin, in the creature's own gender.
-    private static func worn(_ gear: ArzRecord, female: Bool) -> Part? {
+    static func worn(_ gear: ArzRecord, female: Bool) -> Part? {
         let mesh = [
             female ? gear.text("armorFemaleMesh") : gear.text("armorMaleMesh"),
             gear.text("armorNativeMesh"),

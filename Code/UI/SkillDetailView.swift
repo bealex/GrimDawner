@@ -123,11 +123,8 @@ struct SkillDetailView: View {
 
             // Gear that changes a skill nobody has spent a point on changes nothing, so it reads faded.
             ForEach(modifications) { change in
-                SectionCard(title: change.itemName, subtitle: "changes this skill") {
-                    HStack(alignment: .top, spacing: 10) {
-                        reference(to: change.item) {
-                            GameIcon(path: change.iconPath, size: 30, fallbackSymbol: "shippingbox")
-                        }
+                SectionCard(title: change.itemName, subtitle: "changes this skill", iconPath: change.iconPath) {
+                    reference(to: change.item) {
                         SkillChangesView(changes: change.changes)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }

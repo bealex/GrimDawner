@@ -81,6 +81,9 @@ public enum DamageType: String, CaseIterable, Sendable {
     public var overTimeModifierKey: String { "offensiveSlow\(overTimeStem)Modifier" }
     public var overTimeDurationMinimumKey: String { "offensiveSlow\(overTimeStem)DurationMin" }
     public var overTimeDurationModifierKey: String { "offensiveSlow\(overTimeStem)DurationModifier" }
+    /// How much shorter this kind of damage over time lasts **on the character**, which is the defensive
+    /// side of the same figure: `offensiveSlow…Duration` lengthens what it does to others.
+    public var overTimeDurationReductionKey: String { "defensive\(overTimeStem)Duration" }
 
     public var retaliationMinimumKey: String { "retaliation\(rawValue)Min" }
     public var retaliationMaximumKey: String { "retaliation\(rawValue)Max" }

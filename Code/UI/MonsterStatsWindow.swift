@@ -15,6 +15,7 @@ struct MonsterStatsWindow: View {
     private enum Tab: String, CaseIterable, Identifiable {
         case stats = "Stats"
         case attacks = "Attacks"
+        case interaction = "Interaction"
         case loot = "Loot"
         case model = "Model"
 
@@ -28,6 +29,9 @@ struct MonsterStatsWindow: View {
     /// The window filters its own rows, and starts on the first keystroke as the main window does.
     @State
     private var search = ""
+    /// Whether the loot lists the ordinary gear as well as what the monster is hunted for.
+    @State
+    private var showsAllLoot = false
 
     var body: some View {
         Group {
@@ -61,19 +65,20 @@ struct MonsterStatsWindow: View {
                 ScrollView {
                     switch tab {
                         case .attacks: abilities(monster)
+                        case .interaction: interaction(monster)
                         case .loot: loot(monster)
                         default: MonsterSheetView(monster: monster, search: QuickSearch(search))
                     }
                 }
             }
         }
-        .navigationTitle(monster.name)
+        .navigationTitle(monster.title)
     }
 
     private func header(_ monster: ResolvedMonster) -> some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(monster.name)
+                Text(monster.title)
                     .font(.headline)
                     .foregroundStyle(monster.rank.color)
                     .lineLimit(1)
@@ -171,6 +176,21 @@ struct MonsterStatsWindow: View {
         model.selectMonster(path: path, level: model.monsterLevel)
     }
 
+    /// The fight between this monster and the character that is loaded, which needs both to say
+    /// anything: with no character open there is no pairing to read.
+    @ViewBuilder
+    private func interaction(_ monster: ResolvedMonster) -> some View {
+        if let character = model.character, let database = model.records {
+            MonsterInteractionView(monster: monster, character: character, database: database)
+        } else {
+            DetailPlaceholder(
+                title: "No character loaded",
+                hint: "This reads one of your characters against this monster. Pick a character in the main window."
+            )
+            .padding(16)
+        }
+    }
+
     private func loot(_ monster: ResolvedMonster) -> some View {
         let query = QuickSearch(search)
         let slots = monster.loot.filter { slot in
@@ -182,13 +202,19 @@ struct MonsterStatsWindow: View {
         }
 
         return VStack(alignment: .leading, spacing: 14) {
+            Toggle("Show every drop", isOn: $showsAllLoot)
+                .toggleStyle(.checkbox)
+                .help(
+                    "Off, this lists what the monster is hunted for. On, it lists the ordinary gear too — "
+                        + "the white, blue and epic pieces the game generates by the thousand."
+                )
             if slots.isEmpty {
                 Text(monster.loot.isEmpty ? "This one drops nothing." : "Nothing here matches the search.")
                     .foregroundStyle(.secondary)
             }
             ForEach(slots) { slot in
                 SectionCard(title: slot.slot, subtitle: "\(Int(slot.chance))% carried") {
-                    MonsterLootView(slot: slot, showsHeader: false, itemLimit: 60)
+                    MonsterLootView(slot: slot, showsHeader: false, itemLimit: 60, showsOrdinary: showsAllLoot)
                 }
             }
         }

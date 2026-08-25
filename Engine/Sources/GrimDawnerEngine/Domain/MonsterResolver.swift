@@ -48,6 +48,8 @@ public struct MonsterLootEntry: Identifiable, Sendable {
         public let iconPath: String
         /// The item's share of its table, as a percentage.
         public let share: Double
+        /// What the game calls it, for a listing that shows only what is worth naming.
+        public var rarity: ItemRarity = .common
     }
 
     public let id = UUID()
@@ -85,6 +87,10 @@ public struct ResolvedMonster: Sendable {
     public let path: String
     public let name: String
     public let rank: MonsterRank
+    /// Whether it is a creature at all, or a hazard the game merely spawns as one.
+    public let kind: MonsterKind
+    /// Which fight of a several-stage boss this is, for a boss the game chains through death.
+    public let phase: Int?
     /// The faction pack its record puts it in, which says less than it looks like it does.
     public let faction: String
     /// The faction whose nemesis it is, which is the faction that owns it. Empty for everything else.
@@ -127,6 +133,13 @@ public struct ResolvedMonster: Sendable {
         Dictionary(uniqueKeysWithValues: ResistanceKind.allCases.map {
             ($0, StatComposition.total(feeding: $0.resistanceKey, in: stats))
         })
+    }
+
+    /// What to call it: a phase says which one it is, since the stages are different fights.
+    public var title: String {
+        guard let phase else { return name }
+
+        return "\(name) (Phase \(phase))"
     }
 
     public var attacks: [MonsterAbility] { abilities.filter { $0.role != .passive } }
@@ -187,6 +200,8 @@ public struct MonsterResolver {
             path: path,
             name: database.localised(record.text("description")) ?? ItemResolver.readableName(from: path),
             rank: MonsterRank(rawValue: record.text("monsterClassification")) ?? .common,
+            kind: MonsterKind.of(record),
+            phase: MonsterPhases.map(in: database)[path.lowercased()],
             faction: factionName(of: record),
             nemesisOf: MonsterCatalogue.nemeses(in: database)[
                 database.localised(record.text("description")) ?? ""
@@ -495,7 +510,7 @@ public struct MonsterResolver {
     /// a weighted table names the items. Weights fold along the way, so a share is a share of the whole.
     private func contents(of path: String, atLevel level: Int) -> [MonsterLootEntry.Item] {
         var shares = [String: Double]()
-        var names = [String: (name: String, path: String, icon: String)]()
+        var names = [String: (name: String, path: String, icon: String, rarity: ItemRarity)]()
 
         func walk(_ path: String, share: Double, depth: Int) {
             guard share > 0.0001, depth < Self.lootDepth, let record = database.record(path) else { return }
@@ -531,7 +546,13 @@ public struct MonsterResolver {
                     guard let name = ItemResolver.itemName(of: record, in: database) else { return }
 
                     shares[name, default: 0] += share
-                    names[name] = (name, path, ItemResolver.iconPath(of: record))
+                    names[name] = (
+                        name,
+                        path,
+                        ItemResolver.iconPath(of: record),
+                        ItemRarity(recordClass: record.recordClass)
+                            ?? ItemRarity(classification: record.text("itemClassification"))
+                    )
             }
         }
 
@@ -547,7 +568,8 @@ public struct MonsterResolver {
                     name: name,
                     recordPath: names[name]?.path ?? "",
                     iconPath: names[name]?.icon ?? "",
-                    share: share
+                    share: share,
+                    rarity: names[name]?.rarity ?? .common
                 )
             }
     }

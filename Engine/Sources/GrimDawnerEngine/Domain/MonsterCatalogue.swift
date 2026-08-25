@@ -18,11 +18,58 @@ public enum MonsterRank: String, Codable, Sendable, CaseIterable, Comparable {
     }
 }
 
+/// What a record in the monster roster actually is.
+///
+/// Much of the roster is not a creature. The game spawns hazards, traps and pieces of scenery as monsters
+/// so that they can be hit and can hit back — *Blizzard* and *Cave-In* are weather with a health bar,
+/// *Floor Spikes* are a floor, *Warding Totem* is a totem. Where the game keeps the model says which: an
+/// anomaly is drawn from `creatures/anomalies`, a trap from the effect meshes under `fx/meshfx`, an
+/// object from the level art or the breakables. A record that dresses itself in armour is a creature
+/// whatever its own model is, since only a creature is dressed — which is what the Avatar of Mogdrogen
+/// needs, its own model being a headdress.
+public enum MonsterKind: String, Codable, Sendable, CaseIterable {
+    case creature
+    /// Weather and gas: a hazard the game gives no body at all, drawn as an effect and nothing else.
+    case anomaly
+    /// A thing placed on the ground that goes off — spikes, a mine, a flare.
+    case trap
+    /// Scenery brought to life: a totem, a nest, a training dummy, a pile of bones.
+    case object
+
+    public var title: String {
+        switch self {
+            case .creature: "Creature"
+            case .anomaly: "Anomaly"
+            case .trap: "Trap"
+            case .object: "Object"
+        }
+    }
+
+    /// Whether it is a living thing rather than something the game merely spawns as one.
+    public var isCreature: Bool { self == .creature }
+
+    /// What the record is, from the model it is drawn with and whether it is dressed.
+    public static func of(_ record: ArzRecord) -> MonsterKind {
+        let dressed = [ "Head", "Shoulders", "Chest", "Legs", "Feet", "Hands" ]
+            .contains { !record.text("default\($0)Piece").isEmpty }
+        guard !dressed else { return .creature }
+
+        let mesh = record.text("mesh").lowercased()
+        if mesh.hasPrefix("creatures/anomalies/") { return .anomaly }
+        if mesh.hasPrefix("fx/meshfx/") { return .trap }
+        if mesh.hasPrefix("level art/") || mesh.hasPrefix("items/") { return .object }
+
+        return .creature
+    }
+}
+
 /// One monster of the listing: what it is called, what it belongs to, and how deep it is met.
 public struct CataloguedMonster: Codable, Sendable, Identifiable {
     public let path: String
     public let name: String
     public let rank: MonsterRank
+    /// Whether it is a creature at all, or a hazard the game spawns as one.
+    public var kind: MonsterKind = .creature
     /// The faction pack the record puts it in: who it counts as for hostility and for what killing it
     /// does to a standing. Most creatures carry the Aetherials' whatever they are made of, so this says
     /// less about a monster than it looks like it does.
@@ -38,8 +85,18 @@ public struct CataloguedMonster: Codable, Sendable, Identifiable {
     /// The record's own file name, carried only where several records share a name and differ in what
     /// they hold — three Ravagers of Minds are three different fights.
     public var variant: String = ""
+    /// Which fight of a several-stage boss this is, for the records the game chains through death. Nil
+    /// for everything met in one piece.
+    public var phase: Int?
 
     public var id: String { path }
+
+    /// What to call it in a listing: a phase says which one it is, since the stages are different fights.
+    public var title: String {
+        guard let phase else { return name }
+
+        return "\(name) (Phase \(phase))"
+    }
 }
 
 /// One line of the listing, with its text folded once so the search never folds it again.
@@ -51,14 +108,16 @@ public struct MonsterEntry: Identifiable, Sendable {
 
     public init(_ monster: CataloguedMonster) {
         self.monster = monster
-        folded = QuickSearch.folded([ monster.name, monster.faction, monster.race, monster.rank.title ].joined())
+        folded = QuickSearch.folded(
+            [ monster.title, monster.faction, monster.race, monster.rank.title, monster.kind.title ].joined()
+        )
     }
 }
 
 /// Every monster in the game, listed once per installed version and kept on disk.
 public struct MonsterCatalogue: Codable, Sendable {
     /// Bumped whenever an entry means something different, so an older listing on disk is discarded.
-    public static let version = 4
+    public static let version = 6
 
     public let fingerprint: String
     public let version: Int
@@ -69,6 +128,7 @@ public struct MonsterCatalogue: Codable, Sendable {
         var signatures = [String: String]()
         let factions = Self.factionNames(in: database)
         let nemeses = Self.nemeses(in: database)
+        let phases = MonsterPhases.map(in: database)
 
         database.sweep(prefix: "records/creatures/enemies/") { path, record in
             guard
@@ -82,12 +142,14 @@ public struct MonsterCatalogue: Codable, Sendable {
                 path: path,
                 name: name,
                 rank: rank,
+                kind: MonsterKind.of(record),
                 faction: factions[record.text("factions").lowercased()] ?? "",
                 nemesisOf: nemeses[name] ?? "",
                 race: database.localised("tag" + record.text("characterRacialProfile")) ?? "",
                 minLevel: Int(record.number("minLevel")),
                 maxLevel: Int(record.number("maxLevel")),
-                dropsLoot: record.number("dropItems") != 0
+                dropsLoot: record.number("dropItems") != 0,
+                phase: phases[path.lowercased()]
             ))
             signatures[path] = Self.signature(of: record)
         }
@@ -97,7 +159,9 @@ public struct MonsterCatalogue: Codable, Sendable {
         let listed =
             monsters
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-            .filter { seen.insert("\($0.name)|\($0.rank.rawValue)|\($0.faction)").inserted }
+            // A phase is its own line: the stages of one fight are different creatures with different
+            // models, different skills, and — usually — loot on the last of them alone.
+            .filter { seen.insert("\($0.name)|\($0.rank.rawValue)|\($0.faction)|\($0.phase ?? 0)").inserted }
 
         return MonsterCatalogue(fingerprint: database.fingerprint, version: Self.version, monsters: listed)
     }

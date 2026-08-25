@@ -54,7 +54,7 @@ A block is `u32 id`, `peek u32 length`, body, `peek u32 0`.
 
 | id | contents | block version seen |
 | --- | --- | --- |
-| 1 | character info: difficulty, iron, tributes, loot filters | 5 |
+| 1 | character info: difficulty, iron, tributes, skin texture, loot filters | 5 |
 | 2 | biography: level, experience, unspent points, attributes, pools | 8 |
 | 3 | inventory: sacks (nested blocks), equipment, weapon sets | 11 |
 | 4 | personal stash: tabs (nested blocks) | 11 |
@@ -136,6 +136,8 @@ exclusive faction pair reads positive/negative the right way round, and Devil's 
 - Skill entries gained a flag byte before the devotion marker.
 - Character info's loot filters are a length-prefixed byte array; the old `unknown` int before them *is*
   that length. The `always-show-loot` int only exists in block versions 2–4.
+- Character info's `texture` is the skin picked at creation — `creatures/pc/hero02.tex` — which is what
+  the character's model is drawn in, rather than the player record's own `playerTextures` default.
 - Every stash tab carries twenty trailing bytes after its items.
 - The skills block and the play-stats block each carry extra trailing values.
 

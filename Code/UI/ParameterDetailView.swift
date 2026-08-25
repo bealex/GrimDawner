@@ -50,7 +50,8 @@ struct ParameterDetailView: View {
                                             title: source.name,
                                             value: format(source.value),
                                             valueColor: Theme.valueColor(source.value),
-                                            icon: source.item == nil ? nil : "arrow.up.forward.square"
+                                            icon: source.item == nil ? nil : "arrow.up.forward.square",
+                                            titleIconPath: source.item?.iconPath
                                         )
                                         .contentShape(.rect)
                                     }

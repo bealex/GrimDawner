@@ -36,6 +36,9 @@ struct DevotionMapView: View {
         .background(.black)
         .background(MapMouseInput(scale: scale, pan: pan))
         .onGeometryChange(for: CGSize.self, of: { $0.size }, action: resized)
+        // Somewhere else asked to go to a constellation: the sky slides and closes in on it rather
+        // than cutting, so it stays obvious which way it moved and how far.
+        .onChange(of: camera.focus) { _, _ in moveToFocus() }
         .onTapGesture { select(at: $0) }
         .onContinuousHover { phase in
             switch phase {
@@ -50,9 +53,20 @@ struct DevotionMapView: View {
 
     private func resized(_ size: CGSize) {
         self.size = size
+        moveToFocus()
         guard !camera.isFramed else { return }
 
         camera.frame(map.starBounds, in: size)
+    }
+
+    /// Moves to whatever asked to be framed, once the view knows how big it is.
+    private func moveToFocus() {
+        guard let region = camera.focus, size.width > 0, size.height > 0 else { return }
+
+        withAnimation(.easeInOut(duration: 0.45)) {
+            camera.frame(region, in: size)
+            camera.focus = nil
+        }
     }
 
     private func scale(by factor: CGFloat, around point: CGPoint) {

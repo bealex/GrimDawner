@@ -126,6 +126,8 @@ extension MainScreen {
                         character: character,
                         search: search,
                         selection: $model.selectedItem,
+                        renderer: model.modelRenderer,
+                        database: model.records,
                         revealSkill: model.reveal(skillAt:)
                     )
                 case .items:
@@ -150,7 +152,8 @@ extension MainScreen {
                         character: character,
                         search: search,
                         selectedStar: $model.selectedStar,
-                        selectedConstellation: $model.selectedConstellation
+                        selectedConstellation: $model.selectedConstellation,
+                        database: model.records
                     )
                 case .affixes:
                     AffixesTab(

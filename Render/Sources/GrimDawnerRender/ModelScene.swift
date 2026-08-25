@@ -31,6 +31,10 @@ public struct SceneConfiguration: Sendable {
     /// view that keeps drawing to emit at all — a still taken in one pass would catch none of them — so
     /// a live view turns this on and an offline render leaves it off.
     public var emitsEffects = false
+    /// How far the frame may grow to take in an effect, in multiples of the creature's own size. A nova
+    /// covers seven units around a creature two tall, and framing all of it would leave the creature a
+    /// speck, so the frame opens this far and anything bigger spills out of it.
+    public var effectMargin: Float = 1.6
     /// How brightly the model is lit. The game's own art is painted dark, so a plain three-point rig
     /// leaves it in the murk; this scales the whole rig at once.
     public var exposure: CGFloat = 2.2
@@ -130,31 +134,54 @@ public struct ModelScene {
             if frame == nil { skeleton.play(animation, speed: speed) }
         }
 
+        let body = max(max(maximum.x - minimum.x, maximum.y - minimum.y), maximum.z - minimum.z) / 2
+        var reached = Float(0)
+        var aimed: (minimum: SIMD3<Float>, maximum: SIMD3<Float>)?
         if !effects.isEmpty {
             let attachments = drawn.flatMap { $0.mesh.attachments }
             for effect in effects {
                 guard let image = effect.image else { continue }
 
                 let placed = place(effect, among: attachments, of: skeleton)
-                // What hangs off a hand or a head is a hand's worth of effect; what is centred on the
-                // creature is the creature's worth.
-                let scale = effect.attachment.isEmpty ? radius(of: drawn) : radius(of: drawn) / 2
+                let reach = self.reach(of: effect, on: drawn)
+                reached = max(reached, reach)
+                var at = placed?.transform ?? middle(of: drawn)
+                // A wave sweeps out from where it hangs rather than sitting on it, so it is carried
+                // half its own reach along the way the point it hangs on already leans.
+                if effect.isWave {
+                    at = swept(at, on: placed?.parent, by: reach)
+                    // Aimed away from the creature, so the frame has to take in where it lands: a sweep
+                    // drawn off the edge of the picture says nothing about where the creature swept it.
+                    let parent = placed.map { simd_float4x4($0.parent.worldTransform) } ?? matrix_identity_float4x4
+                    let centre = (parent * at).columns.3.xyz
+                    aimed = (
+                        simd_min(aimed?.minimum ?? centre, centre - reach),
+                        simd_max(aimed?.maximum ?? centre, centre + reach)
+                    )
+                }
                 let node = spark(
                     image,
-                    at: placed?.transform ?? middle(of: drawn),
+                    at: at,
                     of: effect,
                     in: animation,
-                    size: scale,
+                    reach: reach,
                     frame: frame,
                     speed: speed
                 )
                 (placed?.parent ?? scene.rootNode).addChildNode(node)
             }
         }
+        if let aimed {
+            minimum = simd_min(minimum, aimed.minimum)
+            maximum = simd_max(maximum, aimed.maximum)
+        }
 
         let centre = (minimum + maximum) / 2
         let size = maximum - minimum
-        let radius = max(max(size.x, size.y), size.z) / 2
+        // An effect that radiates around the creature opens the frame only so far — past that the
+        // creature costs more than the effect is worth. One aimed somewhere is already in the bounds.
+        let framed = max(size.x, max(size.y, size.z)) / 2
+        let radius = min(max(body, reached), max(body * configuration.effectMargin, framed))
             * (animation == nil ? 1 : configuration.movingMargin)
 
         scene.rootNode.addChildNode(camera(around: centre, radius: max(radius, 0.001), turned: turned))
@@ -211,8 +238,40 @@ public struct ModelScene {
         return transform
     }
 
-    /// How big the models are, which is what an effect is sized against.
-    private func radius(of models: [DrawnModel]) -> Float {
+    /// The same placement carried forward by a wave's reach.
+    ///
+    /// The game hangs a wave off a point that already stands out in front of the caster — `FXForward` —
+    /// so which way is forward is the way that point stands from the creature's own middle, along the
+    /// ground. The step has to be taken in the world and put back into the bone's own frame, since
+    /// inside a bone "forward" is whichever way that bone happens to point. A point standing over the
+    /// creature rather than in front of it says nothing about direction and is left where it is.
+    private func swept(_ transform: simd_float4x4, on parent: SCNNode?, by reach: Float) -> simd_float4x4 {
+        let toWorld = parent.map { simd_float4x4($0.worldTransform) } ?? matrix_identity_float4x4
+        let place = (toWorld * transform).columns.3.xyz
+        let along = SIMD3(place.x, 0, place.z)
+        guard simd_length(along) > 0.001 else { return transform }
+
+        var world = toWorld * transform
+        world.columns.3 = SIMD4(place + simd_normalize(along) * reach, 1)
+        return toWorld.inverse * world
+    }
+
+    /// How far an effect reaches, which is what it is drawn across.
+    ///
+    /// The skill that throws it says so, and a model is in the same units — a creature stands a couple
+    /// of them tall and a nova reaches seven — so one cast reads as bigger than another because it is.
+    /// Nothing states the reach of an aura or of what an animation puffs out, so those are measured
+    /// against the creature: the whole of it for something centred on it, a limb's worth for something
+    /// hung off a limb.
+    private func reach(of effect: ModelEffect, on models: [DrawnModel]) -> Float {
+        if let radius = effect.radius { return max(radius, 0.05) }
+
+        let span = span(of: models)
+        return (effect.attachment.isEmpty ? span : span / 3) / 2
+    }
+
+    /// How big the models are, which is what an effect the game does not size is sized against.
+    private func span(of models: [DrawnModel]) -> Float {
         var minimum = SIMD3<Float>(repeating: .greatestFiniteMagnitude)
         var maximum = SIMD3<Float>(repeating: -.greatestFiniteMagnitude)
         for model in models where model.hand == nil {
@@ -221,7 +280,8 @@ public struct ModelScene {
         }
         guard minimum.x <= maximum.x else { return 1 }
 
-        return max(simd_length(maximum - minimum) / 4, 0.1)
+        let size = maximum - minimum
+        return max(max(size.x, max(size.y, size.z)), 0.1)
     }
 
     /// The effect itself: the texture its particles are drawn with, facing the camera at the point the
@@ -231,7 +291,7 @@ public struct ModelScene {
         at transform: simd_float4x4,
         of effect: ModelEffect,
         in animation: AnmFile?,
-        size: Float,
+        reach: Float,
         frame: Int?,
         speed: Double
     ) -> SCNNode {
@@ -239,7 +299,7 @@ public struct ModelScene {
         // carries — and holding still is not what an effect does, so a view that keeps drawing emits it.
         guard let starts = effect.frame, let animation else {
             guard configuration.emitsEffects else {
-                let node = SCNNode(geometry: sprite(image, size: size))
+                let node = SCNNode(geometry: sprite(image, reach: reach))
                 node.simdTransform = transform
                 node.constraints = [ SCNBillboardConstraint() ]
                 node.renderingOrder = 10
@@ -248,11 +308,11 @@ public struct ModelScene {
 
             let node = SCNNode()
             node.simdTransform = transform
-            node.addParticleSystem(cloud(image, size: size))
+            node.addParticleSystem(cloud(image, reach: reach))
             return node
         }
 
-        let node = SCNNode(geometry: sprite(image, size: size))
+        let node = SCNNode(geometry: sprite(image, reach: reach))
         node.simdTransform = transform
         node.constraints = [ SCNBillboardConstraint() ]
         node.renderingOrder = 10
@@ -277,9 +337,10 @@ public struct ModelScene {
         return node
     }
 
-    /// One picture of an effect, facing the camera and lit rather than lying flat.
-    private func sprite(_ image: CGImage, size: Float) -> SCNPlane {
-        let plane = SCNPlane(width: CGFloat(size), height: CGFloat(size))
+    /// One picture of an effect, facing the camera and lit rather than lying flat. A still has only the
+    /// one picture to say how far the effect goes with, so it is drawn across the whole of it.
+    private func sprite(_ image: CGImage, reach: Float) -> SCNPlane {
+        let plane = SCNPlane(width: CGFloat(reach * 2), height: CGFloat(reach * 2))
         plane.firstMaterial?.diffuse.contents = image
         plane.firstMaterial?.lightingModel = .constant
         plane.firstMaterial?.blendMode = .add
@@ -294,21 +355,25 @@ public struct ModelScene {
     /// An effect as the game shows it: not one picture pinned in place but a drift of them, rising and
     /// fading from the point it hangs on. The particles the game itself emits are a format of their own,
     /// so the shape of the drift is this app's, and only the picture is the game's.
-    private func cloud(_ image: CGImage, size: Float) -> SCNParticleSystem {
+    private func cloud(_ image: CGImage, reach: Float) -> SCNParticleSystem {
         let system = SCNParticleSystem()
         system.particleImage = image
-        system.particleSize = CGFloat(size * 0.7)
-        system.particleSizeVariation = CGFloat(size * 0.25)
-        system.birthRate = 14
+        // The reach is how far the drift spreads, not how big one spark in it is: a nova that covers
+        // seven units is a great many sparks over that ground rather than one seven-unit spark.
+        let spark = reach * 0.5
+        system.particleSize = CGFloat(spark)
+        system.particleSizeVariation = CGFloat(spark * 0.35)
+        // A wider drift needs more of them to read as one cloud rather than as a scattering.
+        system.birthRate = CGFloat(14 + 10 * min(reach, 8))
         system.particleLifeSpan = 1.1
         system.particleLifeSpanVariation = 0.4
-        system.emitterShape = SCNSphere(radius: CGFloat(size * 0.16))
+        system.emitterShape = SCNSphere(radius: CGFloat(reach * 0.6))
         system.birthLocation = .volume
         system.emittingDirection = SCNVector3(0, 1, 0)
         system.spreadingAngle = 35
-        system.particleVelocity = CGFloat(size * 0.35)
-        system.particleVelocityVariation = CGFloat(size * 0.2)
-        system.acceleration = SCNVector3(0, size * 0.12, 0)
+        system.particleVelocity = CGFloat(reach * 0.35)
+        system.particleVelocityVariation = CGFloat(reach * 0.2)
+        system.acceleration = SCNVector3(0, reach * 0.12, 0)
         system.particleAngularVelocity = 18
         system.particleAngularVelocityVariation = 40
         system.blendMode = .additive
