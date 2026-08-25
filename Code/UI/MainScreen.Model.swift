@@ -300,12 +300,19 @@ extension MainScreen {
                     case let .success(loaded):
                         database = loaded
                         databaseState = .ready
+                        warmSweeps(of: loaded)
                         reloadSelected()
                     case let .failure(error):
                         database = nil
                         databaseState = .failed(error.localizedDescription)
                 }
             }
+        }
+
+        /// Works out the facts that cost a sweep of every record, so the first monster picked does not
+        /// wait on one. The database keeps the answer, and every reader after this pays nothing.
+        private func warmSweeps(of database: GameDatabase) {
+            Task.detached(priority: .utility) { _ = MonsterPhases.map(in: database) }
         }
 
         /// Decodes the character's artwork off the main thread so switching tabs does not stall on it.

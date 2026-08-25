@@ -204,6 +204,11 @@ not turn 90° in a thirtieth of a second.
 a model rather than a particle system. The travel a key carries, so a walk plays on the spot. And nothing
 blends one frame into the next, so a loop restarts rather than easing round.
 
+**A sweep is paid for once.** Anything worked out from the whole record tree — which records are phases
+of one fight, which creature the player is — costs the better part of a second, and the answer holds for
+as long as the game is installed. The database keeps it, and it is warmed off the main thread when the
+database loads, so picking a monster costs 3 ms rather than 740.
+
 ## Character against monster
 
 The monster window's **Interaction** tab reads one of your characters against the monster in front of it:

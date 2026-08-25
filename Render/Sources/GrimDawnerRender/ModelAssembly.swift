@@ -187,17 +187,24 @@ public struct ModelAssembly: Sendable {
     /// player's own folder: the game ships a third `Player` record under `records/sandbox`, left over
     /// from a test pose.
     static func playerRecord(male: Bool, in database: GameDatabase) -> ArzRecord? {
-        var found: ArzRecord?
-        database.sweep(prefix: "records/creatures/pc/") { _, record in
-            guard
-                found == nil,
-                record.recordClass == "Player",
-                record.text("characterGenderProfile").lowercased() == (male ? "male" : "female")
-            else { return }
+        // Looking for it walks the whole path list, and the doll rebuilds whenever the character swaps
+        // hands, so the answer is kept the first time it is worked out.
+        // The path is cached rather than the record: the record is memoised anyway, and a cache of
+        // something optional cannot tell a miss from an answer of nothing.
+        let found = database.swept("player-record-\(male ? "male" : "female")") { database -> String in
+            var path = ""
+            database.sweep(prefix: "records/creatures/pc/") { candidate, record in
+                guard
+                    path.isEmpty,
+                    record.recordClass == "Player",
+                    record.text("characterGenderProfile").lowercased() == (male ? "male" : "female")
+                else { return }
 
-            found = record
+                path = candidate
+            }
+            return path
         }
-        return found
+        return found.isEmpty ? nil : database.record(found)
     }
 
     /// One armour record's model and skin, in the creature's own gender.

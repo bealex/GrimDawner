@@ -56,6 +56,9 @@ struct MonstersTab: View {
                     database: database,
                     openMonster: { select($0, level, nil) }
                 )
+                // The query found this monster by name, so the whole monster is the match and none
+                // of its stats should dim.
+                .environment(\.quickSearch, search.matches(selected.title) ? QuickSearch() : search)
             } else {
                 DetailPlaceholder(
                     title: "No monster selected",
@@ -196,7 +199,6 @@ private struct MonsterRow: View {
         // The button keeps the single click; the double click runs alongside it rather than replacing
         // it, so one selects and two open the window.
         .simultaneousGesture(TapGesture(count: 2).onEnded(open))
-        .quickSearch(search.emphasis(matching: monster.title), cornerRadius: 5)
         .help("Double-click to open \(monster.title) in a window of its own")
         .accessibilityLabel("\(monster.title), \(monster.kind.title), \(monster.rank.title), \(monster.race)")
         .accessibilityAction(named: "Open in a window", open)

@@ -44,7 +44,11 @@ struct MonsterStatsWindow: View {
         .frame(minWidth: 640, minHeight: 420)
         .environment(\.textures, model.textures)
         .environment(\.damageIcons, model.damageIcons)
-        .environment(\.quickSearch, QuickSearch(search))
+        .environment(
+            \.quickSearch,
+            // Named by the query, so the whole monster is the match and none of its figures dim.
+            QuickSearch(search).matches(model.selectedMonster?.title ?? "") ? QuickSearch() : QuickSearch(search)
+        )
         .background(TypeToSearch(text: $search).frame(width: 0, height: 0))
         .overlay(alignment: .top) {
             if !search.isEmpty { SearchOverlay(text: $search) }

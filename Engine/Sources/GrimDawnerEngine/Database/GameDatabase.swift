@@ -34,6 +34,8 @@ public final class GameDatabase: Sendable {
     private let databases: [ArzDatabase]
     private let tags: [String: String]
     private let cache: RecordCache
+    /// Facts that cost a sweep of the record tree and never change while the game does not.
+    private let sweptFacts = Mutex<[String: any Sendable]>([:])
 
     /// Decoded icons for the records this database serves.
     public let textures: TextureStore
@@ -172,6 +174,21 @@ public final class GameDatabase: Sendable {
             if let code = characters.next(), !code.isLetter { output.append(code) }
         }
         return output
+    }
+
+    /// A sweep of every record, kept so the second caller pays nothing.
+    ///
+    /// Anything derived from the whole tree costs the better part of a second to work out, and it is the
+    /// same answer every time: the database does not change while the app is open. A caller that would
+    /// otherwise sweep on every selection reads it through here instead.
+    /// `Value` must not itself be optional: a miss reads as `nil`, and `nil as? Optional` succeeds,
+    /// so an optional would take the empty cache for a cached answer and never build anything.
+    public func swept<Value: Sendable>(_ name: String, _ build: (GameDatabase) -> Value) -> Value {
+        if let stored = sweptFacts.withLock({ $0[name] }), let known = stored as? Value { return known }
+
+        let built = build(self)
+        sweptFacts.withLock { $0[name] = built }
+        return built
     }
 
     /// Memo of decompressed records; the same handful get read repeatedly while building a character,

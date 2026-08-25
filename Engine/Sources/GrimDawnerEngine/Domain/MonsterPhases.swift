@@ -11,8 +11,13 @@ import Foundation
 public enum MonsterPhases {
     /// The phase of every record that is part of a chain, by record path. A record in no chain is absent.
     ///
-    /// Reading it costs one sweep, so a caller that needs it for a whole listing should read it once.
+    /// Working this out reads every creature the game ships, which takes the better part of a second, so
+    /// the answer is kept on the database and every caller after the first pays nothing.
     public static func map(in database: GameDatabase) -> [String: Int] {
+        database.swept("monster-phases") { build(in: $0) }
+    }
+
+    private static func build(in database: GameDatabase) -> [String: Int] {
         var spawns = [String: [String]]()
         var names = [String: String]()
 
