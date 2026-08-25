@@ -261,19 +261,6 @@ struct GrantedSkillView: View {
     /// The skill's name, with its own artwork and whose it is.
     private var header: some View {
         HStack(spacing: 6) {
-            if hasDetail {
-                Button(action: { isOpened = !isExpanded }) {
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .frame(width: 10)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .pointerStyle(.link)
-                .help(isExpanded ? "Hide what this does" : "Show what this does")
-            }
             if let icon = granted.skill?.iconPath, !icon.isEmpty {
                 GameIcon(path: icon, size: 20, fallbackSymbol: granted.symbolName)
             } else {
@@ -303,6 +290,19 @@ struct GrantedSkillView: View {
                     .accessibilityHidden(true)
             }
             Spacer(minLength: 0)
+            if hasDetail {
+                Button(action: { isOpened = !isExpanded }) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 10)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .pointerStyle(.link)
+                .help(isExpanded ? "Hide what this does" : "Show what this does")
+            }
         }
     }
 
@@ -386,7 +386,7 @@ struct GrantedSkillView: View {
                 SkillPetView(skill: skill)
             }
         }
-        .padding(.leading, 36)
+        .padding(.leading, 26)
     }
 }
 
