@@ -142,31 +142,83 @@ struct ItemDetailView: View {
 
     @ViewBuilder
     private func grantedSkills(_ skills: [GrantedSkill]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(skills) { granted in
-                GrantedSkillView(granted: granted, wearer: wearer, reveal: revealSkill)
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(GrantedSkillGroup.grouping(skills, for: wearer)) { group in
+                GrantedSkillView(group: group, wearer: wearer, reveal: revealSkill)
             }
         }
     }
 }
 
+/// Everything one item does to one skill, gathered under that skill.
+///
+/// An item can name the same skill several times over — ranks from the base record, an enhancement from
+/// an ascendant affix, another from a component — and listing those apart reads as several skills when
+/// it is one. What the character can actually use comes first: a rank or an enhancement aimed at a skill
+/// of another class, or at one nobody has spent a point on, gives nothing at all.
+struct GrantedSkillGroup: Identifiable {
+    let entries: [GrantedSkill]
+    /// Whether the character takes anything from it.
+    let isReachable: Bool
+
+    var id: String { entries[0].recordPath.isEmpty ? entries[0].id.uuidString : entries[0].recordPath }
+
+    /// The line that names the skill: the one conferring it where the item does, the first otherwise.
+    var lead: GrantedSkill { entries.first { $0.kind == .granted } ?? entries[0] }
+    /// Ranks the item adds, however many lines add them.
+    var addedRanks: Int {
+        entries.filter { $0.kind == .added }.reduce(0) { $0 + $1.level }
+    }
+
+    var enhancements: [SkillChanges] {
+        entries.compactMap { $0.kind == .enhanced ? $0.modifications : nil }.filter { !$0.isEmpty }
+    }
+
+    static func grouping(_ skills: [GrantedSkill], for wearer: SkillContext?) -> [GrantedSkillGroup] {
+        var order = [String]()
+        var byPath = [String: [GrantedSkill]]()
+        for skill in skills {
+            let key = skill.recordPath.isEmpty ? skill.id.uuidString : skill.recordPath.lowercased()
+            if byPath[key] == nil { order.append(key) }
+            byPath[key, default: []].append(skill)
+        }
+
+        let groups = order.compactMap { key -> GrantedSkillGroup? in
+            guard let entries = byPath[key], !entries.isEmpty else { return nil }
+
+            return GrantedSkillGroup(entries: entries, isReachable: reachable(entries, for: wearer))
+        }
+        // Stable within each half, so the item's own order survives inside what the character can use.
+        return groups.filter(\.isReachable) + groups.filter { !$0.isReachable }
+    }
+
+    /// A skill the item confers is the item's own and always works. Ranks and enhancements only count
+    /// where the character has spent a point on the skill they name.
+    private static func reachable(_ entries: [GrantedSkill], for wearer: SkillContext?) -> Bool {
+        guard let wearer else { return true }
+        guard !entries.contains(where: { $0.kind == .granted }) else { return true }
+
+        return wearer.learned.contains(entries[0].recordPath.lowercased())
+    }
+}
+
 /// What an item's skill actually does, rather than the name of the record behind it.
+///
+/// One block per skill: its name, what sets it off, what it does, the ranks the item adds, whatever the
+/// item changes about it, and its own numbers. A skill the character takes nothing from — one of another
+/// class, or one nobody has spent a point on — reads faded rather than being left out, since it is still
+/// what the item carries.
 struct GrantedSkillView: View {
-    let granted: GrantedSkill
+    let group: GrantedSkillGroup
     /// The character reading it, when there is one. Absent in the catalogues, where no skill is
     /// anybody's own and nothing has a point spent on it.
     var wearer: SkillContext?
     var reveal: ((String) -> Void)?
 
+    private var granted: GrantedSkill { group.lead }
+
     /// Whether the skill is one of the character's own, which the skill panels already show in full.
     private var isOwn: Bool { wearer?.own.contains(granted.recordPath.lowercased()) ?? false }
-
-    /// A change to a skill the character has spent no point on changes nothing, so it reads faded.
-    private var isIdle: Bool {
-        guard let wearer, granted.kind == .enhanced else { return false }
-
-        return !wearer.learned.contains(granted.recordPath.lowercased())
-    }
 
     @Environment(\.quickSearch)
     private var search
@@ -175,26 +227,26 @@ struct GrantedSkillView: View {
     /// of another class, or an ability the item itself grants — has no panel to open.
     private var opensPanel: Bool { isOwn && granted.kind != .granted && reveal != nil }
 
-    /// What the item grants, as one line: the skill's own artwork, what it does, and whose it is.
-    private var line: some View {
+    /// The skill's name, with its own artwork and whose it is.
+    private var header: some View {
         HStack(spacing: 6) {
             if let icon = granted.skill?.iconPath, !icon.isEmpty {
-                GameIcon(path: icon, size: 18, fallbackSymbol: granted.symbolName)
+                GameIcon(path: icon, size: 20, fallbackSymbol: granted.symbolName)
             } else {
                 Image(systemName: granted.symbolName)
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(Theme.accent)
                     .accessibilityHidden(true)
             }
-            Text(granted.summary)
-                .font(.caption.weight(.semibold))
+            Text(granted.title)
+                .font(.callout.weight(.semibold))
                 .lineLimit(1)
                 // A skill line says what the item does; a search for something else must not fade it
                 // out of the card.
                 .quickSearchText(search.highlight(matching: granted.title))
             // A skill outside the character's masteries appears on no panel, so the line says whose it
             // is instead of pointing at one.
-            if granted.kind != .granted, !isOwn, let mastery = granted.mastery {
+            if !isOwn, let mastery = granted.mastery {
                 Text(mastery)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -206,7 +258,20 @@ struct GrantedSkillView: View {
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
+            Spacer(minLength: 0)
         }
+    }
+
+    /// What has to happen for it to fire, and the rank the item runs it at.
+    private var condition: String? {
+        [
+            granted.trigger,
+            granted.kind == .granted && granted.level > 1 ? "at level \(granted.level)" : nil,
+            group.isReachable ? nil : "nothing is spent on this skill",
+        ]
+        .compactMap { $0 }
+        .joined(separator: " · ")
+        .nilWhenEmpty
     }
 
     var body: some View {
@@ -217,43 +282,49 @@ struct GrantedSkillView: View {
                 Button {
                     reveal?(granted.recordPath)
                 } label: {
-                    line.contentShape(.rect)
+                    header.contentShape(.rect)
                 }
                 .buttonStyle(.plain)
                 .pointerStyle(.link)
                 .help("Show \(granted.title) on its mastery panel")
             } else {
-                line
+                header
             }
 
-            // Only a skill the item brings into being is described here: `+N` and "Enhances" lines
-            // point at a skill whose own panel says what it does.
-            if granted.kind == .enhanced, let changes = granted.modifications, !changes.isEmpty {
-                SkillChangesView(changes: changes)
-            }
-
-            if let skill = granted.skill, granted.kind == .granted {
-                if !skill.description.isEmpty {
-                    Text(skill.description)
+            VStack(alignment: .leading, spacing: 4) {
+                if let condition {
+                    Text(condition)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                // What the skill does reads the same wherever it is described — under an item, under a
+                // component, under an augment.
+                if let description = granted.skill?.description, !description.isEmpty {
+                    Text(description)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
-                if !skill.parameters.isEmpty {
-                    Text(skill.parameters.map { "\($0.name) \($0.value)" }.joined(separator: " · "))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                if group.addedRanks > 0 {
+                    StatRow(title: "ranks", value: "+\(group.addedRanks)", valueColor: Theme.valueColor(1))
                 }
-
-                if !skill.stats.hasNothingToShow {
-                    StatBlockView(block: skill.stats)
+                ForEach(Array(group.enhancements.enumerated()), id: \.offset) { _, changes in
+                    SkillChangesView(changes: changes)
                 }
-
-                SkillPetView(skill: skill)
+                if let skill = granted.skill, granted.kind == .granted {
+                    ForEach(skill.parameters) { parameter in
+                        StatRow(title: parameter.name, value: parameter.value)
+                    }
+                    if !skill.stats.hasNothingToShow {
+                        StatBlockView(block: skill.stats)
+                    }
+                    SkillPetView(skill: skill)
+                }
             }
+            .padding(.leading, 26)
         }
-        .opacity(isIdle ? 0.45 : 1)
+        .opacity(group.isReachable ? 1 : 0.4)
         .accessibilityElement(children: .combine)
     }
 }
@@ -360,4 +431,9 @@ extension StatBlockView {
         let unit = line.definition.unit
         return "\(unit.format(low, signed: false))–\(unit.format(high, signed: false))"
     }
+}
+
+private extension String {
+    /// A joined line that came out empty is nothing to show rather than a blank one.
+    var nilWhenEmpty: String? { isEmpty ? nil : self }
 }

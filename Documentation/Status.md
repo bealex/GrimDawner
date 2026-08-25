@@ -216,6 +216,14 @@ of one fight, which creature the player is — costs the better part of a second
 as long as the game is installed. The database keeps it, and it is warmed off the main thread when the
 database loads, so picking a monster costs 3 ms rather than 740.
 
+**What an item does to a skill reads as one block.** An item can name the same skill several times over
+— ranks from its base record, an enhancement from an ascendant affix, another from a component — and the
+sidebar gathers those under the skill rather than listing them apart. The block is the skill's name and
+artwork, what sets it off, what it does, the ranks added, what the item changes about it, and its own
+numbers; a component describes its skill the same way an item does. What the character can actually use
+comes first, and a rank or an enhancement aimed at a skill nobody has spent a point on reads faded, since
+that is exactly what it is worth.
+
 ## Character against monster
 
 The monster window's **Interaction** tab reads one of your characters against the monster in front of it:

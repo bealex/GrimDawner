@@ -274,8 +274,8 @@ private struct AffixDetailView: View {
                             highest: variant.statsHighest,
                             showsRolls: false
                         )
-                        ForEach(variant.grantedSkills) { granted in
-                            GrantedSkillView(granted: granted)
+                        ForEach(GrantedSkillGroup.grouping(variant.grantedSkills, for: nil)) { group in
+                            GrantedSkillView(group: group)
                         }
                     }
                 }
