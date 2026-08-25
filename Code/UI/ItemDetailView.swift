@@ -444,12 +444,11 @@ struct StatBlockView: View {
                 ForEach(groups, id: \.group) { group in
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(StatBlock.merged(group.lines), id: \.title) { line in
-                            let bands = line.parts.compactMap { band(of: $0) }
+                            let bands = bandText(of: line.parts)
                             let figures = Theme.figures(line.parts)
                             StatRow(
                                 title: line.title,
-                                value: showsRolls || bands.count != line.parts.count
-                                    ? figures : bands.joined(separator: " & "),
+                                value: showsRolls ? figures : (bands ?? figures),
                                 valueColor: Theme.valueColor(line.parts.first?.value ?? 0),
                                 accents: [
                                     Theme.damageAccent(
@@ -461,8 +460,7 @@ struct StatBlockView: View {
                                 iconPath: damageIcons[
                                     Theme.damageToken(forStatKey: line.parts.first?.definition.key ?? "") ?? ""
                                 ],
-                                range: showsRolls && !bands.isEmpty
-                                    ? "[\(bands.joined(separator: " & "))]" : nil
+                                range: showsRolls ? bands.map { "[\($0)]" } : nil
                             )
                         }
                     }
@@ -492,6 +490,49 @@ struct StatBlockView: View {
 
 extension StatBlockView {
     /// The band a rolled figure can land in, as `24–36`.
+    /// The bands a whole line's figures roll in, paired the way the figures themselves are.
+    ///
+    /// A minimum and a maximum are the two ends of one number, so they read as one band. Where a record
+    /// writes only the minimum the app fills the maximum in to match it, and printing both would say
+    /// the same thing twice: 12 flat elemental damage is "13–18", never "13–18 & 13–18". Nothing at all
+    /// where any figure on the line does not roll, since a line half in bands reads as neither.
+    fileprivate func bandText(of parts: [(definition: StatDefinition, value: Double)]) -> String? {
+        guard !parts.isEmpty else { return nil }
+
+        let minimum = parts.first { $0.definition.key.hasSuffix("Min") }
+        let maximum = parts.first { $0.definition.key.hasSuffix("Max") }
+        var used = Set<String>()
+        var pieces = [String]()
+
+        if let minimum, let maximum, let low = band(of: minimum), let high = band(of: maximum) {
+            used.insert(minimum.definition.key)
+            used.insert(maximum.definition.key)
+            // Two ends that roll apart are one span from the lowest a minimum can be to the highest a
+            // maximum can reach; two ends that roll alike are one figure.
+            pieces.append(low == high ? low : span(from: minimum, to: maximum) ?? low)
+        }
+        for part in parts where !used.contains(part.definition.key) {
+            guard let band = band(of: part) else { return nil }
+
+            pieces.append(band)
+        }
+        return pieces.isEmpty ? nil : pieces.joined(separator: " & ")
+    }
+
+    /// The whole reach of a rolled damage range: the least its minimum can be, the most its maximum can.
+    private func span(
+        from minimum: (definition: StatDefinition, value: Double),
+        to maximum: (definition: StatDefinition, value: Double)
+    ) -> String? {
+        guard
+            let low = lowest?.value(minimum.definition.key),
+            let high = highest?.value(maximum.definition.key)
+        else { return nil }
+
+        let unit = minimum.definition.unit
+        return "\(unit.format(low, signed: false))–\(unit.format(high, signed: false))"
+    }
+
     fileprivate func band(of line: (definition: StatDefinition, value: Double)) -> String? {
         guard
             let low = lowest?.value(line.definition.key),
