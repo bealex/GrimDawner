@@ -261,7 +261,6 @@ private struct DollBox: View {
                         height: slot.frame.height - 2,
                         fallbackSymbol: slot.symbolName
                     )
-                    .itemQualityBadge(item.qualityMarkPath, size: slot.frame.width * 0.34)
                 } else {
                     GameIcon(
                         path: slot.silhouette,

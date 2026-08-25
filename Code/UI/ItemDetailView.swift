@@ -36,12 +36,14 @@ struct ItemDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 12) {
                 GameIcon(path: item.iconPath, size: 64, fallbackSymbol: "shippingbox")
-                    .itemQualityBadge(item.qualityMarkPath, size: 22)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.displayName)
-                        .font(.title3.bold())
-                        .foregroundStyle(item.rarity.color)
-                        .quickSearchText(search.emphasis(matching: item.displayName))
+                    HStack(spacing: 6) {
+                        ItemQualityMark(path: item.qualityMarkPath, size: 20)
+                        Text(item.displayName)
+                            .font(.title3.bold())
+                            .foregroundStyle(item.rarity.color)
+                            .quickSearchText(search.emphasis(matching: item.displayName))
+                    }
                     HStack(spacing: 8) {
                         Text(item.rarity.title)
                         if item.itemLevel > 0 { Text("Item Level \(item.itemLevel)") }
@@ -49,6 +51,14 @@ struct ItemDetailView: View {
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    // What the game says the item is, under what it is called.
+                    if !item.flavourText.isEmpty {
+                        Text(item.flavourText)
+                            .font(.callout.italic())
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 2)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -125,17 +135,15 @@ struct ItemDetailView: View {
                         if !part.stats.hasNothingToShow || part.grantedSkills.isEmpty {
                             StatBlockView(block: part.stats)
                         }
-                        grantedSkills(part.grantedSkills)
+                        // A skill is a block rather than another line, so it stands apart from the
+                        // component's own numbers.
+                        if !part.grantedSkills.isEmpty {
+                            grantedSkills(part.grantedSkills)
+                                .padding(.top, 6)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }
-
-            if !item.flavourText.isEmpty {
-                Text(item.flavourText)
-                    .font(.callout.italic())
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

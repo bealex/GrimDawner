@@ -243,8 +243,8 @@ private struct ItemRow: View {
         Button(action: select) {
             HStack(spacing: 10) {
                 GameIcon(path: item.iconPath, size: 28, fallbackSymbol: "shippingbox")
-                    .itemQualityBadge(item.qualityMarkPath, size: 12)
 
+                ItemQualityMark(path: item.qualityMarkPath, size: 13)
                 Text(item.name)
                     .foregroundStyle(item.quality.color)
                     .lineLimit(1)
