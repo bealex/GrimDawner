@@ -222,14 +222,58 @@ struct GrantedSkillView: View {
 
     @Environment(\.quickSearch)
     private var search
+    /// Nothing until it is clicked, and then whatever it was set to. A skill the character takes nothing
+    /// from opens closed, since it is there to be seen rather than read.
+    @State
+    private var isOpened: Bool?
+
+    /// Whether the skill belongs to the character at all. An ability the item confers is always theirs;
+    /// a class skill is theirs only where they took that mastery.
+    private var isAvailable: Bool {
+        guard wearer != nil else { return true }
+
+        return granted.kind == .granted || isOwn
+    }
+
+    /// A skill of a mastery the character never took opens closed: it is there to say what the item
+    /// carries, not to be read.
+    private var isExpanded: Bool { isOpened ?? isAvailable }
 
     /// A line about one of the character's own skills opens that skill's panel; anything else — a skill
     /// of another class, or an ability the item itself grants — has no panel to open.
     private var opensPanel: Bool { isOwn && granted.kind != .granted && reveal != nil }
 
+    /// A skill of a mastery is described on its own panel, and the sidebar links to it. Repeating the
+    /// description here says nothing the panel does not, so only an ability the item itself brings
+    /// into being explains itself.
+    private var description: String? {
+        guard granted.mastery == nil, let text = granted.skill?.description, !text.isEmpty else { return nil }
+
+        return text
+    }
+
+    /// Whether there is anything under the name worth opening for.
+    private var hasDetail: Bool {
+        condition != nil || description != nil || group.addedRanks > 0 || !group.enhancements.isEmpty
+            || (granted.kind == .granted && granted.skill != nil)
+    }
+
     /// The skill's name, with its own artwork and whose it is.
     private var header: some View {
         HStack(spacing: 6) {
+            if hasDetail {
+                Button(action: { isOpened = !isExpanded }) {
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 10)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .pointerStyle(.link)
+                .help(isExpanded ? "Hide what this does" : "Show what this does")
+            }
             if let icon = granted.skill?.iconPath, !icon.isEmpty {
                 GameIcon(path: icon, size: 20, fallbackSymbol: granted.symbolName)
             } else {
@@ -262,16 +306,26 @@ struct GrantedSkillView: View {
         }
     }
 
-    /// What has to happen for it to fire, and the rank the item runs it at.
+    /// What has to happen for it to fire, the rank the item runs it at, and — where the character takes
+    /// nothing from the line — why. A skill of a mastery they never took needs no explanation: the
+    /// mastery's name is already beside it.
     private var condition: String? {
         [
             granted.trigger,
-            granted.kind == .granted && granted.level > 1 ? "at level \(granted.level)" : nil,
-            group.isReachable ? nil : "nothing is spent on this skill",
+            granted.kind == .granted ? rank : nil,
+            isAvailable && !group.isReachable ? "no points spent on it" : nil,
         ]
         .compactMap { $0 }
         .joined(separator: " · ")
         .nilWhenEmpty
+    }
+
+    /// The rank the item runs a granted ability at, out of as many as the skill has.
+    private var rank: String? {
+        guard granted.level > 0 else { return nil }
+
+        let highest = granted.skill?.maxLevel ?? 0
+        return highest > 1 ? "rank \(granted.level) of \(highest)" : "rank \(granted.level)"
     }
 
     var body: some View {
@@ -291,41 +345,48 @@ struct GrantedSkillView: View {
                 header
             }
 
-            VStack(alignment: .leading, spacing: 4) {
-                if let condition {
-                    Text(condition)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                // What the skill does reads the same wherever it is described — under an item, under a
-                // component, under an augment.
-                if let description = granted.skill?.description, !description.isEmpty {
-                    Text(description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if group.addedRanks > 0 {
-                    StatRow(title: "ranks", value: "+\(group.addedRanks)", valueColor: Theme.valueColor(1))
-                }
-                ForEach(Array(group.enhancements.enumerated()), id: \.offset) { _, changes in
-                    SkillChangesView(changes: changes)
-                }
-                if let skill = granted.skill, granted.kind == .granted {
-                    ForEach(skill.parameters) { parameter in
-                        StatRow(title: parameter.name, value: parameter.value)
-                    }
-                    if !skill.stats.hasNothingToShow {
-                        StatBlockView(block: skill.stats)
-                    }
-                    SkillPetView(skill: skill)
-                }
+            if isExpanded {
+                detail
             }
-            .padding(.leading, 26)
         }
         .opacity(group.isReachable ? 1 : 0.4)
         .accessibilityElement(children: .combine)
+    }
+
+    /// What the skill does, under its name.
+    private var detail: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if let condition {
+                Text(condition)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            // What the skill does reads the same wherever it is described — under an item, under a
+            // component, under an augment.
+            if let description {
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if group.addedRanks > 0 {
+                StatRow(title: "ranks", value: "+\(group.addedRanks)", valueColor: Theme.valueColor(1))
+            }
+            ForEach(Array(group.enhancements.enumerated()), id: \.offset) { _, changes in
+                SkillChangesView(changes: changes)
+            }
+            if let skill = granted.skill, granted.kind == .granted {
+                ForEach(skill.parameters) { parameter in
+                    StatRow(title: parameter.name, value: parameter.value)
+                }
+                if !skill.stats.hasNothingToShow {
+                    StatBlockView(block: skill.stats)
+                }
+                SkillPetView(skill: skill)
+            }
+        }
+        .padding(.leading, 36)
     }
 }
 
