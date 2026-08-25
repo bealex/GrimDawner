@@ -67,9 +67,17 @@ public struct EncounterEngine {
     private static let path = "records/game/combatformulas.dbr"
 
     /// Reads one fight: the character swinging at the monster, and the monster swinging back.
-    public func encounter(of sheet: CharacterSheet, against monster: ResolvedMonster) -> Encounter {
+    ///
+    /// `skill` is what the character is swinging with. Given none, that is the weapon damage the sheet
+    /// carries — the floor every build stands on. Given a skill, it is that skill's own damage at the
+    /// rank the character has it, raised by the same bonuses the sheet raises everything by.
+    public func encounter(
+        of sheet: CharacterSheet,
+        against monster: ResolvedMonster,
+        using skill: ResolvedSkill? = nil
+    ) -> Encounter {
         let attacking = blow(
-            flat: sheet.flatDamage,
+            flat: skill.map { Self.damage(of: $0) } ?? sheet.flatDamage,
             modifiers: sheet.damageModifiers,
             offensive: sheet.offensiveAbility,
             against: monster.defensiveAbility,
@@ -173,6 +181,20 @@ public struct EncounterEngine {
         else { return damage }
 
         return value
+    }
+
+    /// What a skill throws before anything raises it: the flat damage its own record carries at the
+    /// rank the character has it. What a skill takes from the weapon it is swung with is not modelled,
+    /// so a weapon-damage skill reads low here.
+    public static func damage(of skill: ResolvedSkill) -> [DamageType: Double] {
+        var damage = [DamageType: Double]()
+        for type in DamageType.allCases {
+            let low = skill.stats.value(type.minimumKey)
+            let high = skill.stats.value(type.maximumKey)
+            let average = high > low ? (low + high) / 2 : low
+            if average > 0 { damage[type] = average }
+        }
+        return damage
     }
 
     /// What a monster swings for, read off its own record's damage stats.

@@ -41,7 +41,7 @@ struct MonsterStatsWindow: View {
                 DetailPlaceholder(title: "No monster selected", hint: "Pick one in the Monsters tab and it opens here.")
             }
         }
-        .frame(minWidth: 640, minHeight: 420)
+        .frame(minWidth: 940, minHeight: 480)
         .environment(\.textures, model.textures)
         .environment(\.damageIcons, model.damageIcons)
         .environment(
@@ -81,16 +81,24 @@ struct MonsterStatsWindow: View {
 
     private func header(_ monster: ResolvedMonster) -> some View {
         HStack(alignment: .center, spacing: 14) {
+            // The name gives way first: it is the one thing here that can be read from the title bar,
+            // and a fixed width on any of the three would let them run into one another.
             VStack(alignment: .leading, spacing: 1) {
                 Text(monster.title)
                     .font(.headline)
                     .foregroundStyle(monster.rank.color)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                 Text(subtitle(monster))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .truncationMode(.tail)
             }
+            .frame(minWidth: 60, alignment: .leading)
+            .layoutPriority(0)
+
+            Spacer(minLength: 12)
 
             Picker("Showing", selection: $tab) {
                 ForEach(Tab.allCases) { tab in
@@ -99,9 +107,10 @@ struct MonsterStatsWindow: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 320)
+            .fixedSize()
+            .layoutPriority(1)
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 12)
 
             MonsterLevelField(
                 range: monster.levelRange,
@@ -112,6 +121,8 @@ struct MonsterStatsWindow: View {
                     model.selectMonster(path: monster.path, level: model.monsterLevel, difficulty: $0)
                 }
             )
+            .fixedSize()
+            .layoutPriority(1)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

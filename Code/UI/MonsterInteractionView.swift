@@ -6,16 +6,39 @@ import SwiftUI
 /// The two of them fighting: what the character does to this monster, and what it does back.
 ///
 /// Every figure is the game's own arithmetic out of `records/game/combatformulas.dbr`, read at the
-/// monster's own level and difficulty — change either and everything here moves. What it does not model
-/// is a particular skill: this is the character's weapon damage against this monster's defences, which
-/// is the floor every build stands on.
+/// monster's own level and difficulty — change either and everything here moves. It opens on the
+/// character's weapon damage, which is the floor every build stands on, and any of its attacks can be
+/// read in its place.
 struct MonsterInteractionView: View {
     let monster: ResolvedMonster
     let character: ResolvedCharacter
     let database: GameDatabase
 
+    /// What the character is swinging with. Nothing is the weapon itself, which is what a build stands
+    /// on before any skill is pressed.
+    @State
+    private var skillPath: String?
+
+    private var chosen: ResolvedSkill? {
+        guard let skillPath else { return nil }
+
+        return attacks.first { $0.recordPath == skillPath }
+    }
+
+    /// The attacks worth comparing: the character's own skills and whatever its gear grants, minus the
+    /// ones that throw no damage of their own. A skill that only buffs has nothing to land.
+    private var attacks: [ResolvedSkill] {
+        var seen = Set<String>()
+        return
+            (character.masteries.flatMap(\.skills).filter { $0.baseLevel > 0 }
+            + character.itemGrantedSkills)
+            .filter { seen.insert($0.recordPath.lowercased()).inserted }
+            .filter { !EncounterEngine.damage(of: $0).isEmpty }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
     private var encounter: Encounter {
-        EncounterEngine(database: database).encounter(of: character.sheet, against: monster)
+        EncounterEngine(database: database).encounter(of: character.sheet, against: monster, using: chosen)
     }
 
     private var reductions: [TargetDebuffs.Reduction] { TargetDebuffs.of(character) }
@@ -31,11 +54,47 @@ struct MonsterInteractionView: View {
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
 
-            blowCard(title: "What you land on it", subtitle: "per swing", blow: fight.attacking, rate: fight.attackRate)
-            blowCard(title: "What it lands on you", subtitle: "per swing", blow: fight.defending, rate: nil)
+            weaponPicker
+
+            // Side by side: the whole point is which of the two numbers is bigger.
+            HStack(alignment: .top, spacing: 14) {
+                blowCard(
+                    title: "What you land on it",
+                    subtitle: "per swing",
+                    blow: fight.attacking,
+                    rate: fight.attackRate
+                )
+                blowCard(title: "What it lands on you", subtitle: "per swing", blow: fight.defending, rate: nil)
+            }
             debuffCard
         }
         .padding(16)
+    }
+
+    /// What the character is swinging with.
+    private var weaponPicker: some View {
+        HStack(spacing: 8) {
+            Picker("Attacking with", selection: $skillPath) {
+                Text("Weapon attack").tag(String?.none)
+                if !attacks.isEmpty {
+                    Divider()
+                    ForEach(attacks) { skill in
+                        Text(skill.name).tag(String?.some(skill.recordPath))
+                    }
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: 300)
+            .help("Which of the character's attacks to read against this monster")
+
+            if chosen != nil {
+                Text("what a skill takes from the weapon it is swung with is not modelled")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+        }
     }
 
     /// One side's blow: how often it lands, what it throws, and what the other side stops.

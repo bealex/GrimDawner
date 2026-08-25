@@ -54,13 +54,27 @@ struct ItemDetailWindow: View {
             Divider()
             ScrollView {
                 switch tab {
-                    case .info: ItemDetailView(item: item, showsRolls: false).padding(16)
+                    case .info:
+                        ItemDetailView(item: item, showsRolls: false, showsHeader: false).padding(16)
                     case .loot: ItemLootView(item: item, model: model)
                     case .affixes: ItemAffixesView(item: item, model: model)
                 }
             }
+            // A different item is a different reading of everything, pickers and toggles included.
+            .id(item.recordPath)
         }
         .navigationTitle(item.displayName)
+    }
+
+    /// What the panel used to repeat under the name: the rarity and the two levels.
+    private func levels(_ item: ResolvedItem) -> String {
+        [
+            item.rarity.title,
+            item.itemLevel > 0 ? "Item Level \(item.itemLevel)" : nil,
+            item.levelRequirement > 0 ? "Requires Level \(item.levelRequirement)" : nil,
+        ]
+        .compactMap { $0 }
+        .joined(separator: " · ")
     }
 
     private func header(_ item: ResolvedItem) -> some View {
@@ -73,9 +87,10 @@ struct ItemDetailWindow: View {
                         .font(.headline)
                         .foregroundStyle(item.rarity.color)
                 }
-                Text(item.rarity.title)
+                Text(levels(item))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer(minLength: 12)

@@ -124,6 +124,10 @@ public struct ResolvedItem: Identifiable, Sendable {
             .joined(separator: " ")
     }
 
+    /// The item's own record. `baseName` beside it is the name the game prints, which is a different
+    /// thing entirely: one is `records/items/…/b304e_necklace.dbr`, the other is "Ixall's Blaze".
+    public var recordPath: String { raw.baseName }
+
     public var grantedSkills: [GrantedSkill] { parts.flatMap(\.grantedSkills) }
 
     public var isEmpty: Bool { raw.isEmpty }

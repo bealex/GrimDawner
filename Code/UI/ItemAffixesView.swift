@@ -23,7 +23,7 @@ struct ItemAffixesView: View {
     private var rolled: ResolvedItem? {
         guard prefix != nil || suffix != nil else { return nil }
 
-        return model.item(at: item.baseName, prefix: prefix, suffix: suffix)
+        return model.item(at: item.recordPath, prefix: prefix, suffix: suffix)
     }
 
     var body: some View {
@@ -55,11 +55,11 @@ struct ItemAffixesView: View {
             }
         }
         .padding(16)
-        .task(id: item.baseName) {
+        .task(id: item.recordPath) {
             prefix = nil
             suffix = nil
             pool = nil
-            pool = await model.affixPool(forItemAt: item.baseName)
+            pool = await model.affixPool(forItemAt: item.recordPath)
         }
     }
 

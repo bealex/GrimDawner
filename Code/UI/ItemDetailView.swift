@@ -14,6 +14,8 @@ struct ItemDetailView: View {
     let item: ResolvedItem
     /// The directory lists items no character owns, so there is no roll to show — only the band.
     var showsRolls = true
+    /// False where something else already names the item — a window whose own title bar does.
+    var showsHeader = true
     /// The character wearing this, as far as its skill lines need. Absent in the directory, where
     /// there is no character for a skill to belong to or a point to have been spent on.
     var wearer: SkillContext?
@@ -34,35 +36,37 @@ struct ItemDetailView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                GameIcon(path: item.iconPath, size: 64, fallbackSymbol: "shippingbox")
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        ItemQualityMark(path: item.qualityMarkPath, size: 20)
-                        Text(item.displayName)
-                            .font(.title3.bold())
-                            .foregroundStyle(item.rarity.color)
-                            .quickSearchText(search.emphasis(matching: item.displayName))
+            if showsHeader {
+                HStack(alignment: .top, spacing: 12) {
+                    GameIcon(path: item.iconPath, size: 64, fallbackSymbol: "shippingbox")
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            ItemQualityMark(path: item.qualityMarkPath, size: 20)
+                            Text(item.displayName)
+                                .font(.title3.bold())
+                                .foregroundStyle(item.rarity.color)
+                                .quickSearchText(search.emphasis(matching: item.displayName))
+                        }
+                        HStack(spacing: 8) {
+                            Text(item.rarity.title)
+                            if item.itemLevel > 0 { Text("Item Level \(item.itemLevel)") }
+                            if item.levelRequirement > 0 { Text("Requires Level \(item.levelRequirement)") }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        // What the game says the item is, under what it is called.
+                        if !item.flavourText.isEmpty {
+                            Text(item.flavourText)
+                                .font(.callout.italic())
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.top, 2)
+                        }
                     }
-                    HStack(spacing: 8) {
-                        Text(item.rarity.title)
-                        if item.itemLevel > 0 { Text("Item Level \(item.itemLevel)") }
-                        if item.levelRequirement > 0 { Text("Requires Level \(item.levelRequirement)") }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    // What the game says the item is, under what it is called.
-                    if !item.flavourText.isEmpty {
-                        Text(item.flavourText)
-                            .font(.callout.italic())
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(.top, 2)
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
             }
-            .accessibilityElement(children: .combine)
 
             if !item.requirements.isEmpty {
                 SectionCard(title: "Requirements") {
