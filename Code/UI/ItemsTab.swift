@@ -66,6 +66,11 @@ struct ItemsTab: View {
                 )
             }
         }
+        // A slot the newly chosen kinds no longer offer has no control left to clear it with, and
+        // would go on narrowing the list out of sight.
+        .onChange(of: filter.kinds) { _, _ in
+            filter.appliesTo.formIntersection(availableSlots)
+        }
         // A list narrowed to matches shows the first of them rather than an empty sidebar.
         .onChange(of: rows.first?.item.path, initial: true) { _, first in
             guard selectedPath == nil, search.isActive || filter.isActive, let first else { return }
@@ -143,6 +148,7 @@ struct ItemsTab: View {
                     filter: $filter,
                     rarities: availableRarities,
                     kinds: availableKinds,
+                    slots: availableSlots,
                     highestLevel: highestLevel
                 )
             }
@@ -165,6 +171,16 @@ struct ItemsTab: View {
 
     private var availableKinds: [String] {
         Set(items.map { $0.item.kind }).sorted()
+    }
+
+    /// What the chosen kinds can be applied to: a component fits weapons and armour, an augment
+    /// jewellery and medals. Nothing until a kind that is applied to something is picked, which is
+    /// what keeps the control to components and augments.
+    private var availableSlots: [String] {
+        guard !filter.kinds.isEmpty else { return [] }
+
+        return Set(items.lazy.filter { filter.kinds.contains($0.item.kind) }.flatMap { $0.item.appliesTo })
+            .sorted()
     }
 
     /// The deepest level any item asks for, which is as far as the level control needs to run.
@@ -354,14 +370,19 @@ struct DirectoryFilter: Equatable {
     /// Empty means every rarity, which is how both menus read when nothing is ticked.
     var rarities: Set<ItemRarity> = []
     var kinds: Set<String> = []
+    /// Which equipment a component or an augment has to fit, which only those kinds can be narrowed by.
+    var appliesTo: Set<String> = []
 
-    var isActive: Bool { minimumLevel > 0 || !rarities.isEmpty || !kinds.isEmpty }
+    var isActive: Bool {
+        minimumLevel > 0 || !rarities.isEmpty || !kinds.isEmpty || !appliesTo.isEmpty
+    }
 
     func admits(_ item: CataloguedItem) -> Bool {
         guard item.levelRequirement >= minimumLevel else { return false }
         guard rarities.isEmpty || rarities.contains(item.quality) else { return false }
+        guard kinds.isEmpty || kinds.contains(item.kind) else { return false }
 
-        return kinds.isEmpty || kinds.contains(item.kind)
+        return appliesTo.isEmpty || !appliesTo.isDisjoint(with: item.appliesTo)
     }
 }
 
@@ -371,6 +392,9 @@ private struct DirectoryFilterBar: View {
     var filter: DirectoryFilter
     let rarities: [ItemRarity]
     let kinds: [String]
+    /// What the chosen kinds fit into; empty for anything but components and augments, and the menu
+    /// is then not there to be used.
+    let slots: [String]
     let highestLevel: Int
 
     var body: some View {
@@ -383,7 +407,7 @@ private struct DirectoryFilterBar: View {
                 clear: { filter.rarities.removeAll() }
             ) {
                 ForEach(rarities, id: \.self) { rarity in
-                    Toggle(rarity.title, isOn: binding(for: rarity))
+                    Toggle(Self.title(of: rarity), isOn: binding(for: rarity))
                 }
             }
 
@@ -393,7 +417,19 @@ private struct DirectoryFilterBar: View {
                 clear: { filter.kinds.removeAll() }
             ) {
                 ForEach(kinds, id: \.self) { kind in
-                    Toggle(kind, isOn: binding(for: kind))
+                    Toggle(kind, isOn: binding(for: kind, in: \.kinds))
+                }
+            }
+
+            if !slots.isEmpty {
+                menu(
+                    title: label("Applies to", chosen: filter.appliesTo.count),
+                    systemImage: "puzzlepiece",
+                    clear: { filter.appliesTo.removeAll() }
+                ) {
+                    ForEach(slots, id: \.self) { slot in
+                        Toggle(slot, isOn: binding(for: slot, in: \.appliesTo))
+                    }
                 }
             }
 
@@ -449,6 +485,13 @@ private struct DirectoryFilterBar: View {
         .fixedSize()
     }
 
+    /// What the directory calls a rarity. Rare reads as "Monster Infrequent" here: a base record is
+    /// rare only by being one, where a character's own item can also reach rare by rolling two rare
+    /// affixes.
+    private static func title(of rarity: ItemRarity) -> String {
+        rarity == .rare ? "Monster Infrequent" : rarity.title
+    }
+
     private func label(_ name: String, chosen: Int) -> String {
         chosen == 0 ? name : "\(name) (\(chosen))"
     }
@@ -466,14 +509,16 @@ private struct DirectoryFilterBar: View {
         )
     }
 
-    private func binding(for kind: String) -> Binding<Bool> {
+    private func binding(for value: String, in chosen: WritableKeyPath<DirectoryFilter, Set<String>>)
+        -> Binding<Bool>
+    {
         Binding(
-            get: { filter.kinds.contains(kind) },
+            get: { filter[keyPath: chosen].contains(value) },
             set: { isOn in
                 if isOn {
-                    filter.kinds.insert(kind)
+                    filter[keyPath: chosen].insert(value)
                 } else {
-                    filter.kinds.remove(kind)
+                    filter[keyPath: chosen].remove(value)
                 }
             }
         )

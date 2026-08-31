@@ -29,6 +29,9 @@ public struct CataloguedItem: Codable, Identifiable, Sendable {
     /// The ashes' own artwork, carried here so a row can mark an upgradeable item without a database
     /// lookup of its own. Repeated on the hundred-odd items a blueprint covers.
     public var upgradeIconPath = ""
+    /// The kinds of equipment this can be put into, named as `kind` names them — "Sword",
+    /// "Head", "Amulet". Components and augments only; everything else is applied to nothing.
+    public var appliesTo = [String]()
 
     /// The three crafting classes the game names differently from their record class.
     public static let craftingKinds = [
@@ -39,10 +42,19 @@ public struct CataloguedItem: Codable, Identifiable, Sendable {
 
     public var quality: ItemRarity { ItemRarity(rawValue: rarity) ?? .common }
 
+    /// A monster infrequent: a piece of gear whose own record is classified rare, which is what the
+    /// game's green badge marks. Every rare record in the directory is one — an item only reaches rare
+    /// any other way by rolling two rare affixes, and a base record carries no affixes.
+    public var isMonsterInfrequent: Bool {
+        quality == .rare && ItemQualityMark.isGear(recordClass: recordClass)
+    }
+
     /// What kind of thing it is, from the tail of its class: `ArmorJewelry_Amulet` reads as "Amulet",
     /// `WeaponMelee_Axe2h` as "Axe (2-handed)".
-    public var kind: String {
-        if let kind = Self.craftingKinds[recordClass] { return kind }
+    public var kind: String { Self.kind(ofClass: recordClass) }
+
+    public static func kind(ofClass recordClass: String) -> String {
+        if let kind = craftingKinds[recordClass] { return kind }
 
         let tail = recordClass.split(separator: "_").last.map(String.init) ?? recordClass
         var words = ""
@@ -107,7 +119,7 @@ public struct DirectoryEntry: Identifiable, Sendable {
 /// Every named item in the game, listed once per installed version and kept on disk.
 public struct ItemCatalogue: Codable, Sendable {
     /// Bumped whenever an entry means something different, so an older listing on disk is discarded.
-    public static let version = 8
+    public static let version = 9
 
     /// The database this was built from; a patched game produces a different one and is listed again.
     public let fingerprint: String
@@ -165,7 +177,8 @@ public struct ItemCatalogue: Codable, Sendable {
                 itemLevel: record.integer("itemLevel"),
                 levelRequirement: record.integer("levelRequirement"),
                 stats: Self.statTitles(of: record),
-                soldBy: record.text("factionSource")
+                soldBy: record.text("factionSource"),
+                appliesTo: Self.slotFlags(of: record)
             ))
         }
 
@@ -186,6 +199,13 @@ public struct ItemCatalogue: Codable, Sendable {
             items[index].awakenedPath = awakened
             items[index].awakenedName = names[awakened.lowercased()] ?? ""
             items[index].upgradeIconPath = ashesIcon
+        }
+
+        // A slot flag is the tail of the class the equipment it fits is written as — `sword2h` for
+        // `WeaponMelee_Sword2h` — so the equipment itself says what each flag means.
+        let slots = Self.slotKinds(of: items)
+        for index in items.indices where !items[index].appliesTo.isEmpty {
+            items[index].appliesTo = items[index].appliesTo.compactMap { slots[$0] }.sorted()
         }
 
         // The same weapon is written once per enemy that carries it — three Pine Staffs at level 1,
@@ -272,6 +292,29 @@ public struct ItemCatalogue: Codable, Sendable {
             levelRequirement: record.integer("levelRequirement"),
             stats: Self.statTitles(of: record)
         )
+    }
+
+    /// What each slot flag names, by the kind the directory lists that equipment under.
+    private static func slotKinds(of items: [CataloguedItem]) -> [String: String] {
+        var kinds = [String: String]()
+        for item in items where CataloguedItem.craftingKinds[item.recordClass] == nil {
+            guard let tail = item.recordClass.split(separator: "_").last else { continue }
+
+            kinds[tail.lowercased()] = item.kind
+        }
+        return kinds
+    }
+
+    /// The slots a component or an augment fits, as its own record names them: a flag per slot,
+    /// switched on. Left raw here, since the classes they name are only all known once the sweep ends.
+    private static func slotFlags(of record: ArzRecord) -> [String] {
+        guard CataloguedItem.craftingKinds[record.recordClass] != nil else { return [] }
+
+        return record.fields.compactMap { key, value in
+            guard case let .flag(values) = value, values.first == true else { return nil }
+
+            return key
+        }
     }
 
     /// The names of the stats a record actually carries; a field left at zero grants nothing.
