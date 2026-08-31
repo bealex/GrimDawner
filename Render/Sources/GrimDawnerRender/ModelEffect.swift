@@ -13,6 +13,10 @@ import GrimDawnerMesh
 /// spawns it — enough to tell one cast from another.
 public struct ModelEffect: Sendable, Identifiable {
     public var id: String { "\(recordPath)|\(attachment)|\(frame ?? -1)" }
+
+    /// True where there is something to draw at all. A record the app can read neither the particles
+    /// nor the model of is still listed, since knowing the game calls for it is worth something.
+    public var isDrawable: Bool { image != nil || model != nil }
     public let name: String
     /// The frame of the animation it starts on, or nothing for one that simply holds — the aura a
     /// passive carries, or a skill's own effect shown on its own.
@@ -21,7 +25,17 @@ public struct ModelEffect: Sendable, Identifiable {
     /// game centres on the creature.
     public let attachment: String
     public let recordPath: String
+    /// The picture its particles are drawn with, for the effects that are particles.
     public let image: CGImage?
+    /// The model it is, for the effects that are one rather than a picture — the chunks a stomp throws
+    /// up, the wall a shield puts down. Loaded here the way the picture is, since the scene draws what
+    /// it is handed rather than reading the game itself.
+    public var model: DrawnModel?
+    /// What the record multiplies its model by. One where the record says nothing.
+    public var scale: Float = 1
+    /// The model's own animation, which is what spreads it: a stomp's chunks are one rigged mesh whose
+    /// spikes are driven apart by this, so without it every chunk sits on top of the others.
+    public var motion: AnmFile?
     /// How far the effect reaches, in the model's own units, where the skill that throws it says so.
     /// Nothing for one nothing sizes — an animation's own puff, or an aura a passive simply carries.
     public let radius: Float?
@@ -61,25 +75,30 @@ public extension ModelRenderer {
         -> [ModelEffect] {
         let thrown = skill.flatMap { database?.record($0) }.map(SkillReach.init)
 
-        return animation.events.compactMap { event in
+        var seen = Set<String>()
+        return animation.events.compactMap { event -> ModelEffect? in
             guard event.kind == .entity else { return nil }
 
             let path = event.name.replacingOccurrences(of: "\\", with: "/").lowercased()
-            let particles = database?.record(path)?.text("effectFile") ?? ""
             // A wave belongs to the point the game hangs it out in front on; the flash in the hand that
             // threw it is a flash in a hand, and sizing that to the sweep fills the frame with it.
             let reach = thrown.flatMap {
                 !$0.isWave || event.attachment.lowercased().contains("forward") ? $0 : nil
             }
 
-            return ModelEffect(
-                name: Self.readableName(of: path),
+            // An animation often calls for the same effect twice on the same frame and point — the game
+            // spreads the copies around the impact, and drawn on top of one another they are one effect
+            // at twice the brightness.
+            guard seen.insert("\(path)|\(event.attachment)|\(event.frame)").inserted else { return nil }
+
+            return drawn(
+                at: path,
+                named: Self.readableName(of: path),
                 frame: event.frame,
                 attachment: event.attachment,
-                recordPath: path,
-                image: particles.isEmpty ? nil : image(ofParticles: particles),
                 radius: reach?.radius,
-                isWave: reach?.isWave ?? false
+                isWave: reach?.isWave ?? false,
+                in: database
             )
         }
     }
@@ -123,23 +142,23 @@ public extension ModelRenderer {
     ) -> [ModelEffect] {
         guard depth < 4, !path.isEmpty, let record = database.record(path.lowercased()) else { return [] }
 
-        let particles = record.text("effectFile")
-        if !particles.isEmpty {
+        if !record.text("effectFile").isEmpty || !record.text("meshName").isEmpty {
             return [
-                ModelEffect(
-                    name: Self.readableName(of: path),
+                drawn(
+                    at: path.lowercased(),
+                    named: Self.readableName(of: path),
                     frame: nil,
                     attachment: attachment.isEmpty ? Self.bone(named: record) : attachment,
-                    recordPath: path.lowercased(),
-                    image: image(ofParticles: particles),
                     radius: reach.radius,
-                    isWave: reach.isWave
+                    isWave: reach.isWave,
+                    in: database
                 ),
-            ]
+            ].compactMap { $0 }
         }
 
         // A pack names its effects, and — when it hangs them off the creature — where each one goes.
-        let names = record["particleEffectNames"]?.texts ?? []
+        // The models it throws are named apart from the particles, and are effects just the same.
+        let names = (record["particleEffectNames"]?.texts ?? []) + (record["meshEffectNames"]?.texts ?? [])
         let points = record["particleEffectAttachPoints"]?.texts ?? []
         return names.enumerated().flatMap { index, name in
             effects(
@@ -150,6 +169,41 @@ public extension ModelRenderer {
                 depth: depth + 1
             )
         }
+    }
+
+    /// One effect record read as something to draw: the picture its particles use, or the model it is.
+    ///
+    /// `EffectEntity` names a particle system in `effectFile`; `FxMesh` names a model in `meshName`,
+    /// with the `scale` to draw it at. A record naming neither is still returned, so what the game calls
+    /// for is listed even where nothing can be drawn for it.
+    private func drawn(
+        at path: String,
+        named name: String,
+        frame: Int?,
+        attachment: String,
+        radius: Float?,
+        isWave: Bool,
+        in database: GameDatabase?
+    ) -> ModelEffect? {
+        let record = database?.record(path)
+        var effect = ModelEffect(
+            name: name,
+            frame: frame,
+            attachment: attachment,
+            recordPath: path,
+            image: (record?.text("effectFile")).flatMap { $0.isEmpty ? nil : image(ofParticles: $0) },
+            radius: radius,
+            isWave: isWave
+        )
+
+        if case let mesh = record?.text("meshName") ?? "", !mesh.isEmpty, let loaded = try? self.mesh(at: mesh) {
+            effect.model = DrawnModel(mesh: loaded, textures: skins(for: loaded, at: mesh, preferring: nil))
+            // A record that states no scale draws its model as it was built.
+            let stated = Float(record?.number("scale") ?? 0)
+            effect.scale = stated > 0 ? stated : 1
+            effect.motion = (record?.text("animationName")).flatMap { $0.isEmpty ? nil : try? animation(at: $0) }
+        }
+        return effect
     }
 
     /// The texture a particle system draws with. A `.pfx` is binary, and the paths in it are written as

@@ -44,7 +44,11 @@ public struct SceneConfiguration: Sendable {
 
 /// A model ready to be drawn: what it is made of, what it is painted with, and — for a weapon — the hand
 /// it is held in rather than a place of its own.
-public struct DrawnModel {
+/// A model ready to draw: the mesh, and one skin per material it names.
+///
+/// Unchecked because a `CGImage` is not `Sendable` on paper; the pictures here are decoded once and
+/// never written to again.
+public struct DrawnModel: @unchecked Sendable {
     public let mesh: MshFile
     /// One skin per material the model names.
     public let textures: [CGImage?]
@@ -140,7 +144,7 @@ public struct ModelScene {
         if !effects.isEmpty {
             let attachments = drawn.flatMap { $0.mesh.attachments }
             for effect in effects {
-                guard let image = effect.image else { continue }
+                guard effect.isDrawable else { continue }
 
                 let placed = place(effect, among: attachments, of: skeleton)
                 let reach = self.reach(of: effect, on: drawn)
@@ -159,15 +163,15 @@ public struct ModelScene {
                         simd_max(aimed?.maximum ?? centre, centre + reach)
                     )
                 }
-                let node = spark(
-                    image,
-                    at: at,
-                    of: effect,
-                    in: animation,
-                    reach: reach,
-                    frame: frame,
-                    speed: speed
-                )
+                let node =
+                    effect.model.map {
+                        thrown($0, of: effect, at: at, frame: frame, speed: speed)
+                    }
+                    ?? effect.image.map {
+                        spark($0, at: at, of: effect, in: animation, reach: reach, frame: frame, speed: speed)
+                    }
+                guard let node else { continue }
+
                 (placed?.parent ?? scene.rootNode).addChildNode(node)
             }
         }
@@ -260,14 +264,28 @@ public struct ModelScene {
     ///
     /// The skill that throws it says so, and a model is in the same units — a creature stands a couple
     /// of them tall and a nova reaches seven — so one cast reads as bigger than another because it is.
-    /// Nothing states the reach of an aura or of what an animation puffs out, so those are measured
-    /// against the creature: the whole of it for something centred on it, a limb's worth for something
-    /// hung off a limb.
+    /// Nothing in the records states the reach of an aura or of what an animation puffs out — the
+    /// particle system holds that, and it is a binary format this does not read — so those are measured
+    /// against the creature instead: the whole of it for one centred on it, a limb's worth for one hung
+    /// off a limb.
     private func reach(of effect: ModelEffect, on models: [DrawnModel]) -> Float {
         if let radius = effect.radius { return max(radius, 0.05) }
 
         let span = span(of: models)
-        return (effect.attachment.isEmpty ? span : span / 3) / 2
+        return (Self.isCentred(effect.attachment) ? span : span / 3) / 2
+    }
+
+    /// Whether an attachment means the creature itself rather than a point on it.
+    ///
+    /// The game's own vocabulary, counted across `records/fx`: `FXCentered` on 376 records and
+    /// `FXUnParentedCenter` on 221 wrap the whole creature, where `HeadFXUP`, `R Hand` and the rest name
+    /// a place to hang something off. Reading a centred one as a point is what made an aura a puff on
+    /// the chest.
+    private static func isCentred(_ attachment: String) -> Bool {
+        guard !attachment.isEmpty else { return true }
+
+        let name = attachment.lowercased()
+        return name.contains("center") || name.contains("aura")
     }
 
     /// How big the models are, which is what an effect the game does not size is sized against.
@@ -337,6 +355,45 @@ public struct ModelScene {
         return node
     }
 
+    /// A model an effect throws — the chunks a stomp breaks the ground into — placed where the game
+    /// hangs it and drawn at the size its record states.
+    ///
+    /// It is a model like the creature's own rather than a picture, so it is built the same way and
+    /// simply put where the effect points. Its own animation is not played: an `FxMesh` names one, and
+    /// what that does to the model is its own business rather than the creature's.
+    private func thrown(
+        _ model: DrawnModel,
+        of effect: ModelEffect,
+        at transform: simd_float4x4,
+        frame: Int?,
+        speed: Double
+    ) -> SCNNode {
+        let node = SCNNode()
+        // A rig of its own: the effect's animation drives its own bones, not the creature's.
+        let skeleton = ModelSkeleton(meshes: [ model.mesh ]).nonEmpty
+        if let skeleton { node.addChildNode(skeleton.root) }
+
+        for part in nodes(for: model.mesh, textures: model.textures, skeleton: skeleton) {
+            node.addChildNode(part)
+            part.skinner?.skeleton = skeleton?.root
+        }
+
+        if let skeleton, let motion = effect.motion {
+            if let frame {
+                // The creature's animation is held on one frame, so the effect is held as far into its
+                // own as it had got by then — it starts on the frame that spawned it, not on frame nought.
+                skeleton.pose(motion, at: max(0, frame - (effect.frame ?? 0)))
+            } else {
+                skeleton.pose(motion, at: 0)
+                skeleton.play(motion, speed: speed)
+            }
+        }
+
+        node.simdTransform = transform
+        node.simdScale = SIMD3(repeating: effect.scale)
+        return node
+    }
+
     /// One picture of an effect, facing the camera and lit rather than lying flat. A still has only the
     /// one picture to say how far the effect goes with, so it is drawn across the whole of it.
     private func sprite(_ image: CGImage, reach: Float) -> SCNPlane {
@@ -363,10 +420,12 @@ public struct ModelScene {
         let spark = reach * 0.5
         system.particleSize = CGFloat(spark)
         system.particleSizeVariation = CGFloat(spark * 0.35)
-        // A wider drift needs more of them to read as one cloud rather than as a scattering.
-        system.birthRate = CGFloat(14 + 10 * min(reach, 8))
-        system.particleLifeSpan = 1.1
-        system.particleLifeSpanVariation = 0.4
+        // A wider drift needs more of them to read as one cloud rather than as a scattering — but only
+        // just. These are drawn additively over one another, so a rate that reads as lively on one
+        // effect blows out to a white smear once a cast throws six at once.
+        system.birthRate = CGFloat(6 + 4 * min(reach, 8))
+        system.particleLifeSpan = 0.9
+        system.particleLifeSpanVariation = 0.35
         system.emitterShape = SCNSphere(radius: CGFloat(reach * 0.6))
         system.birthLocation = .volume
         system.emittingDirection = SCNVector3(0, 1, 0)
@@ -383,7 +442,7 @@ public struct ModelScene {
         system.loops = true
         // Fades in as it is born and out as it dies, so nothing pops.
         let fading = CAKeyframeAnimation(keyPath: "opacity")
-        fading.values = [ 0, 1, 0.9, 0 ]
+        fading.values = [ 0, 0.55, 0.45, 0 ]
         fading.keyTimes = [ 0, 0.15, 0.6, 1 ]
         fading.duration = 1
         let controller = SCNParticlePropertyController(animation: fading)

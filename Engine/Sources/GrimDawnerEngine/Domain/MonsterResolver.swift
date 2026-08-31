@@ -380,7 +380,7 @@ public struct MonsterResolver {
             delay: record.number("specialAttackDelay"),
             cooldown: record.number("specialAttackTimeout")
         )
-        for index in 2 ... 5 {
+        for index in 2 ... 7 {
             add(
                 record.text("specialAttack\(index)SkillName"),
                 role: .special,
@@ -391,6 +391,11 @@ public struct MonsterResolver {
         }
         add(record.text("dyingSkillName"), role: .onDeath)
 
+        // The slots the controller fires from rather than the attack rotation: the shield a caster
+        // throws up, the buff it puts on its friends, the heal, the one it opens with. Each is a skill
+        // like any other and shows what it shows, so leaving them out hid a creature's own aura.
+        for key in Self.firedSkillKeys { add(record.text(key), role: .special) }
+
         // Whatever is left in the skill list is either a passive adjuster or a skill the controller
         // fires on its own; the record's class is what says which.
         for path in levels.keys.sorted() {
@@ -400,6 +405,14 @@ public struct MonsterResolver {
         }
         return abilities
     }
+
+    /// The rest of the slots a monster record names a skill in, beyond its attacks and its skill list.
+    /// Taken from what the records actually use rather than from the template, so nothing is listed
+    /// that no creature has.
+    private static let firedSkillKeys = [
+        "initialSkillName", "buffSelfSkillName", "buffSelf2SkillName", "buffOtherSkillName",
+        "healSkillName", "chainInitialSkill", "chainNextSkill", "nightBuffSkill", "berserkSkillName",
+    ]
 
     /// Where a skill belongs on the sheet. The record's own slot says what the monster uses it for, but
     /// its class overrules that slot for the two the slot gets wrong: a skill that only fires as the

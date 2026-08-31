@@ -137,6 +137,13 @@ public struct AnmFile: Sendable {
     ///
     ///     CallbackPoint { name = "RightHandHit" frame = 11 }
     ///     CreateEntity  { frame = 1 entity = "records/fx/…_FX01.dbr" attach = "Target" }
+    ///     RemoveEntity  { frame = 1 entity = "records/fx/…_FX01.dbr" }
+    ///
+    /// **The block's own word is what says which it is.** A `RemoveEntity` names an entity exactly as a
+    /// `CreateEntity` does, and taking the name alone as a spawn puts the thing on the model at the very
+    /// moment the game takes it off: the yeti animations remove a boulder they were carrying on frame 1
+    /// of every walk and idle, which drew as an ice block in its hand while it stood still. Of the events
+    /// the monsters' animations hold, 1,014 create and 46 remove.
     private static func events(in text: String) -> [Event] {
         text.components(separatedBy: "}").compactMap { block in
             let frame = block.range(of: "frame = ")
@@ -145,7 +152,10 @@ public struct AnmFile: Sendable {
             if let name = block.firstMatch(between: "name = \"", and: "\"") {
                 return Event(kind: .callback, name: name, frame: frame, attachment: "")
             }
-            guard let entity = block.firstMatch(between: "entity = \"", and: "\"") else { return nil }
+            guard
+                block.contains("CreateEntity"),
+                let entity = block.firstMatch(between: "entity = \"", and: "\"")
+            else { return nil }
 
             return Event(
                 kind: .entity,
