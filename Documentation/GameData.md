@@ -106,6 +106,13 @@ suffixes and ascendant affixes have **no artwork in the game either** — they a
 `augmentMasteryLevel1..4`, and `augmentAllLevel`. A granted ability is `itemSkillName`, whose rank is
 `itemSkillLevel` or the formula in `itemSkillLevelEq` (evaluate with `Equation`).
 
+**What a component or augment fits is a flag per slot** — `sword`, `axe2h`, `head`, `ring` — set on its
+own `ItemRelic` / `ItemEnchantment` record. Each name is the tail of the class the equipment is written
+as, lowercased: `sword2h` is `WeaponMelee_Sword2h`, `head` is `ArmorProtective_Head`, and all 23 slots
+match. The record carries other flags that name no slot (`craftingMaterial`, `soulbound`,
+`untradeable`), so the equipment's own classes are what says which of them count. A relic
+(`ItemArtifact`) sets none: it has a slot of its own.
+
 ### Monsters
 
 `records/creatures/enemies/**` with `Class = Monster` — 2,970 named ones. The record gives the name
@@ -161,6 +168,25 @@ that it cancels the record rather than by its name.
 gives the base of each; the game's `combatformulas.dbr` turns that, the attribute (cunning for offensive,
 physique for defensive) and the level into the figure a fight uses — the same equations a character's
 sheet runs. Reading the base alone understates a level 100 boss by a factor of three.
+
+**A creature names skills in far more slots than its skill list.** Beyond `skillName1‑23` and the attack
+slots, records use `initialSkillName` (1,261 creatures), `buffSelfSkillName` (166), `buffOtherSkillName`
+(125), `chainInitialSkill`/`chainNextSkill` (224), `healSkillName` (66), `nightBuffSkill` (57),
+`buffSelf2SkillName` (7) and `berserkSkillName` (2). The Possessed Archmage's cyan shield is a
+`buffSelfSkillName`, so reading only the list and the attacks leaves a creature's own aura invisible.
+
+**An effect is a particle system or a model, and the two are named apart.** `EffectEntity` gives a `.pfx`
+in `effectFile`; `FxMesh` gives a `.msh` in `meshName`, the `scale` to draw it at, and an `.anm` in
+`animationName` — 147 records over 67 meshes. A pack lists the two separately, `particleEffectNames`
+beside `meshEffectNames` (92 records), so following only the first drops the chunks a stomp throws up.
+The `FxMesh` model is rigged and its own animation is what spreads it: `groundchunks02b.msh` has eight
+spike bones that the animation drives apart.
+
+**Nothing in the records states how big an effect is.** The size and the colour live inside the `.pfx`,
+which is binary — a header naming the texture and the shader, then a stream of float curves. What an
+attach point states is *where*: `FXCentered` (376 records) and `FXUnParentedCenter` (221) wrap the whole
+creature, where `HeadFXUP` (91), `R Hand`, `L Hand` and the rest name a place to hang something off.
+Reading a centred one as a point is what draws an aura as a puff on the chest.
 
 ### The model format
 
@@ -307,6 +333,11 @@ CreateEntity  { frame = 1 entity = "records/fx/Creatures/AetherCreatureSpawn_FX0
 
 A callback is the moment the game hangs a sound, a blow or a particle start on; a `CreateEntity` spawns an
 effect at a point of the rig. A handful of files end in a blank line instead.
+
+**`RemoveEntity` names an entity in exactly the same shape and means the opposite.** Across the animations
+the monsters name, 1,014 blocks create and 46 remove, so the block's own word is the only thing that says
+which it is: the yeti animations remove a boulder the creature was carrying on frame 1 of every walk and
+idle, and reading the name alone drew Kubacabra holding an ice block while it stood still.
 
 ### Effects
 

@@ -20,6 +20,13 @@ struct ItemLootView: View {
     @Environment(\.openWindow)
     private var openWindow
 
+    /// The blueprint that makes this item, where one does.
+    private var blueprint: ItemBlueprint? {
+        guard let database = model.records else { return nil }
+
+        return ItemBlueprint.map(in: database)[item.recordPath.lowercased()]
+    }
+
     private var sources: [ItemDropSource] {
         let all = model.drops?.sources(forItemNamed: item.baseName) ?? []
         return showsEverything ? all : all.filter { $0.chance >= ItemDropSource.significant }
@@ -35,12 +42,59 @@ struct ItemLootView: View {
                 case let .failed(reason):
                     Text(reason).foregroundStyle(.secondary)
                 default:
+                    if let blueprint { crafting(blueprint) }
                     controls
                     list
             }
         }
         .padding(16)
         .task { model.loadDrops() }
+    }
+
+    /// What it takes to make it, for the items a blueprint covers. The game never says so on the item
+    /// itself — only the blueprint names what it produces — so this is the one place it can be read.
+    private func crafting(_ blueprint: ItemBlueprint) -> some View {
+        SectionCard(title: "Crafted from", iconPath: blueprint.iconPath) {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    model.openItem(at: blueprint.recordPath)
+                    openWindow(id: ItemDetailWindow.id)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(blueprint.name)
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(Theme.accent)
+                        Image(systemName: "arrow.up.forward.square")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 4)
+                        if blueprint.cost > 0 {
+                            Text("\(blueprint.cost.formatted(.number)) iron")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .pointerStyle(.link)
+                .help("Open \(blueprint.name)")
+
+                ForEach(blueprint.reagents) { reagent in
+                    HStack(spacing: 6) {
+                        GameIcon(path: reagent.iconPath, size: 18, fallbackSymbol: "shippingbox")
+                        Text(reagent.name)
+                            .font(.caption)
+                        Spacer(minLength: 4)
+                        Text("×\(reagent.quantity)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+            }
+        }
     }
 
     private var controls: some View {

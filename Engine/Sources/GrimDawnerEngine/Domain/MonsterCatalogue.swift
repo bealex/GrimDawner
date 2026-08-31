@@ -88,6 +88,9 @@ public struct CataloguedMonster: Codable, Sendable, Identifiable {
     /// Which fight of a several-stage boss this is, for the records the game chains through death. Nil
     /// for everything met in one piece.
     public var phase: Int?
+    /// Where the game keeps the record, which is the only thing telling two of the same name apart: the
+    /// Kubacabra under `enemies/nemesis` and the one under `enemies/special/fun` are otherwise identical.
+    public var origin: String = ""
 
     public var id: String { path }
 
@@ -117,7 +120,7 @@ public struct MonsterEntry: Identifiable, Sendable {
 /// Every monster in the game, listed once per installed version and kept on disk.
 public struct MonsterCatalogue: Codable, Sendable {
     /// Bumped whenever an entry means something different, so an older listing on disk is discarded.
-    public static let version = 6
+    public static let version = 7
 
     public let fingerprint: String
     public let version: Int
@@ -149,7 +152,8 @@ public struct MonsterCatalogue: Codable, Sendable {
                 minLevel: Int(record.number("minLevel")),
                 maxLevel: Int(record.number("maxLevel")),
                 dropsLoot: record.number("dropItems") != 0,
-                phase: phases[path.lowercased()]
+                phase: phases[path.lowercased()],
+                origin: Self.origin(ofRecordAt: path)
             ))
             signatures[path] = Self.signature(of: record)
         }
@@ -161,9 +165,38 @@ public struct MonsterCatalogue: Codable, Sendable {
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             // A phase is its own line: the stages of one fight are different creatures with different
             // models, different skills, and — usually — loot on the last of them alone.
-            .filter { seen.insert("\($0.name)|\($0.rank.rawValue)|\($0.faction)|\($0.phase ?? 0)").inserted }
+            .filter {
+                seen.insert("\($0.name)|\($0.rank.rawValue)|\($0.faction)|\($0.phase ?? 0)|\($0.origin)")
+                    .inserted
+            }
 
         return MonsterCatalogue(fingerprint: database.fingerprint, version: Self.version, monsters: listed)
+    }
+
+    /// What the game's own folders say a record is for.
+    ///
+    /// Nothing in a record states this — the roster's shape is the folder tree — so the folder is read
+    /// instead, most particular first: `enemies/special/fun` before `enemies/special`. It is what lets a
+    /// reader tell the Kubacabra that is fought from the joke copy of it that is not.
+    public static func origin(ofRecordAt path: String) -> String {
+        let folders: [(String, String)] = [
+            ("/nemesis/", "Nemesis"),
+            ("/special/fun/", "Fun"),
+            ("/bounties/", "Bounty"),
+            ("/devotion/", "Devotion"),
+            ("/waveevent", "Wave Event"),
+            ("/boss&quest/", "Boss & Quest"),
+            ("/hero/", "Hero"),
+            ("/faction/", "Faction"),
+            ("/special/", "Special"),
+            ("/anomalies/", "Anomaly"),
+            ("/ambient/", "Ambient"),
+            ("/npcs/", "NPC"),
+        ]
+        let lowered = path.lowercased()
+        if lowered.hasPrefix("records/endlessdungeon/") { return "Shattered Realm" }
+
+        return folders.first { lowered.contains($0.0) }?.1 ?? ""
     }
 
     /// Which faction each nemesis belongs to, by the nemesis's own name.

@@ -170,6 +170,17 @@ private struct MonsterRow: View {
                 if !monster.kind.isCreature {
                     MonsterKindBadge(kind: monster.kind)
                 }
+                if !monster.origin.isEmpty {
+                    Text(monster.origin)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Theme.panel, in: .capsule)
+                        .overlay(Capsule().stroke(Theme.subtleBorder))
+                        .help("Where the game keeps this record: \(monster.origin)")
+                }
                 if !monster.variant.isEmpty {
                     Text(monster.variant)
                         .font(.caption2)
@@ -200,7 +211,9 @@ private struct MonsterRow: View {
         // it, so one selects and two open the window.
         .simultaneousGesture(TapGesture(count: 2).onEnded(open))
         .help("Double-click to open \(monster.title) in a window of its own")
-        .accessibilityLabel("\(monster.title), \(monster.kind.title), \(monster.rank.title), \(monster.race)")
+        .accessibilityLabel(
+            "\(monster.title), \(monster.origin), \(monster.kind.title), \(monster.rank.title), \(monster.race)"
+        )
         .accessibilityAction(named: "Open in a window", open)
     }
 }
@@ -290,6 +303,10 @@ private struct RankToggle: View {
             Text(rank.title)
                 .font(.caption.weight(isOn ? .semibold : .regular))
                 .foregroundStyle(isOn ? Color.black : rank.color)
+                // A chip reads as a chip only on one line; a squeezed bar would otherwise break
+                // "SuperBoss" across three.
+                .lineLimit(1)
+                .fixedSize()
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
                 .background(isOn ? rank.color : .clear, in: .capsule)
