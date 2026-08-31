@@ -38,6 +38,33 @@ public struct CataloguedItem: Codable, Identifiable, Sendable {
         "ItemRelic": "Component", "ItemArtifact": "Relic", "ItemEnchantment": "Augment",
     ]
 
+    /// Everything else under `records/items` that carries a name and is worth listing.
+    ///
+    /// The class is all the game gives: nothing states a category, and the record's own class name
+    /// reads badly on its own — `ItemArtifactFormula` is what a player calls a blueprint. The last two
+    /// are world objects rather than things carried, kept because they are named and asked after.
+    public static let otherKinds = [
+        "ItemArtifactFormula": "Blueprint",
+        "QuestItem": "Quest Item",
+        "ItemNote": "Lore Note",
+        "ItemTransmuter": "Illusion",
+        "ItemTransmuterSet": "Illusion Set",
+        "OneShot_Scroll": "Scroll",
+        "OneShot_SkillUnlock": "Formula",
+        "OneShot_PotionHealth": "Potion",
+        "OneShot_PotionMana": "Potion",
+        "OneShot_Food": "Food",
+        "ItemFactionBooster": "Faction Booster",
+        "ItemFactionWarrant": "Faction Warrant",
+        "ItemUsableSkill": "Usable",
+        "ItemDifficultyUnlock": "Merit",
+        "FixedItemContainer": "Trove",
+        "Destructible": "Destructible",
+    ]
+
+    /// Every class the directory lists beyond armour and weapons.
+    static var namedKinds: [String: String] { craftingKinds.merging(otherKinds) { first, _ in first } }
+
     public var id: String { path }
 
     public var quality: ItemRarity { ItemRarity(rawValue: rarity) ?? .common }
@@ -54,7 +81,7 @@ public struct CataloguedItem: Codable, Identifiable, Sendable {
     public var kind: String { Self.kind(ofClass: recordClass) }
 
     public static func kind(ofClass recordClass: String) -> String {
-        if let kind = craftingKinds[recordClass] { return kind }
+        if let kind = namedKinds[recordClass] { return kind }
 
         let tail = recordClass.split(separator: "_").last.map(String.init) ?? recordClass
         var words = ""
@@ -119,7 +146,7 @@ public struct DirectoryEntry: Identifiable, Sendable {
 /// Every named item in the game, listed once per installed version and kept on disk.
 public struct ItemCatalogue: Codable, Sendable {
     /// Bumped whenever an entry means something different, so an older listing on disk is discarded.
-    public static let version = 9
+    public static let version = 10
 
     /// The database this was built from; a patched game produces a different one and is listed again.
     public let fingerprint: String
@@ -156,7 +183,7 @@ public struct ItemCatalogue: Codable, Sendable {
             }
             guard
                 Self.itemClassPrefixes.contains(where: { recordClass.hasPrefix($0) })
-                    || CataloguedItem.craftingKinds[recordClass] != nil,
+                    || CataloguedItem.namedKinds[recordClass] != nil,
                 let name = ItemResolver.itemName(of: record, in: database),
                 !name.isEmpty
             else { return }
@@ -170,7 +197,7 @@ public struct ItemCatalogue: Codable, Sendable {
             items.append(CataloguedItem(
                 path: path,
                 name: name,
-                iconPath: Self.iconPath(of: record),
+                iconPath: ItemResolver.iconPath(of: record),
                 recordClass: recordClass,
                 rarity: rarity.rawValue,
                 qualityMarkPath: mark?.texturePath ?? "",
@@ -191,7 +218,7 @@ public struct ItemCatalogue: Codable, Sendable {
             items[index].standing = vendors[items[index].path.lowercased()] ?? ""
         }
 
-        let ashesIcon = database.record(Self.awakeningAshes).map { Self.iconPath(of: $0) } ?? ""
+        let ashesIcon = database.record(Self.awakeningAshes).map { ItemResolver.iconPath(of: $0) } ?? ""
         let names = Dictionary(items.map { ($0.path.lowercased(), $0.name) }, uniquingKeysWith: { first, _ in first })
         for index in items.indices {
             guard let awakened = upgrades[items[index].path.lowercased()] else { continue }
@@ -330,14 +357,6 @@ public struct ItemCatalogue: Codable, Sendable {
             titles.append(title)
         }
         return titles.sorted()
-    }
-
-    private static func iconPath(of record: ArzRecord) -> String {
-        for key in [ "bitmap", "artifactBitmap", "relicBitmap", "shardBitmap" ] {
-            let path = record.text(key)
-            if !path.isEmpty { return path }
-        }
-        return ""
     }
 
     private static func rarity(of record: ArzRecord, at path: String) -> ItemRarity {
