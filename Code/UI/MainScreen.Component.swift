@@ -191,6 +191,18 @@ extension MainScreen {
                         select: model.selectMonster(path:level:difficulty:)
                     )
                     .task { model.openMonsters() }
+                case .optimizer:
+                    OptimizerTab(
+                        character: character,
+                        skills: model.optimizerSkills,
+                        isListing: model.isListingItems,
+                        state: model.optimizer,
+                        start: model.optimize(target:skill:),
+                        cancel: model.optimizer.cancel,
+                        selectPlan: { model.optimizer.selectedPlan = $0 },
+                        openItem: openItem
+                    )
+                    .task { model.openCatalogue() }
                 case .parameters:
                     ParametersTab(
                         character: character,

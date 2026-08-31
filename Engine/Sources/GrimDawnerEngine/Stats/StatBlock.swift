@@ -57,6 +57,12 @@ public struct StatBlock: Sendable {
         conversions.append(conversion)
     }
 
+    /// Takes one block's figures back out of this one, for reading a character as it would be
+    /// without something it wears.
+    public mutating func subtract(_ other: StatBlock) {
+        for (key, amount) in other.values { values[key, default: 0] -= amount }
+    }
+
     public mutating func merge(_ other: StatBlock) {
         for (key, amount) in other.values { values[key, default: 0] += amount }
         for (path, levels) in other.skillBonuses { skillBonuses[path, default: 0] += levels }

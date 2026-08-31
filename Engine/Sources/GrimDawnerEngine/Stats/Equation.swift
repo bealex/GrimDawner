@@ -11,7 +11,7 @@ import Foundation
 ///
 /// Grammar: numbers, identifiers, `+ - * /`, `^` (right-associative), unary minus and parentheses.
 /// Unknown identifiers evaluate to zero, which matches how the game treats an absent variable.
-public struct Equation {
+public struct Equation: Sendable {
     public enum Failure: LocalizedError {
         case malformed(String)
 
@@ -43,7 +43,13 @@ public struct Equation {
         var lowercased = [String: Double](minimumCapacity: variables.count)
         for (name, value) in variables { lowercased[name.lowercased()] = value }
 
-        var parser = Parser(tokens: tokens, variables: lowercased, source: source)
+        return try value(lowercased: lowercased)
+    }
+
+    /// The same, for a caller evaluating one equation many thousands of times, which has folded the
+    /// names to lower case itself and does not want that done again on every call.
+    public func value(lowercased variables: [String: Double]) throws -> Double {
+        var parser = Parser(tokens: tokens, variables: variables, source: source)
         let result = try parser.expression()
 
         guard parser.isAtEnd else { throw Failure.malformed(source) }

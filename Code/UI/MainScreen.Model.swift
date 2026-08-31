@@ -26,6 +26,7 @@ extension MainScreen {
             case skills = "Skills"
             case devotions = "Devotions"
             case parameters = "Stats"
+            case optimizer = "Optimizer"
             case items = "Items"
             case affixes = "Affixes"
             case monsters = "Monsters"
@@ -39,9 +40,10 @@ extension MainScreen {
                     case .skills: "2"
                     case .devotions: "3"
                     case .parameters: "4"
-                    case .items: "5"
-                    case .affixes: "6"
-                    case .monsters: "7"
+                    case .optimizer: "5"
+                    case .items: "6"
+                    case .affixes: "7"
+                    case .monsters: "8"
                 }
             }
 
@@ -51,6 +53,7 @@ extension MainScreen {
                     case .skills: "sparkles.rectangle.stack"
                     case .devotions: "sparkles"
                     case .parameters: "person.text.rectangle"
+                    case .optimizer: "slider.horizontal.3"
                     case .items: "list.bullet.rectangle"
                     case .affixes: "textformat.abc"
                     case .monsters: "pawprint"
@@ -102,6 +105,9 @@ extension MainScreen {
         /// Monsters are worth several times more on Ultimate than on Normal, so the difficulty is read
         /// alongside the level.
         private(set) var monsterDifficulty: Difficulty = .ultimate
+
+        /// What the loadout search is doing, which outlives any one view of it.
+        let optimizer = OptimizerState()
 
         var saveFolderName: String? { saveAccess?.url.lastPathComponent }
         var gameFolderName: String? { gameAccess?.url.lastPathComponent }
@@ -269,6 +275,27 @@ extension MainScreen {
             monsterLevel = level
             monsterDifficulty = difficulty ?? monsterDifficulty
             selectedMonster = resolver.monster(at: path, level: level, difficulty: monsterDifficulty)
+        }
+
+        /// The skills the attack plan can be measured on: the character's own, that it has spent a
+        /// point on and that carry damage of their own.
+        var optimizerSkills: [ResolvedSkill] {
+            (character?.masteries.flatMap(\.skills) ?? [])
+                .filter { $0.baseLevel > 0 && !EncounterEngine.damage(of: $0).isEmpty }
+                .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        }
+
+        /// Looks for the components and augments that hold the resistances and make the most of the rest.
+        func optimize(target: LoadoutTarget, skill: ResolvedSkill?) {
+            guard let character, let database else { return }
+
+            optimizer.search(
+                character: character,
+                database: database,
+                catalogue: catalogue.map(\.item),
+                skill: skill,
+                target: target
+            )
         }
 
         /// Shows a piece of the character's gear where it is worn.
