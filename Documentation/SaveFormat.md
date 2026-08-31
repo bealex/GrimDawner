@@ -8,6 +8,22 @@ The community references — [lost.org.uk](https://www.lost.org.uk/grimdawn.html
 [odie/gd-edit](https://github.com/odie/gd-edit) — describe 1.1.x. **They do not parse a current save.** The
 differences are listed under "Deltas from the 1.1.x references".
 
+## Preamble version 1 is a different file
+
+`GDCX`, then a preamble version. Everything here describes version **2**. Version 1 saves predate the
+expansions and are rejected outright rather than half-read.
+
+What is known of the difference, from one level-41 save:
+
+- The header omits the expansion-flags byte entirely — name, gender, class tag, level and hardcore, then
+  straight to the terminator.
+- With that byte skipped the header reads and the terminator lands, but the info block that follows
+  diverges too: reading it as version 2 does asks for a string of 1.6 billion characters 108 bytes in.
+
+So v1 is not a one-field delta; its blocks have their own shapes, and the expansion-era fields — tributes,
+loot filters, Shattered Realm counts — cannot be there at all. Supporting it means re-deriving each block
+against more than the one sample, and the parser consuming the file exactly either way.
+
 ## Obfuscation
 
 The file is scrambled with a rolling XOR whose key advances over the *encrypted* bytes as they are read.

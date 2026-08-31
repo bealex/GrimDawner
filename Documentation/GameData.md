@@ -183,7 +183,13 @@ The `FxMesh` model is rigged and its own animation is what spreads it: `groundch
 spike bones that the animation drives apart.
 
 **Nothing in the records states how big an effect is.** The size and the colour live inside the `.pfx`,
-which is binary — a header naming the texture and the shader, then a stream of float curves. What an
+which is binary: `u32`, a length-prefixed name, `PFX1`, three more words, then the length-prefixed texture
+and shader paths, then a stream of values. The stream is **not aligned to the start of the file** — it
+begins at an odd offset — so reading it as four-byte words from the front yields nonsense. Two effects of
+the same family that differ only by a size word in their names (`_sm_` against `_lg_`) turn out to differ
+in a couple of hundred scattered bytes rather than in one figure, so there is no single scale to lift out;
+the format has to be decoded properly or not at all. Thirty such pairs exist to check a candidate layout
+against. What an
 attach point states is *where*: `FXCentered` (376 records) and `FXUnParentedCenter` (221) wrap the whole
 creature, where `HeadFXUP` (91), `R Hand`, `L Hand` and the rest name a place to hang something off.
 Reading a centred one as a point is what draws an aura as a puff on the chest.
