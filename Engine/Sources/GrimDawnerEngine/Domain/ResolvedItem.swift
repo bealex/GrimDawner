@@ -50,11 +50,20 @@ public struct GrantedSkill: Identifiable, Sendable {
         case enhanced
     }
 
+    /// How far a `+N` line reaches: the skill it names, every skill of a mastery, or every skill at all.
+    public enum Reach: Sendable {
+        case skill
+        case mastery
+        case everySkill
+    }
+
     public let id = UUID()
     public let name: String
     public let recordPath: String
     public let level: Int
     public let kind: Kind
+    /// What the line covers. Only a `+N` says anything but `.skill`.
+    public var reach: Reach = .skill
     /// The skill as the game defines it, for the effects the sidebar lists under this line.
     public let skill: ResolvedSkill?
     /// What sets the skill off, worded as the game words it: "(25% Chance on Attack)".
@@ -65,7 +74,20 @@ public struct GrantedSkill: Identifiable, Sendable {
     public var modifications: SkillChanges?
 
     /// Some component skills carry no name anywhere in the database; they are known by what they do.
-    public var title: String { name.isEmpty ? "Granted ability" : name }
+    public var title: String {
+        if reach == .everySkill { return "All skills" }
+
+        return name.isEmpty ? "Granted ability" : name
+    }
+
+    /// What the ranks line calls what it is adding to.
+    public var ranksTitle: String {
+        switch reach {
+            case .skill: "ranks"
+            case .mastery: "to all skills in \(title)"
+            case .everySkill: "to all skills"
+        }
+    }
 
     public var summary: String {
         switch kind {
@@ -74,7 +96,12 @@ public struct GrantedSkill: Identifiable, Sendable {
                     level > 1 ? "Grants \(title) (level \(level))" : "Grants \(title)", trigger,
                 ]
                 .compactMap { $0 }.joined(separator: " ")
-            case .added: "+\(level) to \(title)"
+            case .added:
+                switch reach {
+                    case .skill: "+\(level) to \(title)"
+                    case .mastery: "+\(level) to all skills in \(title)"
+                    case .everySkill: "+\(level) to all skills"
+                }
             case .enhanced: "Enhances \(title)"
         }
     }

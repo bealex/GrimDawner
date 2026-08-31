@@ -91,6 +91,9 @@ struct GameIcon: View {
     var height: CGFloat?
     /// `.fill` suits backdrop artwork, where a letterboxed edge would read as a stray rectangle.
     var contentMode: ContentMode = .fit
+    /// False where the art may be shrunk to fit but never blown up past the size it was drawn at. The
+    /// game's item icons are small, and a 32-point one stretched to 64 is a blurry 32-point one.
+    var magnifies = true
     var fallbackSymbol = "questionmark"
     var label: String?
 
@@ -98,8 +101,12 @@ struct GameIcon: View {
     private var textures
 
     var body: some View {
-        Group {
-            if let image = textures?.image(at: path) {
+        let image = textures?.image(at: path)
+        let asked = CGSize(width: width ?? size, height: height ?? size)
+        let drawn = magnifies ? asked : Self.fitted(asked, within: image)
+
+        return Group {
+            if let image {
                 Image(decorative: image, scale: 1, orientation: .up)
                     .resizable()
                     .interpolation(.high)
@@ -110,8 +117,22 @@ struct GameIcon: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(width: width ?? size, height: height ?? size)
+        .frame(width: drawn.width, height: drawn.height)
         .accessibilityHidden(label == nil)
         .accessibilityLabel(label ?? "")
+    }
+
+    /// The asked-for box, shrunk by however much the artwork would have been blown up inside it.
+    ///
+    /// Fitting draws the picture at the smaller of the two ratios, so that is what decides whether it is
+    /// magnified: a 32×32 icon in a 64-point box is drawn at twice its size and the box is halved, while
+    /// a 32×64 one already fits a 64-point box exactly and is left alone.
+    private static func fitted(_ asked: CGSize, within image: CGImage?) -> CGSize {
+        guard let image, image.width > 0, image.height > 0 else { return asked }
+
+        let fit = min(asked.width / CGFloat(image.width), asked.height / CGFloat(image.height))
+        guard fit > 1 else { return asked }
+
+        return CGSize(width: asked.width / fit, height: asked.height / fit)
     }
 }

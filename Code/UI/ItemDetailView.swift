@@ -38,7 +38,7 @@ struct ItemDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             if showsHeader {
                 HStack(alignment: .top, spacing: 12) {
-                    GameIcon(path: item.iconPath, size: 64, fallbackSymbol: "shippingbox")
+                    GameIcon(path: item.iconPath, size: 64, magnifies: false, fallbackSymbol: "shippingbox")
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 6) {
                             ItemQualityMark(path: item.qualityMarkPath, size: 20)
@@ -378,7 +378,7 @@ struct GrantedSkillView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if group.addedRanks > 0 {
-                StatRow(title: "ranks", value: "+\(group.addedRanks)", valueColor: Theme.valueColor(1))
+                StatRow(title: granted.ranksTitle, value: "+\(group.addedRanks)", valueColor: Theme.valueColor(1))
             }
             ForEach(Array(group.enhancements.enumerated()), id: \.offset) { _, changes in
                 SkillChangesView(changes: changes)
@@ -529,8 +529,7 @@ extension StatBlockView {
             let high = highest?.value(maximum.definition.key)
         else { return nil }
 
-        let unit = minimum.definition.unit
-        return "\(unit.format(low, signed: false))–\(unit.format(high, signed: false))"
+        return Self.band(of: minimum.definition, from: low, to: high)
     }
 
     fileprivate func band(of line: (definition: StatDefinition, value: Double)) -> String? {
@@ -540,8 +539,16 @@ extension StatBlockView {
             low.rounded() != high.rounded()
         else { return nil }
 
-        let unit = line.definition.unit
-        return "\(unit.format(low, signed: false))–\(unit.format(high, signed: false))"
+        return Self.band(of: line.definition, from: low, to: high)
+    }
+
+    /// A rolled figure's two ends. A reduction carries its sign on the first of them only — the game
+    /// writes "−7/9% Skill Energy Cost" rather than repeating the minus.
+    static func band(of definition: StatDefinition, from low: Double, to high: Double) -> String {
+        let unit = definition.unit
+        let first = unit.format(definition.shown(low), signed: false)
+        let second = unit.format(abs(definition.shown(high)), signed: false)
+        return "\(first)–\(second)"
     }
 }
 

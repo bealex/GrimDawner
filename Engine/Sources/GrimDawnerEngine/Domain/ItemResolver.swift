@@ -115,6 +115,14 @@ public struct ItemResolver {
         return block
     }
 
+    /// A component or an augment read on its own: what it would add to whatever piece it goes into.
+    public func fitting(at path: String) -> ItemPart? {
+        guard let record = database.record(path) else { return nil }
+
+        let kind: ItemPart.Kind = record.recordClass == "ItemEnchantment" ? .augment : .component
+        return part(kind: kind, record: record, name: affixName(of: record))
+    }
+
     /// One affix read on its own, as the catalogue lists it rather than as an item wears it.
     public func affix(at path: String) -> ResolvedAffix? {
         guard let record = database.record(path) else { return nil }
@@ -355,10 +363,38 @@ public struct ItemResolver {
             let path = record.text("augmentMasteryName\(index)")
             guard !path.isEmpty else { continue }
 
-            stats.addMasteryBonus(path, record.integer("augmentMasteryLevel\(index)"))
+            let levels = record.integer("augmentMasteryLevel\(index)")
+            stats.addMasteryBonus(path, levels)
+            // A mastery bonus is a `+N` line like any other — the game words it "+1 to all skills in
+            // Arcanist" — and listing only the ones that name a single skill left it off the item.
+            //
+            // The mastery's own record is not carried: what it holds is what one point in the mastery
+            // bar gives, and a `+1 to all skills` grants no such point.
+            var mastery = GrantedSkill(
+                name: skillName(path),
+                recordPath: path,
+                level: levels,
+                kind: .added,
+                skill: nil,
+                mastery: nil
+            )
+            mastery.reach = .mastery
+            granted.append(mastery)
         }
 
-        stats.addAllSkillBonus(record.integer("augmentAllLevel"))
+        if case let levels = record.integer("augmentAllLevel"), levels != 0 {
+            stats.addAllSkillBonus(levels)
+            var everySkill = GrantedSkill(
+                name: "",
+                recordPath: "",
+                level: levels,
+                kind: .added,
+                skill: nil,
+                mastery: nil
+            )
+            everySkill.reach = .everySkill
+            granted.append(everySkill)
+        }
 
         // An item that changes a skill names the skill and, beside it, a `Skill_Modifier` record
         // holding what it changes.
@@ -475,20 +511,20 @@ public struct ItemResolver {
 
     /// The skill's name, or nothing at all: several component skills are unnamed in the database, and the
     /// record's own file name is not a name a reader would recognise.
+    ///
+    /// A record that carries no name points at the one that does, and that record may do the same again:
+    /// a pet modifier names the pet's skill, which names the buff it drives, which is where the name
+    /// finally is. So the links are followed until a name turns up rather than only once.
     private func skillName(_ path: String) -> String {
-        guard let record = database.record(path) else { return "" }
+        var next: String? = path
+        var seen = Set<String>()
 
-        if let name = database.localised(record.text("skillDisplayName")) { return name }
+        while let current = next, seen.insert(current.lowercased()).inserted {
+            guard let record = database.record(current) else { break }
 
-        for link in [ "buffSkillName", "petSkillName" ] {
-            guard
-                case let linked = record.text(link),
-                !linked.isEmpty,
-                let target = database.record(linked),
-                let name = database.localised(target.text("skillDisplayName"))
-            else { continue }
+            if let name = database.localised(record.text("skillDisplayName")), !name.isEmpty { return name }
 
-            return name
+            next = [ "buffSkillName", "petSkillName" ].map { record.text($0) }.first { !$0.isEmpty }
         }
         return ""
     }

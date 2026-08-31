@@ -62,14 +62,29 @@ public struct StatDefinition: Sendable {
     public let unit: StatUnit
     /// Sort weight inside the group; equal weights fall back to the catalogue's declaration order.
     public let order: Int
+    /// True where the record stores a figure the game shows as taking something away.
+    /// `skillManaCostReduction = 8` is written positive and reads "−8% Skill Energy Cost", so the sign
+    /// has to be turned over on the way out or the line says the opposite of what it does.
+    public let isReduction: Bool
 
-    public init(_ key: String, _ title: String, _ group: StatGroup, _ unit: StatUnit = .flat, order: Int = 0) {
+    public init(
+        _ key: String,
+        _ title: String,
+        _ group: StatGroup,
+        _ unit: StatUnit = .flat,
+        order: Int = 0,
+        isReduction: Bool = false
+    ) {
         self.key = key
         self.title = title
         self.group = group
         self.unit = unit
         self.order = order
+        self.isReduction = isReduction
     }
+
+    /// The figure as a line should read it, with a reduction turned negative.
+    public func shown(_ value: Double) -> Double { isReduction ? -value : value }
 }
 
 /// Every `.dbr` stat field the app reads, in the order it presents them.
@@ -79,7 +94,8 @@ public struct StatDefinition: Sendable {
 public enum StatCatalog {
     public static let everyStat: [StatDefinition] =
         attributes + defence + resistances
-        + controlResistances + durationReductions + offence + damage + damageOverTime + retaliation + utility
+        + controlResistances + durationReductions + offence + controlEffects + damage + damageOverTime
+        + retaliation + utility
 
     private static let byKey: [String: StatDefinition] = Dictionary(
         everyStat.map { ($0.key, $0) },
@@ -214,6 +230,37 @@ public enum StatCatalog {
         StatDefinition("racialBonusPercentDefense", "Reduced Damage from Race", .offence, .percent, order: 12),
     ]
 
+    /// What a blow does to whoever it lands on beyond damaging them.
+    ///
+    /// The game writes each as a duration band and a chance, the same shape a damage band has, and words
+    /// it "25% Chance of 1.5 Second(s) of Stun". Their `Modifier` fields are left out: what those scale
+    /// is not stated anywhere the app can read.
+    private static let controlEffects: [StatDefinition] = [
+        (key: "Stun", title: "Stun"),
+        (key: "Freeze", title: "Freeze"),
+        (key: "Petrify", title: "Petrify"),
+        (key: "Sleep", title: "Sleep"),
+        (key: "Knockdown", title: "Knockdown"),
+        (key: "Confusion", title: "Confusion"),
+        (key: "Fear", title: "Fear"),
+        (key: "Trap", title: "Trap"),
+        (key: "Disruption", title: "Skill Disruption"),
+    ]
+    .enumerated()
+    .flatMap { index, effect in
+        [
+            StatDefinition("offensive\(effect.key)Min", effect.title, .offence, .seconds, order: 20 + index * 2),
+            StatDefinition("offensive\(effect.key)Max", effect.title, .offence, .seconds, order: 20 + index * 2),
+            StatDefinition(
+                "offensive\(effect.key)Chance",
+                "\(effect.title) Chance",
+                .offence,
+                .percent,
+                order: 20 + index * 2 + 1
+            ),
+        ]
+    }
+
     private static let damage: [StatDefinition] = perDamageType { index, type in
         [
             StatDefinition(type.minimumKey, "\(type.title) Damage", .damage, .flat, order: index * 3),
@@ -253,16 +300,40 @@ public enum StatCatalog {
     private static let utility: [StatDefinition] =
         [
             StatDefinition("skillCooldownReduction", "Skill Cooldown Reduction", .utility, .percent, order: 0),
-            StatDefinition("skillManaCostReduction", "Skill Energy Cost", .utility, .percent, order: 1),
+            StatDefinition(
+                "skillManaCostReduction",
+                "Skill Energy Cost",
+                .utility,
+                .percent,
+                order: 1,
+                isReduction: true
+            ),
+            // A `Skill_RefreshCooldown` takes this many seconds off every cooldown already running.
+            StatDefinition(
+                "refreshTime",
+                "Currently Active Skill Cooldowns",
+                .utility,
+                .seconds,
+                order: 2,
+                isReduction: true
+            ),
             StatDefinition("characterLightRadius", "Light Radius", .utility, .flat, order: 2),
             StatDefinition("characterIncreasedExperience", "Experience Gained", .utility, .percent, order: 3),
-            StatDefinition("characterGlobalReqReduction", "Requirements", .utility, .percent, order: 4),
+            StatDefinition(
+                "characterGlobalReqReduction",
+                "Requirements",
+                .utility,
+                .percent,
+                order: 4,
+                isReduction: true
+            ),
             StatDefinition(
                 "characterArmorStrengthReqReduction",
                 "Armor Physique Requirement",
                 .utility,
                 .percent,
-                order: 5
+                order: 5,
+                isReduction: true
             ),
             StatDefinition(
                 "offensiveTotalResistanceReductionAbsoluteMin",

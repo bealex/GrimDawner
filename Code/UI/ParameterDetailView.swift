@@ -96,7 +96,7 @@ struct ParameterDetailView: View {
     }
 
     private func format(_ value: Double) -> String {
-        StatCatalog.definition(for: selection.key)?.unit.format(value)
+        StatCatalog.definition(for: selection.key).map { $0.unit.format($0.shown(value)) }
             ?? value.formatted(.number.precision(.fractionLength(0)))
     }
 }

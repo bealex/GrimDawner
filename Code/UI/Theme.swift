@@ -87,17 +87,17 @@ extension Theme {
                 high.value > low.value {
             let rest = parts.filter { $0.definition.key != low.definition.key }
                 .filter { $0.definition.key != high.definition.key }
-                .map { $0.definition.unit.format($0.value) }
+                .map { $0.definition.unit.format($0.definition.shown($0.value)) }
             let range =
-                "\(low.definition.unit.format(low.value))"
-                + "–\(high.definition.unit.format(high.value, signed: false))"
+                "\(low.definition.unit.format(low.definition.shown(low.value)))"
+                + "–\(high.definition.unit.format(high.definition.shown(high.value), signed: false))"
             return ([ range ] + rest).joined(separator: " & ")
         }
 
         return
             parts
             .filter { !$0.definition.key.hasSuffix("Max") || $0.value != 0 }
-            .map { $0.definition.unit.format($0.value) }
+            .map { $0.definition.unit.format($0.definition.shown($0.value)) }
             .joined(separator: " & ")
     }
 

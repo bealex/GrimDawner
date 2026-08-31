@@ -385,7 +385,7 @@ struct ParametersTab: View {
                     let value = min(raw, CharacterSheet.resistanceCap)
                     row(
                         definition.title,
-                        definition.unit.format(value, signed: false),
+                        definition.unit.format(definition.shown(value), signed: false),
                         key: definition.key,
                         valueColor: value > 0 ? .primary : .secondary,
                         detail: raw > value ? Theme.overCap(raw - value) : nil
