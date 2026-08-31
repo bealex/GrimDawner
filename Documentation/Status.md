@@ -3,8 +3,8 @@
 ## Working
 
 The save parser consumes a current save exactly. Names and icons for items, skills, factions and
-constellations resolve from the installed game's data. Seven tabs render — Inventory, Items, Affixes,
-Skills, Devotions, Stats, Monsters — each with a detail sidebar and the shared quick search, which starts
+constellations resolve from the installed game's data. Eight tabs render — Inventory, Items, Affixes,
+Skills, Devotions, Stats, Optimizer, Monsters — each with a detail sidebar and the shared quick search, which starts
 on the first keystroke rather than from a field in the toolbar. The app runs dark whatever the system is set to,
 since every panel it draws is the game's own artwork.
 
@@ -276,11 +276,14 @@ Each entry carries the names of the stats its record holds, so both catalogues f
 does as well as by what it is called, and everything searchable is folded once when the listing loads:
 folding thousands of entries on every keystroke would be felt.
 
-**Items.** 7,756 lines from 26,196 records, the rest being loot tables, affixes, crafting formulas, lore
-notes and potions. Gear is every `Armor*` and `Weapon*` class; the three crafting classes join it under
-the names the game uses rather than its own — `ItemRelic` is a **Component**, `ItemArtifact` a **Relic**,
-`ItemEnchantment` an **Augment** — and each gets a rarity of that name so both filter menus offer it. None
-of the three carries an `itemNameTag`: their name is the `description` tag. Records that duplicate one
+**Items.** 9,424 lines from 26,196 records, the rest being loot tables, affixes and the proxies and pools
+that carry no name. Gear is every `Armor*` and `Weapon*` class; every other class that names something
+joins it under a word a player would use rather than the record's own — `ItemRelic` is a **Component**,
+`ItemArtifact` a **Relic**, `ItemEnchantment` an **Augment**, `ItemArtifactFormula` a **Blueprint** — and
+the three crafting ones get a rarity of that name so both filter menus offer it. None of those three
+carries an `itemNameTag`: their name is the `description` tag. Troves and destructibles are listed too and
+named as what they are: world objects rather than things carried, and the only entries without artwork,
+since they hold model textures rather than an inventory icon. Records that duplicate one
 another collapse, since the same weapon is written once per monster that carries it. One line covers every
 level an item is written at, and the sidebar picks between them.
 
@@ -293,6 +296,30 @@ level, and every roll written at that level is shown rather than one of them cho
 
 Neither an affix nor a directory item is anybody's copy: there is no seed and no roll to print, so each
 figure shows as the band it can land in.
+
+## The optimizer
+
+Thirteen sockets, each taking one of a few dozen components and one of a few dozen augments, come to
+roughly 10^39 combinations, so the search does not enumerate. It is coordinate ascent under a rising price
+on falling short: every socket's component and every socket's augment is one coordinate, a sweep takes each
+one's best option with the rest held still, and the price on a missing point of resistance climbs each
+round until nothing is short. Eight runs per goal from different starting points, every goal concurrent.
+Doubling the budget returns the same plans, which is the only evidence there is that it has settled.
+
+Ranking uses a reduced set of figures rather than a built character, since building one for each of the
+hundreds of thousands of combinations would take days. That makes the arithmetic a second telling of the
+sheet's, so `LoadoutOptimizerTests` pins the two together: read the character's own fittings back through
+the evaluator and every figure must be the sheet's. None of it reaches the screen. The app sockets a
+finished plan into a copy of the save, rebuilds it through `CharacterBuilder`, and shows that sheet.
+
+**What it does not count.** The game draws a component's completion bonus at random from its own table,
+so no plan can promise one and none is counted: every figure is the least the plan is worth. Skill ranks
+stay at what the character has now, so a fitting granting +1 to a mastery gets no credit for what that
+rank would unlock. Folding that in would mean re-levelling every mastery per combination.
+
+**What "on max" means.** Each resistance targets the character's own maximum as it stands, plus whatever
+overcap is asked for. A fitting that raises a cap costs nothing for doing so, and the plan reports the
+final maximum beside what it reached.
 
 ## How the sidebars read
 

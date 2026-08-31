@@ -33,7 +33,7 @@ On first launch, pick two folders:
   point at the game folder inside the bottle.
 - **Save folder** — the game's `save` folder, or its `main` subfolder.
 
-Both are kept as security-scoped bookmarks, so they survive relaunches. ⌘1 … ⌘7 switch tabs, ⌘R re-reads
+Both are kept as security-scoped bookmarks, so they survive relaunches. ⌘1 … ⌘8 switch tabs, ⌘R re-reads
 the save folder.
 
 Every tab works the same way: click something to see it in full in the sidebar, and start typing to light
@@ -48,12 +48,15 @@ the game's own quality badge: a monster infrequent's gem, a double rare's pair o
 ascendant affix adds. Selecting an item breaks it down part by part — base, prefix, suffix, crafting
 bonus, component, augment, ascendant affix — with what each contributes and the skills it grants.
 
-**Items** — every named item in the game, some seven and a half thousand, components, relics and augments
-among them, one line each with a dropdown for the levels it is written at. Typing filters this list rather
-than dimming it, and matches stats as well as names: `fireres` finds everything carrying fire resistance.
-Filters above the list cover the lowest level, rarity and kind, and it sorts by name or by level. Rolled
-figures show as the band a copy can land in. An epic piece the Ashes of Awakening upgrade carries the
-ashes' own icon beside its name and a link to the awakened item it becomes.
+**Items** — every named item in the game, some nine and a half thousand: gear, components, relics and
+augments, and the blueprints, quest items, lore notes, illusions, scrolls and potions besides. One line
+each, with a dropdown for the levels it is written at. Typing filters this list rather than dimming it,
+and matches stats as well as names: `fireres` finds everything carrying fire resistance. Filters cover the
+lowest level, rarity, kind, and — with components or augments picked — what they can be socketed into.
+Rarity names a monster infrequent as one, since every rare base record is one. Rolled figures show as the
+band a copy can land in. An epic piece the Ashes of Awakening upgrade carries the ashes' own icon beside
+its name and a link to the awakened item it becomes, and an item a blueprint makes says so, with what the
+crafting costs.
 
 **Affixes** — every prefix and suffix a random item can roll, one line per name. The sidebar picks which
 level tier to read and lists every roll the game writes at it, with the band each figure lands in and the
@@ -71,7 +74,9 @@ what it grants, what it adds to every pet, and what it summons — the pet's own
 and each of its abilities. Two fingers pan the sky and a pinch zooms it; a mouse wheel zooms and the
 middle button drags.
 
-**Monsters** — every named monster in the game, filtered by rank, by race and by name. A monster is read
+**Monsters** — every named monster in the game, filtered by rank, by race and by name, each marked with
+where the game keeps its record — Nemesis, Hero, Bounty, Wave Event — which is the only thing telling two
+of the same name apart. A monster is read
 at a level and a difficulty, since everything it has is an equation of both: what it is worth in a fight,
 its attacks with their ranges and timings, its passives, and what it drops from each equipment slot with
 the odds. Double-clicking opens it in a window of its own, with its whole sheet, its attacks, its loot,
@@ -79,6 +84,15 @@ and its **model** — the game's own, drawn live, dressed in its own gear and ho
 the tables it draws one from. Pick an attack and it plays that attack's animation with the effects the
 skill throws; pick a passive and it wears its aura. Half and quarter speed make the moment a blow lands
 readable, and the frames it lands on are listed beside it. Drag to turn it, scroll to move in.
+
+**Optimizer** — what to socket into the gear the character already wears, so that every resistance sits
+at its cap and what is left over goes as far as it can. Thirteen sockets over a few dozen components and
+augments each come to some 10^39 combinations, so it does not enumerate: it is coordinate ascent under a
+price on falling short that climbs until nothing is under cap, several runs from different starts, every
+goal at once across the machine's cores — a second or two. Three plans come back, for attack, for defence
+and for both, each drawn on the game's own character panel with the fittings written out beside the piece
+they go into and the faction each augment is bought from. Every figure shown is the app's own sheet: the
+winning plan is socketed into a copy of the save and read back as a whole character.
 
 **Stats** — every number the sheet knows, grouped: attributes, offence, defence, armour per hit region,
 resistances against their caps, control resistances, damage by type, damage over time, retaliation,

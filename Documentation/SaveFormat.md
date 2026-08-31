@@ -20,9 +20,9 @@ What is known of the difference, from one level-41 save:
 - With that byte skipped the header reads and the terminator lands, but the info block that follows
   diverges too: reading it as version 2 does asks for a string of 1.6 billion characters 108 bytes in.
 
-So v1 is not a one-field delta; its blocks have their own shapes, and the expansion-era fields — tributes,
-loot filters, Shattered Realm counts — cannot be there at all. Supporting it means re-deriving each block
-against more than the one sample, and the parser consuming the file exactly either way.
+So v1's blocks have shapes of their own, and the expansion-era fields (tributes, loot filters, Shattered
+Realm counts) cannot be there at all. Supporting it means re-deriving each block against more than the one
+sample, with the parser still consuming the file exactly.
 
 ## Obfuscation
 
