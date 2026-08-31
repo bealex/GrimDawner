@@ -443,12 +443,23 @@ public struct MonsterResolver {
 
     // MARK: - Loot
 
+    /// Whether a monster leaves anything behind.
+    ///
+    /// `dropItems` is not the question it looks like: it is off on 593 creatures that name loot tables
+    /// all the same — every nemesis among them — so reading it alone as the gate hid all of their drops.
+    /// A record that names a table has something to give whatever the flag says.
+    public static func leavesLoot(_ record: ArzRecord) -> Bool {
+        if record.number("dropItems") != 0 { return true }
+
+        return record.fieldOrder.contains { $0.hasPrefix("loot") && !record.text($0).isEmpty }
+    }
+
     /// Every slot the record fills, read once: what it drops and what it is wearing come from the same
     /// tables. A monster that drops nothing is still dressed, so its equipment is read either way.
     private func slots(of record: ArzRecord, atLevel level: Int)
         -> (dropped: [MonsterLootSlot], equipped: [MonsterLootSlot])
     {
-        let drops = record.number("dropItems") != 0
+        let drops = Self.leavesLoot(record)
         let fields = drops ? Self.lootSlots : Self.lootSlots.filter { Self.equippedFields.contains($0.field) }
         let found = slots(of: record, atLevel: level, fields: fields)
 

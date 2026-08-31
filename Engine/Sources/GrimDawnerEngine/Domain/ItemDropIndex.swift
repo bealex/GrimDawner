@@ -26,7 +26,7 @@ public struct ItemDropSource: Codable, Sendable, Identifiable, Hashable {
 /// answer is built once per installed version and kept beside the item and monster listings.
 public struct ItemDropIndex: Codable, Sendable {
     /// Bumped whenever an entry means something different, so an older index on disk is discarded.
-    public static let version = 1
+    public static let version = 2
 
     public let fingerprint: String
     public let version: Int
@@ -61,7 +61,7 @@ public struct ItemDropIndex: Codable, Sendable {
         database.sweep(prefix: "records/creatures/enemies/") { path, record in
             guard
                 record.text("Class") == "Monster",
-                record.number("dropItems") != 0,
+                MonsterResolver.leavesLoot(record),
                 let rank = MonsterRank(rawValue: record.text("monsterClassification")),
                 let name = database.localised(record.text("description")),
                 !name.isEmpty
