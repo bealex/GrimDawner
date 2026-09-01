@@ -72,7 +72,32 @@ struct MonsterModelView: NSViewRepresentable {
         let played = animation.flatMap { try? renderer.animation(at: $0.path) }
         // The animation says what to throw and where; only the skill being watched says how far it goes.
         var effects = played.map { renderer.effects(of: $0, in: database, thrownBy: skill) } ?? []
-        if let skill, let database { effects += renderer.effects(ofSkillAt: skill, in: database) }
+        if let skill, let database {
+            var own = renderer.effects(ofSkillAt: skill, in: database)
+            // What the skill fires leaves on the animation's hit callback, which is when the game
+            // itself lets go; a skill watched on a still creature fires from where it stands.
+            let launch = played?.events
+                .first { $0.kind == .callback && $0.name.lowercased().contains("hit") }?.frame
+            // Watching the attack itself, the animation owns the timing: a cast effect it already
+            // calls out is not drawn a second time, and the rest of the skill's own flash at the blow
+            // rather than burning for the whole loop.
+            if monster.attacks.contains(where: {
+                $0.skill.recordPath == skill && $0.animation?.path == animation?.path
+            }) {
+                let spawned = Set(effects.map(\.recordPath))
+                own.removeAll { spawned.contains($0.recordPath) }
+                if let launch {
+                    own = own.map { effect in
+                        var timed = effect
+                        timed.frame = timed.frame ?? launch
+                        return timed
+                    }
+                }
+            }
+            effects += own
+            let level = max(monster.abilities.first { $0.skill.recordPath == skill }?.skill.baseLevel ?? 1, 1)
+            effects += renderer.emitted(bySkillAt: skill, level: level, launchFrame: launch, in: database)
+        }
 
         return ModelScene(configuration: configuration).scene(
             for: models,
@@ -140,7 +165,7 @@ struct MonsterModelPane: View {
             skill = nil
             hands = ModelAssembly.Hands()
         }
-        .task(id: chosen?.path) { moments = read(chosen) }
+        .task(id: "\(chosen?.path ?? "")|\(skill ?? "")") { moments = read(chosen, firing: skill) }
     }
 
     private var controls: some View {
@@ -251,6 +276,7 @@ struct MonsterModelPane: View {
             guard
                 seen.insert(path).inserted,
                 !renderer.effects(ofSkillAt: path, in: database).isEmpty
+                    || !renderer.emitted(bySkillAt: path, level: 1, launchFrame: nil, in: database).isEmpty
             else { return nil }
 
             let title = ability.title ?? ability.kind
@@ -284,8 +310,9 @@ struct MonsterModelPane: View {
         .padding(10)
     }
 
-    /// Everything the animation calls out: the effects it spawns, and the frames a blow lands on.
-    private func read(_ animation: MonsterAnimation?) -> [Moment] {
+    /// Everything the animation calls out: the effects it spawns, the frames a blow lands on, and what
+    /// the watched skill fires when it does.
+    private func read(_ animation: MonsterAnimation?, firing skill: String?) -> [Moment] {
         guard
             let animation,
             let renderer,
@@ -308,6 +335,22 @@ struct MonsterModelPane: View {
             .map {
                 Moment(at: Double($0.frame) / rate, title: spaced($0.name), where_: "", isEffect: false)
             }
+        if let skill, let database {
+            let launch = played.events
+                .first { $0.kind == .callback && $0.name.lowercased().contains("hit") }?.frame
+            let level = max(monster.abilities.first { $0.skill.recordPath == skill }?.skill.baseLevel ?? 1, 1)
+            moments += renderer.emitted(bySkillAt: skill, level: level, launchFrame: launch, in: database)
+                .map { effect in
+                    let count = effect.flight.map(\.count) ?? 1
+                    return Moment(
+                        at: Double(effect.frame ?? 0) / rate,
+                        title: count > 1 ? "\(effect.name) ×\(count)" : effect.name,
+                        where_: effect.attachment.isEmpty
+                            ? "emitted" : "from \(effect.attachment.lowercased())",
+                        isEffect: true
+                    )
+                }
+        }
         return moments.sorted { $0.at < $1.at }
     }
 

@@ -155,6 +155,18 @@ public struct ModelScene {
             for effect in effects {
                 guard effect.isDrawable else { continue }
 
+                // A fired thing crosses the world rather than hanging on the rig, so its copies are
+                // built apart and parented to the scene itself.
+                if let flight = effect.flight {
+                    for node in launched(
+                        effect, flying: flight, among: attachments, of: skeleton, models: drawn,
+                        animation: animation, frame: frame, speed: speed, facing: turned
+                    ) {
+                        scene.rootNode.addChildNode(node)
+                    }
+                    continue
+                }
+
                 let placed = place(effect, among: attachments, of: skeleton)
                 let reach = self.reach(of: effect, on: drawn)
                 reached = max(reached, reach)
@@ -311,6 +323,161 @@ public struct ModelScene {
         return max(max(size.x, max(size.y, size.z)), 0.1)
     }
 
+    /// What a skill fires, sent on its way: the stated number of copies leave the launch point, fan
+    /// across the stated arc, and each crosses the stated distance at the stated speed, gone when it
+    /// arrives. They fly through the world rather than riding the rig — a launched thing does not
+    /// follow the mouth that spat it — and the flight starts on the animation's hit callback, which is
+    /// the frame the game itself lets go on.
+    private func launched(
+        _ effect: ModelEffect,
+        flying flight: ModelEffect.Flight,
+        among attachments: [MshFile.Attachment],
+        of skeleton: ModelSkeleton?,
+        models: [DrawnModel],
+        animation: AnmFile?,
+        frame: Int?,
+        speed: Double,
+        facing turned: Float
+    ) -> [SCNNode] {
+        // The launch point and the facing are both read with the rig posed on the launch frame, since
+        // that is where the mouth stands and where the head aims when the game lets go. Setting the
+        // pose only writes the bones' resting values, so a playing animation carries on over it
+        // untouched.
+        var launch = middle(of: models).columns.3.xyz
+        var yaw = turned
+        if let placed = place(effect, among: attachments, of: skeleton) {
+            if let skeleton, let animation, let starts = effect.frame {
+                skeleton.pose(animation, at: starts)
+                launch = (simd_float4x4(placed.parent.worldTransform) * placed.transform).columns.3.xyz
+                yaw = skeleton.turn()
+                skeleton.pose(animation, at: frame ?? 0)
+            } else {
+                launch = (simd_float4x4(placed.parent.worldTransform) * placed.transform).columns.3.xyz
+            }
+        }
+
+        // Which way is out: wherever the creature is facing as it lets go. The models face +Z in the
+        // bind pose — every forward point sits at positive Z — and the pose's yaw carries that round,
+        // measured off the head where there is one, which is what aims a spit.
+        let forward = SIMD3<Float>(sin(yaw), 0, cos(yaw))
+
+        let arc = flight.arc * .pi / 180
+        let time = Double(flight.distance / max(flight.velocity, 0.1))
+        return (0 ..< flight.count).map { index in
+            // A full circle spaces the copies evenly all the way round; anything less is a fan centred
+            // on the way out.
+            let yaw: Float =
+                arc >= 2 * .pi * 0.99
+                ? 2 * .pi * Float(index) / Float(flight.count)
+                : (flight.count > 1 ? arc * (Float(index) / Float(flight.count - 1) - 0.5) : 0)
+            let direction = SIMD3<Float>(
+                forward.x * cos(yaw) + forward.z * sin(yaw), 0,
+                -forward.x * sin(yaw) + forward.z * cos(yaw)
+            )
+            return one(effect, from: launch, along: direction, over: time,
+                       flying: flight, models: models, animation: animation, frame: frame, speed: speed)
+        }
+    }
+
+    /// One copy of a fired thing: its own model where the record names one, its flight texture riding
+    /// along, moving out from the launch point and gone when it arrives.
+    private func one(
+        _ effect: ModelEffect,
+        from launch: SIMD3<Float>,
+        along direction: SIMD3<Float>,
+        over time: Double,
+        flying flight: ModelEffect.Flight,
+        models: [DrawnModel],
+        animation: AnmFile?,
+        frame: Int?,
+        speed: Double
+    ) -> SCNNode {
+        let node = SCNNode()
+        if let model = effect.model {
+            for part in nodes(for: model.mesh, textures: model.textures, skeleton: nil) {
+                part.simdScale = SIMD3(repeating: effect.scale)
+                node.addChildNode(part)
+            }
+            // Pointed the way it flies: a bolt or a spike is modelled along an axis, and standing
+            // still sideways it reads as debris.
+            node.simdOrientation = simd_quatf(angle: atan2(direction.x, direction.z), axis: SIMD3(0, 1, 0))
+        }
+        if let image = effect.image {
+            // The record's radius is the thing's physics, not its picture, and the picture is what is
+            // being stood in for — so it never draws smaller than can be seen.
+            let half = flight.size > 0 ? max(flight.size, 0.3) : min(max(span(of: models) * 0.15, 0.4), 1.6)
+            let rider = SCNNode(geometry: sprite(image, reach: half))
+            rider.constraints = [ SCNBillboardConstraint() ]
+            rider.renderingOrder = 10
+            node.addChildNode(rider)
+        }
+        node.position = SCNVector3(launch.x, launch.y, launch.z)
+
+        let landing = launch + direction * flight.distance
+
+        // Held on one frame: the copy stands as far along as the flight had got by then.
+        if let frame {
+            let rate = Double(max(animation?.framesPerSecond ?? 30, 1))
+            let since = Double(frame - (effect.frame ?? 0)) / rate
+            if since < 0 || since > time {
+                node.opacity = 0
+            } else {
+                let gone = launch + direction * flight.velocity * Float(since)
+                node.position = SCNVector3(gone.x, gone.y, gone.z)
+            }
+            return node
+        }
+
+        // Playing alongside an animation: launched on its frame, timed against the same clock the
+        // skeleton loops on, so the copy leaves when the blow lands every time round.
+        if let animation, animation.duration > 0 {
+            let rate = Double(max(animation.framesPerSecond, 1))
+            let start = min(Double(effect.frame ?? 0) / rate / animation.duration, 1)
+            let end = min(start + time / animation.duration, 1)
+            let covered = direction * flight.velocity * Float((end - start) * animation.duration)
+            let target = launch + covered
+
+            let moving = CAKeyframeAnimation(keyPath: "position")
+            moving.values = [
+                SCNVector3(launch.x, launch.y, launch.z), SCNVector3(launch.x, launch.y, launch.z),
+                SCNVector3(target.x, target.y, target.z), SCNVector3(target.x, target.y, target.z),
+            ]
+            moving.keyTimes = [ 0, NSNumber(value: start), NSNumber(value: end), 1 ]
+            moving.duration = animation.duration / speed
+            moving.repeatCount = .infinity
+            moving.calculationMode = .linear
+            moving.isRemovedOnCompletion = false
+            node.addAnimation(moving, forKey: "flight")
+
+            let step = min(0.02, max((end - start) / 4, 0.001))
+            let showing = CAKeyframeAnimation(keyPath: "opacity")
+            showing.values = [ 0, 0, 1, 1, 0, 0 ]
+            showing.keyTimes = [
+                0, NSNumber(value: start), NSNumber(value: start + step),
+                NSNumber(value: max(end - step, start + step)), NSNumber(value: end), 1,
+            ]
+            showing.duration = animation.duration / speed
+            showing.repeatCount = .infinity
+            showing.calculationMode = .linear
+            showing.isRemovedOnCompletion = false
+            node.opacity = 0
+            node.addAnimation(showing, forKey: "showing")
+            return node
+        }
+
+        // On a still creature the flight loops on a clock of its own: out, gone, back, again.
+        node.opacity = 0
+        let delta = landing - launch
+        node.runAction(.repeatForever(.sequence([
+            .fadeOpacity(to: 1, duration: 0.05),
+            .move(by: SCNVector3(delta.x, delta.y, delta.z), duration: time / speed),
+            .fadeOpacity(to: 0, duration: 0.1),
+            .move(to: SCNVector3(launch.x, launch.y, launch.z), duration: 0),
+            .wait(duration: 0.5),
+        ])))
+        return node
+    }
+
     /// The effect itself: the texture its particles are drawn with, facing the camera at the point the
     /// game spawns it, lit up on the frame it is called for and gone again a moment later.
     private func spark(
@@ -425,23 +592,25 @@ public struct ModelScene {
         let system = SCNParticleSystem()
         system.particleImage = image
         // The reach is how far the drift spreads, not how big one spark in it is: a nova that covers
-        // seven units is a great many sparks over that ground rather than one seven-unit spark.
-        let spark = reach * 0.5
+        // seven units is a great many small sparks over that ground rather than a few half-its-size —
+        // sized past a unit they read as playing cards and an area effect whites the frame out.
+        let spark = min(max(reach * 0.18, 0.2), 0.9)
         system.particleSize = CGFloat(spark)
         system.particleSizeVariation = CGFloat(spark * 0.35)
         // A wider drift needs more of them to read as one cloud rather than as a scattering — but only
         // just. These are drawn additively over one another, so a rate that reads as lively on one
         // effect blows out to a white smear once a cast throws six at once.
-        system.birthRate = CGFloat(6 + 4 * min(reach, 8))
-        system.particleLifeSpan = 0.9
-        system.particleLifeSpanVariation = 0.35
-        system.emitterShape = SCNSphere(radius: CGFloat(reach * 0.6))
+        system.birthRate = CGFloat(10 + 5 * min(reach, 8))
+        system.particleLifeSpan = 0.7
+        system.particleLifeSpanVariation = 0.25
+        system.emitterShape = SCNSphere(radius: CGFloat(reach * 0.7))
         system.birthLocation = .volume
         system.emittingDirection = SCNVector3(0, 1, 0)
         system.spreadingAngle = 35
-        system.particleVelocity = CGFloat(reach * 0.35)
-        system.particleVelocityVariation = CGFloat(reach * 0.2)
-        system.acceleration = SCNVector3(0, reach * 0.12, 0)
+        // A shimmer over the ground it covers rather than a column climbing off it.
+        system.particleVelocity = CGFloat(reach * 0.12)
+        system.particleVelocityVariation = CGFloat(reach * 0.08)
+        system.acceleration = SCNVector3(0, reach * 0.05, 0)
         system.particleAngularVelocity = 18
         system.particleAngularVelocityVariation = 40
         system.blendMode = .additive

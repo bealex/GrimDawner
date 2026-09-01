@@ -20,7 +20,7 @@ public struct ModelEffect: Sendable, Identifiable {
     public let name: String
     /// The frame of the animation it starts on, or nothing for one that simply holds — the aura a
     /// passive carries, or a skill's own effect shown on its own.
-    public let frame: Int?
+    public var frame: Int?
     /// The attachment of the model it hangs from — `Mouth`, `HeadFXUP`, `FXCentered`. Empty for one the
     /// game centres on the creature.
     public let attachment: String
@@ -42,6 +42,23 @@ public struct ModelEffect: Sendable, Identifiable {
     /// Whether it runs forward from where it hangs rather than sitting on it. A wave skill — a breath, a
     /// flame arc — states how far it sweeps, and drawn on the caster it is a spark in a fist instead.
     public var isWave = false
+    /// Set on something the skill fires rather than wears: the projectile leaves the launch point and
+    /// crosses the world, and this is the flight the game's own records state for it.
+    public var flight: Flight?
+
+    /// How a fired thing crosses the world: how many leave at once, across what spread, and how fast.
+    public struct Flight: Sendable {
+        public let count: Int
+        /// The spread the copies fan across, in degrees — a ring is the whole circle.
+        public let arc: Float
+        /// World units a second, the record's own `projectileVelocity`.
+        public let velocity: Float
+        /// How far one flies before it is done, the record's own `projectileDistance`.
+        public let distance: Float
+        /// How big the thing in flight is, the record's own `actorRadius` — what its picture is drawn
+        /// across when the model itself is the game's invisible stand-in.
+        public let size: Float
+    }
 }
 
 /// How far a skill throws what it shows, and whether it sweeps forward.
@@ -125,11 +142,89 @@ public extension ModelRenderer {
             found += effects(inside: pack, at: "", reaching: reach, in: database, depth: 0)
         }
         for key in skill.fieldOrder where key.hasPrefix("particleEffectName") || key == "radiusEffectName" {
-            found += effects(inside: skill.text(key), at: "", reaching: reach, in: database, depth: 0)
+            // The record pairs each cast effect with the point of the model it hangs on:
+            // `particleEffectName2` goes with `particleEffectAttachPoint2`.
+            let attach =
+                key.hasPrefix("particleEffectName")
+                ? skill.text("particleEffectAttachPoint" + key.dropFirst("particleEffectName".count)) : ""
+            found += effects(inside: skill.text(key), at: attach, reaching: reach, in: database, depth: 0)
         }
 
         var seen = Set<String>()
         return found.filter { seen.insert($0.id).inserted }
+    }
+
+    /// What a skill fires, as something to draw in flight.
+    ///
+    /// `skillProjectileName` names the projectile, which is a creature-like record of its own: a `mesh`
+    /// to draw, a `projectileFlightFX` whose particle texture rides along, `projectileVelocity` and
+    /// `projectileDistance` for the flight, and `projectileScaleFactor` where the model is not life
+    /// size. The skill states the rest — `launchAttachPointName` is the point of the model it leaves
+    /// from, `projectileLaunchNumber` how many leave at once (per rank), `projectileLaunchRotation` the
+    /// spread they fan across. The engine fires the skill on the animation's hit callback, so that
+    /// frame is when the flight starts.
+    func emitted(
+        bySkillAt path: String,
+        level: Int,
+        launchFrame: Int?,
+        in database: GameDatabase
+    ) -> [ModelEffect] {
+        guard let skill = database.record(path) else { return [] }
+
+        let projectilePath = skill.text("skillProjectileName")
+            .replacingOccurrences(of: "\\", with: "/").lowercased()
+        guard !projectilePath.isEmpty, let projectile = database.record(projectilePath) else { return [] }
+
+        let counts = skill["projectileLaunchNumber"]?.numbers ?? []
+        let count = counts.isEmpty ? 1 : Int(counts[min(max(level - 1, 0), counts.count - 1)])
+        let stated = Float(skill.number("projectileLaunchRotation"))
+        // A ring says its spread outright; a burst of several without one is read as a narrow fan.
+        let arc = stated > 0 ? stated : (count > 1 ? 45 : 0)
+        let velocity = Float(projectile.number("projectileVelocity"))
+        let distance = Float(projectile.number("projectileDistance"))
+        let reach = SkillReach(skill)
+
+        // What flies is drawn as the effect riding it, or the trail it lays: `projectileFlightFX`
+        // first, and where a crawler carries none, the pak it drops on the ground as it goes —
+        // the fault line's eruptions are `inflightGroundFxPakName` and its spark is invisible.
+        var picture: CGImage?
+        let flightPath = projectile.text("projectileFlightFX")
+            .replacingOccurrences(of: "\\", with: "/").lowercased()
+        if !flightPath.isEmpty, case let file = database.record(flightPath)?.text("effectFile") ?? "",
+            !file.isEmpty {
+            picture = image(ofParticles: file)
+        }
+        if picture == nil {
+            picture = effects(
+                inside: projectile.text("inflightGroundFxPakName"),
+                at: "", reaching: reach, in: database, depth: 0
+            ).compactMap(\.image).first
+        }
+
+        var effect = ModelEffect(
+            name: Self.readableName(of: projectilePath),
+            frame: launchFrame,
+            attachment: skill.text("launchAttachPointName"),
+            recordPath: projectilePath,
+            image: picture,
+            radius: nil
+        )
+        effect.flight = ModelEffect.Flight(
+            count: max(count, 1),
+            arc: arc,
+            velocity: velocity > 0 ? velocity : 8,
+            distance: distance > 0 ? distance : (reach.radius.map { $0 * 2 } ?? 12),
+            size: Float(projectile.number("actorRadius"))
+        )
+        // The model is the projectile's own — unless it wears the game's invisible stand-in, which is
+        // the record's way of saying the effect is the whole look.
+        if case let mesh = projectile.text("mesh"), !mesh.isEmpty, let loaded = try? self.mesh(at: mesh),
+            !loaded.materials.allSatisfy({ $0.diffuse?.lowercased().contains("invisible") == true }) {
+            effect.model = DrawnModel(mesh: loaded, textures: skins(for: loaded, at: mesh, preferring: nil))
+            let scale = Float(projectile.number("scale"))
+            effect.scale = scale > 0 ? scale : 1
+        }
+        return effect.isDrawable ? [ effect ] : []
     }
 
     /// One record's effects, following a pack of them down to the particle systems inside it.

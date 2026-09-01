@@ -353,9 +353,10 @@ struct ModelRendererTests {
         #expect(cast.contains { $0.image != nil })
     }
 
-    /// An effect that names no point of its own is centred on the creature, which is not the middle of
-    /// its bounding box: N'erfatal's tail drags that six units behind it, and what it channels was hung
-    /// out there in the air.
+    /// An effect aimed at the creature itself is hung on its own middle, which is not the middle of
+    /// its bounding box: N'erfatal's tail drags that six units behind it. The skill states the aim —
+    /// its cast effect is paired with `FXCentered` — and the model's own point of that name is where
+    /// the creature says its middle is.
     @MainActor
     @Test
     func centresAnEffectOnTheCreatureRatherThanItsBox() throws {
@@ -370,15 +371,18 @@ struct ModelRendererTests {
         let monster = try #require(
             resolver.monster(at: "records/creatures/enemies/special/beaver_01.dbr", level: 100)
         )
-        let channel = try #require(monster.animations.first { $0.title == "Channel" })
+        let sacrifice = try #require(monster.animations.first { $0.title == "Sacrifice" })
 
         let effects = monster.abilities
-            .filter { $0.animation?.path == channel.path }
+            .filter { $0.animation?.path == sacrifice.path }
             .flatMap { renderer.effects(ofSkillAt: $0.skill.recordPath, in: database) }
-        #expect(effects.contains { $0.attachment.isEmpty }, "this one names no point of its own")
+        #expect(
+            effects.contains { $0.attachment.lowercased() == "fxcentered" },
+            "the cast names the creature's own middle"
+        )
 
         let models = renderer.models(of: ModelAssembly.of(monster, in: database))
-        let scene = ModelScene().scene(for: models, playing: try renderer.animation(at: channel.path), at: 0,
+        let scene = ModelScene().scene(for: models, playing: try renderer.animation(at: sacrifice.path), at: 0,
                                        showing: effects)
 
         func planes(_ node: SCNNode) -> [SIMD3<Float>] {
