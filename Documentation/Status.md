@@ -62,10 +62,21 @@ way a fire resistance of 126 reads as −50 from Ultimate and +176 elemental rat
 
 ## What the game shows and the app does not
 
+[Coverage.md](Coverage.md) is the field-by-field audit: every property on an item, monster, skill or
+devotion record, and whether anything reads it.
+
+
 **The damage panel.** *Fire Damage 50*, *Aether Damage 9118–9993* and *Damage Per Second* combine the
 weapon's own damage range with conversions, flat bonuses and the percentages. The app shows the flat
 damage a character adds and the percentage it is raised by — both exact — but not the weapon figures they
-feed.
+feed. The Interaction tab does carry `weaponDamagePct` through to a skill's damage; the sheet's own panel
+does not.
+
+**Flat damage reads as its floor.** The game writes a flat bonus as a minimum with no maximum and a range
+as both, and the two keys are summed apart, so a build whose flat bonuses outweigh its ranged ones ends
+with a maximum below its minimum — 208 against 99 for aether on the character checked here. Recovering
+the real spread means pairing them per source in `ItemRoll`; until then the top is clamped never to read
+under the floor.
 
 **Conversions and retaliation** are parsed and displayed but never folded into a total.
 
@@ -95,6 +106,19 @@ are structurally right and numerically untested. Pet stats have no reference eit
 much of each of fire, cold and lightning, and the elemental percentage does not reach an elemental damage
 over time. The game's Fire panel settles the second — Burn should read +446% rather than +599% for the
 character checked here.
+
+**Which damage band a swing lands in.** The record states the six thresholds and their multipliers but
+not how the roll picks between them, and the published sources disagree. The app reads the roll as even
+across the pairing's hit figure. Settling it needs the binary.
+
+**What the game scopes a monster's per-type damage modifier to.** The Dread's `offensivePhysicalModifier`
+comes to −107% at level 100 and would leave a boss hitting for nothing, so the app uses only the
+creature-wide `offensiveTotalDamageModifier`. Leaving it out is incomplete; applying it is wrong.
+
+**A monster's damage against a reference.** `MonsterStatsTests` pins Ravager of Minds' health, attributes,
+abilities, armour and resistances to GrimTools, which is the only reference there is. GrimTools' monster
+database returns 403 to fetching, so nothing pins a monster's *damage* — the one figure that would settle
+whether the interaction numbers are right.
 
 **Whether Nemesis is the right tier around −12000.** The band runs from the floor at −20000 up to −8000,
 which follows from reading `factionValueN` as lower bounds — consistent with 25000 being both the Revered
@@ -247,21 +271,34 @@ sure to carry. [GameData.md](GameData.md#which-affixes-an-item-can-roll) has whe
 
 The monster window's **Interaction** tab reads one of your characters against the monster in front of it.
 The two sides sit side by side — what your swing lands on it, what its swing lands on you — with what
-your build takes off it underneath. Every figure is the game's own arithmetic out of
-`combatformulas.dbr` at the monster's own level and difficulty;
+each takes off the other underneath. Every figure is the game's own arithmetic out of
+`combatformulas.dbr` at the monster's own level and mode;
 [GameData.md](GameData.md#the-fight-itself) has the equations.
 
-It opens on weapon damage, the floor a build stands on, and any of the character's attacks can be read
-in its place: the skill's own flat damage at the rank it is held, raised by the same bonuses the sheet
-raises everything by. Skills that only buff are left out of the list, having nothing to land. **What a
-skill takes from the weapon it is swung with is not modelled**, so a weapon-damage skill reads low — the
-same gap that leaves the sheet's own Damage Per Second blank.
+Both sides show the chance to hit and to crit, what a blow lands at its hardest, what it averages over
+misses and bands, and what that comes to over a second. A blow bigger than the whole of your health is
+called out as a one shot. Each card carries a picker: yours chooses which of your attacks to read,
+starting on the weapon attack, and the monster's chooses which of its attacks it swings back with, since
+a boss carries six and they are not close in what they throw.
 
-**The reductions are the interesting part.** The game applies the *largest* of each and drops the rest, so
-a build carrying two sources of one is paying for a line that never fires. Each is listed with every
-source feeding it — gear, components, augments, masteries, individual skills, constellations — and a
-wasteful one is flagged in red with how much of it is doing nothing.
+**Rates are per attack, not per weapon.** A beam, cone, drain, tether or spin ticks at its own
+`timeBetweenAttacks` — Albrecht's Aether Ray at 300ms and cast speed — while a charge or a growing radius
+ticks that fast within one use and is governed by its cooldown instead. A cooldown shorter than the swing
+means the skill is always ready, not that it is thrown faster.
 
+**Buffs and Nerfs** sits beside the attack picker. Passives, auras and transmuters are already in every
+figure and are listed in a card so you can see which. What a save cannot know is which timed buffs were
+up and which of the monster's debuffs had landed, so those are checkboxes: your own self-buffs on one
+side, and on the other everything the monster leaves on you — Sundered, and its reductions to your
+abilities and damage. Only the strongest of each kind counts.
+
+**Mode covers Ascendant.** It is not a difficulty the save records but a second adjustment over Ultimate,
+and it roughly doubles a boss's health and triples its damage.
+
+**What is still one attack at a time.** The monster's combined figure reads its own attack at full rate
+plus each special at its stated chance once per its timeout. That is an estimate: the record says how
+often, not in what order. Your side is not combined at all. No pets, no devotion procs, no damage over
+time — Reap Spirit's pets fight for eighteen seconds and count for nothing.
 ## The catalogues
 
 Both are swept from `records/items/` in one pass and cached in one file under

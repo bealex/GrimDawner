@@ -77,7 +77,9 @@ middle button drags.
 **Monsters** — every named monster in the game, filtered by rank, by race and by name, each marked with
 where the game keeps its record — Nemesis, Hero, Bounty, Wave Event — which is the only thing telling two
 of the same name apart. A monster is read
-at a level and a difficulty, since everything it has is an equation of both: what it is worth in a fight,
+at a level and a mode — the three difficulties and Ascendant, which is a second adjustment over Ultimate
+worth roughly twice the health and three times the damage — since everything it has is an equation of
+both: what it is worth in a fight,
 its attacks with their ranges and timings, its passives, and what it drops from each equipment slot with
 the odds. Double-clicking opens it in a window of its own, with its whole sheet, its attacks, its loot,
 and its **model** — the game's own, drawn live, dressed in its own gear and holding a weapon rolled from
@@ -136,12 +138,16 @@ do the rolled figures on individual items, bands included. The damage panel and 
 not modelled.
 
 Monsters have no such window in the game, so they are checked against GrimTools' monster database, which
-reads the same records: Ravager of Minds at level 100 on Ultimate matches to the unit.
+reads the same records: Ravager of Minds at level 100 on Ultimate matches to the unit. Its *damage* is
+pinned to nothing — GrimTools refuses to be fetched — so the interaction figures rest on the equations
+alone. The armour equations and the resistance-reduction order are pinned to Crate's own worked examples.
 [Documentation/Status.md](Documentation/Status.md) has the whole of it.
 
 ## Documentation
 
 - [Documentation/SaveFormat.md](Documentation/SaveFormat.md) — the `.gdc` layout.
+- [Documentation/Coverage.md](Documentation/Coverage.md) — every field on an item, monster, skill or
+  devotion record, and whether the engine reads it.
 - [Documentation/GameData.md](Documentation/GameData.md) — the `.arz`, `.arc` and `.tex` formats, which
   record holds which fact, and the rules the engine encodes.
 - [Documentation/Status.md](Documentation/Status.md) — how far the stat engine goes.

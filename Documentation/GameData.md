@@ -94,8 +94,18 @@ Sizes to expect: skill icons 32×32, item art 32×32 to 32×96, faction icons 24
 - Affixes: `lootRandomizerName`. Ascendant affixes have no name of their own — use the skill named by
   `modifiedSkillName1`.
 - Skills: `skillDisplayName`; if absent, follow `buffSkillName` or `petSkillName` and read it there.
-- Localised strings carry inline colour codes: a caret followed by one letter, as in `^kPrismatic Diamond`.
-  `GameDatabase.localised` strips them.
+- Localised strings carry inline colour codes: a caret followed by one letter, as in `^kPrismatic Diamond`,
+  and braced as `{^E}`. A line break is written `{}`, and a lore note writes a blank line as `{}{}`.
+  `GameDatabase.localised` handles both, taking the line break first — strip the caret before the braces
+  and a colour code leaves an empty pair that reads as a break it never was.
+- A monster's attacks are nameless. No `skillDisplayName`, no `FileDescription`, no tag: the record's file
+  name is the only string there is, so the creature's own prefix is dropped and the rest capitalised.
+  `thedread_screechorb_secondarypool` reads "Screechorb · Secondarypool". Nothing splits `screechorb` in
+  two, because nothing in the game says where the seam is.
+- Several fields carry a text tag named after the field, which is how a value and its wording are paired
+  without guessing. `LifeMonitorPercent` reads "Activates when Health drops below {%.1f0}%";
+  `SkillChanceWeight`, `ProjectileLaunchNumber` and `ProjectilePiercingChance` are the same shape. The tag
+  is capitalised where the field is not, so the lookup has to know both.
 
 ### Item parts
 
@@ -193,6 +203,34 @@ against. What an
 attach point states is *where*: `FXCentered` (376 records) and `FXUnParentedCenter` (221) wrap the whole
 creature, where `HeadFXUP` (91), `R Hand`, `L Hand` and the rest name a place to hang something off.
 Reading a centred one as a point is what draws an aura as a puff on the chest.
+
+### How a monster attacks
+
+A creature carries no inventory weapon. The flat damage on its **passives** is what a swing of it is
+worth — `damagebase_physical06` gives an uber boss 1014–1353 physical at level 100 — and its attack
+skills add their own figures on top, scaled by `weaponDamagePct` where they state one. Ravager of Minds'
+plain attack states no damage at all and is worth exactly the creature's own blow.
+
+`monsterskillmanager.tpl` states how often it reaches for a special: `specialAttackChance`,
+`specialAttack2Chance` and `specialAttack3Chance` in `[0..100]`, `specialAttackTimeout` ("Seconds - time
+out for all skill use") and `specialAttackDelay`. The Dread's are 70/100/70 with an eight second timeout.
+The order it picks them in is not stated anywhere.
+
+Its `offensive<Type>Modifier` total is not usable as a damage multiplier. The Dread's comes to −107%
+physical at level 100, from three passives that are balanced against each other:
+
+| passive | total damage | physical | physical damage |
+| --- | ---: | ---: | ---: |
+| `armorbase06` | +25% | −135% | — |
+| `damage_totaladjuster` | +24% | +18% | — |
+| `damagebase_physical06` | — | +10% | 1014 |
+| `thedread_passiveproperties` | — | — | 388 |
+
+`armorbase06` is a shared armour passive whose `offensivePhysicalModifier` slides from 0 at rank 1 to
+−135 at rank 100, paired with its own `offensiveTotalDamageModifier` going −90 to +25 over the same
+range. Laying the per-type total over a skill's stated damage leaves a boss hitting for nothing, so the
+app uses `offensiveTotalDamageModifier` — creature-wide, +89% for The Dread on Ultimate — and leaves the
+per-type figure alone. What the game scopes the −135% to is not established.
 
 ### The model format
 
@@ -463,14 +501,39 @@ level tier.
 
 ### Who drops an item
 
-Nothing states it. The tables run from a monster to what it leaves behind, so the only way to answer it
-is to walk every monster that drops anything — 1,453 of them — and record what its tables can reach.
-That takes about ten seconds, so it is done once per installed version and kept beside the item and
-monster listings.
+Every loot slot a monster record names is **initial equipment**. `templatebase/characterloot.tpl` has one
+content group and calls it that, holding Head, Chest, Shoulders, Hands, Legs, Feet, Right Hand, Left
+Hand, Finger1, Finger2 and Misc1–3. A hand slot is what the creature spawns holding, in the same sense
+its chest slot is what it spawns wearing.
 
-The answer is filed under the item's **name** rather than its record, since the game writes one record
-per level tier and a table names whichever tier suits its own band. Where a monster reaches one item
-down several paths those chances add, being chances of the same kill.
+`dropItems` on `monster.tpl` — "drop items on death?" — decides whether any of it is left behind. Every
+one of the 3,096 monster records writes the flag, so its default never applies and naming a table proves
+nothing: 528 creatures spawn armed with the flag off and their weapons go with them.
+
+The designed loot sits in **Misc1–3**, not in the hands. Fabius holds generic `mt_gearweaponsmelee1h`
+tables in both hands; his signature pauldron is `mt_geararmorshoulder_nemesisoutlaw` in Misc1, beside
+Scrap and a Celestial Lotus. Valdaran has no hand slots at all and the same Misc shape.
+
+Nemesis loot lives in two trees. Under `records/creatures/enemies/nemesis/` the split is exact: every
+record with the flag on has Misc loot, every record with it off has none. The ones with it off — Kaisan,
+Nyarlathon, The Underking, Grava'Thul, Ixall, Kubacabra, Aleksander, Reaper, Shriek, Vinn, Raddoth,
+Ignus — carry their monster infrequents on a second record under
+`records/endlessdungeon/creatures/enemies/`. Kaisan's necklace hangs off the endless-dungeon copy at
+50%. Both trees have to be swept or twelve nemeses credit nothing; `records/sandbox` is developer test
+records and `records/skills` is summons, and neither belongs in a drop index.
+
+### What a chest holds
+
+A chest's table is not a weighted list. `fixeditemloot.tpl` is a grid: six slots of named tables, each
+carrying one chance per thing the chest drops. Position by position those chances are weighed against
+one another and sum to about 1000, so the first thing out can be drawn from a richer table than the
+last — which is how a chest promises a legendary without promising three. A position every slot writes a
+zero at is one the chest does not fill, and counting the rest is what says how much comes out.
+
+`FixedItemContainer` is a trove: 603 records, all with a `mesh`, none with a `bitmap`. They are never
+carried, so the game gives them no inventory icon and the model is the only picture of one there is. 563
+name a loot table. `Destructible` covers crates, barrels and the "Grand Spoils" a boss leaves; it carries
+the same `lootTable` field, and all 184 of its records carry meshes too.
 
 ### The fight itself
 
@@ -482,15 +545,54 @@ defender's defensive ability and produces one figure. `pthMinimum` (55) is the f
 against, and the figure is capped at 100 to read as a chance.
 
 **How hard.** `pthThreshold1..6` (70, 90, 105, 120, 130, 135) and `pthDamageModifier1..6` (1.0 to 1.5)
-are six bands: a blow landing past a threshold is multiplied by that band's modifier. The app shows the
-highest band a pairing reaches; how often each is rolled is the game's own business and is not guessed at.
+are six bands: a blow landing past a threshold is multiplied by that band's modifier. Below the first
+threshold `normalPTHEquation` applies, which is `probabilityToHit / 70` — a pairing that never clears 70
+hits softer as well as less often.
+
+Which band a given swing lands in is the one thing the record does not state. Sources disagree: the Dawn
+Index reads it as fixed by the hit figure, the forums describe a d100 whose ranges the thresholds carve
+up, and the Index itself says the behaviour needs a live fixture to settle. The app reads the roll as
+even across the pairing's whole hit figure, so a band is worth the span it covers. That is an
+assumption, and it is labelled as one in the code and in the tooltip.
+
+**Attributes.** Three more equations scale damage by attribute, and they are easy to miss because the
+character sheet's own damage figures exclude them:
+
+    physicalDamageEquation = physicalDamageDV*((dexterityDV/245)+1)
+    pierceDamageEquation   = pierceDamageDV*((dexterityDV/245)+1)
+    magicalDamageEquation  = magicalDamageDV*((intelligenceDV/215)+1)
+
+Cunning raises physical and pierce, Spirit everything else. The variables carry the engine's old names:
+`dexterityDV` is Cunning, `intelligenceDV` is Spirit. At 874 Spirit that is a fivefold multiplier on
+aether, so leaving it out understates a caster by more than any other single omission.
 
 **What stops it.** Two armour equations, picked by whether the blow is bigger than the armour:
 `physicalDamageDefenseEquationDGP` is `(protection × (1 − absorption)) + (damage − protection)` for a
 blow that gets through, `physcialDamageDefenseEquationDLEP` — the game's own spelling — is
 `damage × (1 − absorption)` for one the armour swallows. The absorption share itself is
-`armorDefensiveAbsorption` on `gameengine.dbr`, raised by whatever `defensiveAbsorptionModifier` a record
-adds.
+`armorDefensiveAbsorption` on `gameengine.dbr` (70), raised by whatever `defensiveAbsorptionModifier` a
+record adds, and the raise is multiplicative: two +20% pieces give 70 × 1.4, not 110.
+
+Crate publishes three worked examples for this, and `ArmorTests` pins all three:
+<https://www.grimdawn.com/guide/gameplay/combat/>. The same page states that armour applies **per hit
+region** — a body area is picked per blow and that region's own armour applies, weighted by
+`combatRegion<Part>Chance` on the formulas record. The averaged Armor Rating the sheet displays is not
+what a blow meets.
+
+**Damage absorption.** `damageAbsorptionPercent` is a share of everything that reaches the target,
+swallowed after resistance and armour both. It is aimed at every damage type where armour absorption
+stops only physical, and Mirror of Ereoctes states 100% of it, which is what makes it a few seconds of
+immunity.
+
+**Resistance caps.** `playerDefenseCap` on `gameengine.dbr` is 80 for all three difficulties, raised per
+type by `defensive<Type>MaxResist`. Everything past the cap is overcap. It stops nothing by itself and is
+spent absorbing reduction before the cap starts to give, so reduction comes off the whole figure and the
+cap is laid over the result: 110% against −30 still resists 80.
+
+**Weapon damage.** A skill's `weaponDamagePct` carries that share of the whole weapon attack — the
+weapon's own damage and every flat bonus the character's gear adds — on top of the skill's own figures.
+A spell that names no percentage carries none. Flat Elemental damage is split three ways, a third each
+to fire, cold and lightning, and each third is then met by that type's own resistance.
 
 ### What one side takes off the other
 
@@ -509,10 +611,21 @@ Three families lower what a target brings, and the game treats them differently:
 first five are what a build carries against a target, and carrying two of one wastes the smaller: 236
 records name the damage reduction, 120 the flat resistance reduction, 50 the defensive-ability one.
 
-The last is the only one that adds up, and it cannot be told apart from the character's own resistance:
-Flame Jet's buff carries `defensiveElementalResistance = -40` under the same key a ring uses for +40 of
-its own. Reading it off a character would list that character's own gear as though it were aimed at the
-enemy, so the app leaves it out.
+Nothing in the database states the order they apply in. The Dawn Index documents it, and
+`TargetReductionTests` pins its worked example: the stacking `-X%` debuffs first, then the largest
+percentage reduction, then the largest flat one. A percentage follows the sign of what it takes from, so
+a resistance the debuffs have already driven below zero gets deeper rather than shallower. Applied in
+the wrong order the same three reductions come to half as much.
+
+The last family is written under the same key as the character's own resistance, so it cannot be read off
+a character's gear. It can be read off a skill: Spectral Wrath carries `defensiveAether = −39` aimed at
+whatever it hits, and a monster's abilities carry the same shape. Since 1.2 a monster's abilities no
+longer carry the other two families, so the negative-resistance kind is all a monster applies.
+
+**Sundered** is the game's name for `offensiveSlowDamageMult`: the target takes that much more damage for
+`offensiveSlowDamageMultDuration` seconds. Sixteen boss skills are named for it and every one carries the
+field, 30–65% for 3–5 seconds. Only the strongest instance applies. No field in the game is called
+sunder; the name lives in the file names and the patch notes.
 
 ### Reduction in duration
 
@@ -643,6 +756,14 @@ the shoulders and legs raise exactly those two regions.
 
 **Absorption multiplies.** "Increases Armor Absorption by X%" scales the base 70%, capped at 100 — the same
 wording, and the same behaviour, as "Increases Armor by X%".
+
+**Ascendant is not a fourth difficulty.** The save records three, and
+`balancingadjustment_ultramode_enemies01.dbr` is a second adjustment laid over Ultimate:
+`characterLifeModifier` +850, `offensiveTotalDamageModifier` +165, `offensiveCritDamageModifier` +40,
++80 flat to both abilities, +12% attack speed. Net on a boss that is roughly twice the health and about
+three times the damage — The Dread goes 2.30M to 4.95M — which matches Crate's own "roughly double enemy
+health". A celestial boss carries a skill that negates the adjustment stat for stat and is left where it
+stands, which is why Ravager of Minds reads the same in both.
 
 **Blanket bonuses fold into every figure they reach**, and the figure never names them. A resistance takes
 `defensiveAllResistance`, and fire, cold and lightning also take `defensiveElementalResistance`; a maximum
