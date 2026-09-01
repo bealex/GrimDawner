@@ -43,7 +43,15 @@ fi
 ACTIONS=(build)
 [ "$CLEAN" -eq 1 ] && ACTIONS=(clean build)
 
-xcodebuild -project GrimDawner.xcodeproj -scheme GrimDawner -configuration "$CONFIG" "${ACTIONS[@]}" |
-  grep -E "error:|warning:|BUILD" || true
+# xcodebuild's status is checked on its own: piping it into a grep let the grep's status stand in
+# for the build's, and a compile error still printed "✅".
+LOG="$(mktemp)"
+trap 'rm -f "$LOG"' EXIT
+if ! xcodebuild -project GrimDawner.xcodeproj -scheme GrimDawner -configuration "$CONFIG" "${ACTIONS[@]}" >"$LOG" 2>&1; then
+  grep -E "error:" "$LOG" >&2 || tail -n 20 "$LOG" >&2
+  echo "build ❌ $CONFIG" >&2
+  exit 1
+fi
+grep -E "warning:|BUILD" "$LOG" || :
 
 echo "build ✅ $CONFIG"
