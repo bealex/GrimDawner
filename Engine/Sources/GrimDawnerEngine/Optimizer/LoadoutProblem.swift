@@ -52,7 +52,10 @@ public struct LoadoutProblemBuilder {
     public func problem(for character: ResolvedCharacter, skill: ResolvedSkill?) -> LoadoutProblem {
         let resolver = ItemResolver(database: database, skills: SkillResolver(database: database))
         let weights = hitRegionWeights()
-        let damageWeights = skill.map { EncounterEngine.damage(of: $0) } ?? [:]
+        // The search weighs a type by what the skill throws of it, which is the middle of its band.
+        let damageWeights =
+            skill
+            .map { EncounterEngine.damage(of: $0).mapValues { ($0.lowerBound + $0.upperBound) / 2 } } ?? [:]
 
         let places = self.places(of: character)
         var sockets = [LoadoutSocket]()

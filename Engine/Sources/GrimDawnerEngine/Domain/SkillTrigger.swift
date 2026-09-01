@@ -24,6 +24,54 @@ public enum SkillTrigger {
         "OnKill": "tagAutoSkillCondition12",
     ]
 
+    /// The condition fields a skill states on its own record, and the tag the game words each with.
+    ///
+    /// Each tag is named after the field it words, which is how the pairing is known rather than
+    /// guessed — `LifeMonitorPercent` reads "Activates when Health drops below {%.1f0}%" and takes the
+    /// field's own value. `onHitActivationChance` is the exception: it has no tag of its own, so its
+    /// chance is worded with the generic one and what it waits for comes from the record's class.
+    private static let conditionFields = [
+        (field: "lifeMonitorPercent", tag: "LifeMonitorPercent"),
+        (field: "skillChanceWeight", tag: "SkillChanceWeight"),
+        (field: "filterCaster", tag: "FilterCaster"),
+    ]
+
+    /// What a record's own class says it waits for, where the class is the only thing that says it.
+    ///
+    /// These are the app's words, not the game's: nothing in the database spells them out, and a skill
+    /// that only fires on a critical hit reads as permanently on without them.
+    private static let classConditions = [
+        ("OnCrit", "on a critical hit"),
+        ("OnKill", "on a kill"),
+        ("OnHit", "on hit"),
+        ("OnLife", "at low health"),
+    ]
+
+    /// Everything that has to happen before a skill does anything, worded as the game words it where
+    /// the game words it at all. Empty for a skill that simply runs.
+    public static func conditions(ofSkillAt path: String, in database: GameDatabase) -> [String] {
+        guard !path.isEmpty, let record = database.record(path) else { return [] }
+
+        var found = [String]()
+        for condition in conditionFields {
+            guard
+                let value = record[condition.field]?.numbers.first,
+                value != 0,
+                let wording = database.localised(condition.tag)
+            else { continue }
+
+            found.append(format(wording, [ value ]))
+        }
+
+        // A chance to fire says nothing without what it fires on, and only the class carries that.
+        if case let chance = record.number("onHitActivationChance"), chance > 0 {
+            let waits = classConditions.first { record.recordClass.contains($0.0) }?.1 ?? "on hit"
+            let wording = database.localised("SkillActivationChance") ?? "Chance of Activating"
+            found.append("\(chance.formatted(.number.precision(.fractionLength(0))))% \(wording.lowercased()) \(waits)")
+        }
+        return found
+    }
+
     /// How the game words the controller at `path`, or nothing when a record names none.
     public static func text(ofControllerAt path: String, in database: GameDatabase) -> String? {
         guard

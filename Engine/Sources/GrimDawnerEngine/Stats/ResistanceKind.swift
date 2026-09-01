@@ -69,6 +69,23 @@ public enum ResistanceKind: String, CaseIterable, Sendable {
         }
     }
 
+    /// The damage type this stops, for the reductions the game names by damage type rather than by
+    /// resistance. Bleeding has none: its damage is written as the pierce family's over-time variant.
+    public var damageType: DamageType? {
+        switch self {
+            case .fire: .fire
+            case .cold: .cold
+            case .lightning: .lightning
+            case .acid: .acid
+            case .vitality: .vitality
+            case .aether: .aether
+            case .chaos: .chaos
+            case .pierce: .pierce
+            case .physical: .physical
+            case .bleeding: nil
+        }
+    }
+
     public var resistanceKey: String { "defensive\(stem)" }
     public var maximumKey: String { "defensive\(stem)MaxResist" }
 

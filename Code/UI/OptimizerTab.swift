@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
 import GrimDawnerEngine
+import GrimDawnerRender
 import SwiftUI
 
 /// What to socket into the gear the character already wears.
@@ -17,6 +18,8 @@ struct OptimizerTab: View {
     let start: (LoadoutTarget, ResolvedSkill?) -> Void
     let cancel: () -> Void
     let selectPlan: (LoadoutPlan.ID?) -> Void
+    let renderer: ModelRenderer?
+    let database: GameDatabase?
     /// Opens a component or an augment in the window that reads an item in full.
     var openItem: ((String) -> Void)?
 
@@ -239,6 +242,8 @@ struct OptimizerTab: View {
                         character: character,
                         plan: selected,
                         weaponSet: character.weaponSets.first { $0.isActive } ?? character.weaponSets.first,
+                        renderer: renderer,
+                        database: database,
                         openItem: openItem
                     )
                 }
@@ -306,10 +311,12 @@ private struct PlanRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                // Held at two lines either way, so three cards side by side line their figures up.
                 Text(plan.goal.detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(2, reservesSpace: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 14) {
                     Delta(title: "OA", now: character.sheet.offensiveAbility, then: plan.sheet.offensiveAbility)

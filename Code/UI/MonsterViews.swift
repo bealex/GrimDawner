@@ -8,8 +8,8 @@ struct MonsterLevelField: View {
     let range: ClosedRange<Int>
     let level: Int
     let setLevel: (Int) -> Void
-    var difficulty: Difficulty?
-    var setDifficulty: ((Difficulty) -> Void)?
+    var mode: MonsterMode?
+    var setMode: ((MonsterMode) -> Void)?
 
     @State
     private var text = ""
@@ -27,16 +27,20 @@ struct MonsterLevelField: View {
             Stepper("Level", value: Binding(get: { level }, set: setLevel), in: range)
                 .labelsHidden()
 
-            if let difficulty, let setDifficulty {
-                Picker("Difficulty", selection: Binding(get: { difficulty }, set: setDifficulty)) {
-                    ForEach(Difficulty.allCases, id: \.self) { difficulty in
-                        Text(difficulty.title).tag(difficulty)
+            if let mode, let setMode {
+                Picker("Difficulty", selection: Binding(get: { mode }, set: setMode)) {
+                    ForEach(MonsterMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
                     }
                 }
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .fixedSize()
-                .help("A monster on Ultimate carries several times the health it does on Normal")
+                .help(
+                    "A monster on Ultimate carries several times the health it does on Normal, and "
+                        + "Ascendant lays another adjustment over Ultimate again — 850% more health and "
+                        + "165% more damage. A celestial boss carries a skill that cancels it."
+                )
             }
         }
         .font(.callout)

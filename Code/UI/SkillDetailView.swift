@@ -71,6 +71,12 @@ struct SkillDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             header
 
+            ForEach(skill.triggers, id: \.self) { trigger in
+                Label(trigger, systemImage: "bolt.badge.clock")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(Theme.accent)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if !skill.description.isEmpty {
                 Text(skill.description)
                     .font(.callout)

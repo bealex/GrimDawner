@@ -148,7 +148,8 @@ extension MainScreen {
                         selectedPath: model.selectedCataloguePath,
                         selected: model.selectedCatalogueItem,
                         select: model.selectCatalogued,
-                        open: openItem
+                        open: openItem,
+                        renderer: model.modelRenderer
                     )
                     .task { model.openCatalogue() }
                 case .skills:
@@ -185,10 +186,10 @@ extension MainScreen {
                         selectedPath: model.selectedMonsterPath,
                         selected: model.selectedMonster,
                         level: model.monsterLevel,
-                        difficulty: model.monsterDifficulty,
+                        mode: model.monsterMode,
                         renderer: model.modelRenderer,
                         database: model.records,
-                        select: model.selectMonster(path:level:difficulty:)
+                        select: model.selectMonster(path:level:mode:)
                     )
                     .task { model.openMonsters() }
                 case .optimizer:
@@ -200,6 +201,8 @@ extension MainScreen {
                         start: model.optimize(target:skill:),
                         cancel: model.optimizer.cancel,
                         selectPlan: { model.optimizer.selectedPlan = $0 },
+                        renderer: model.modelRenderer,
+                        database: model.records,
                         openItem: openItem
                     )
                     .task { model.openCatalogue() }

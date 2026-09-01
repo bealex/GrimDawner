@@ -135,6 +135,15 @@ public struct ModelScene {
             // creature facing, and the camera has to be told how far that is from the model's own.
             skeleton.pose(animation, at: frame ?? 0)
             turned = skeleton.turn()
+            // A pose carries the creature away from where it stands in the bind: The Dread rears up to
+            // smash, and framing the bind pose leaves it drawn above the picture. The posed bones say
+            // where it has gone, so they are what the frame is taken from.
+            let posed = skeleton.posedBounds()
+            if posed.minimum.x <= posed.maximum.x {
+                let padding = (maximum - minimum) * 0.15
+                minimum = simd_min(minimum, posed.minimum - padding)
+                maximum = simd_max(maximum, posed.maximum + padding)
+            }
             if frame == nil { skeleton.play(animation, speed: speed) }
         }
 

@@ -53,6 +53,19 @@ public enum DamageType: String, CaseIterable, Sendable {
     /// Fire, cold and lightning, the three the blanket elemental bonuses reach.
     public var isElemental: Bool { self == .fire || self == .cold || self == .lightning }
 
+    /// Which of the game's damage equations scales this type with an attribute.
+    ///
+    /// `combatformulas.dbr` writes three: physical and pierce off Cunning, everything else off Spirit.
+    /// The equations name their variables the way the engine did before the attributes were renamed —
+    /// `dexterityDV` is Cunning, `intelligenceDV` is Spirit.
+    public var scalingEquationKey: String {
+        switch self {
+            case .physical: "physicalDamageEquation"
+            case .pierce: "pierceDamageEquation"
+            default: "magicalDamageEquation"
+        }
+    }
+
     public var color: Color {
         switch self {
             case .physical: Color(red: 0.85, green: 0.82, blue: 0.72)

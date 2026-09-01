@@ -168,6 +168,22 @@ final class ModelSkeleton {
     /// shoulders half a turn while the head stays on the enemy — follow the shoulders and the face ends
     /// up pointing away, which is the one thing a model view must not do. A creature with no head bone is
     /// measured by the single turn that best carries its whole bind skeleton onto the posed one.
+    /// Where the rig stands once it has been posed, which is where the creature actually is.
+    ///
+    /// A bone is a point rather than a volume, so this is the span of the rig and not of the skin over
+    /// it — enough to say where the creature has moved to, which is what a camera has to aim at.
+    func posedBounds() -> (minimum: SIMD3<Float>, maximum: SIMD3<Float>) {
+        var minimum = SIMD3<Float>(repeating: .greatestFiniteMagnitude)
+        var maximum = SIMD3<Float>(repeating: -.greatestFiniteMagnitude)
+        for bone in bones {
+            let column = simd_float4x4(bone.worldTransform).columns.3
+            let at = SIMD3(column.x, column.y, column.z)
+            minimum = simd_min(minimum, at)
+            maximum = simd_max(maximum, at)
+        }
+        return (minimum, maximum)
+    }
+
     func turn() -> Float {
         if let head = bones.firstIndex(where: { ($0.name ?? "").lowercased().contains("head") }) {
             return yaw(from: bindWorld[head], to: simd_float4x4(bones[head].worldTransform))

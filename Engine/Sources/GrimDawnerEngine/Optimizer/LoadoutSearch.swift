@@ -98,8 +98,11 @@ public enum LoadoutSearch {
         let rebuilt = CharacterBuilder(database: database)
             .build(save(of: character, wearing: choices), file: character.file)
         let damage = skill.map { EncounterEngine.damage(of: $0) } ?? [:]
-        let thrown = damage.reduce(0) { running, entry in
-            running + entry.value * (1 + (rebuilt.sheet.damageModifiers[entry.key] ?? 0) / 100)
+        var thrown = 0.0
+        for (type, band) in damage {
+            let middle: Double = (band.lowerBound + band.upperBound) / 2
+            let modifier: Double = rebuilt.sheet.damageModifiers[type] ?? 0
+            thrown += middle * (1 + modifier / 100)
         }
 
         return LoadoutPlan(

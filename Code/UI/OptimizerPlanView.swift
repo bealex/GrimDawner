@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
 import GrimDawnerEngine
+import GrimDawnerRender
 import SwiftUI
 
 /// What a plan is worth, in the sidebar beside the doll that shows what it puts where.
@@ -176,6 +177,8 @@ struct PlanDoll: View {
     let character: ResolvedCharacter
     let plan: LoadoutPlan
     let weaponSet: WeaponSet?
+    let renderer: ModelRenderer?
+    let database: GameDatabase?
     var openItem: ((String) -> Void)?
 
     /// One block, once it has been given a place to sit.
@@ -194,7 +197,7 @@ struct PlanDoll: View {
     /// A band's blocks are narrower than a gutter's: four of them have to fit the panel's own width
     /// plus both gutters.
     private static let bandBlockWidth: CGFloat = 200
-    private static let blockHeight: CGFloat = 58
+    private static let blockHeight: CGFloat = 68
     private static let blockGap: CGFloat = 8
     /// The clear space between a row of blocks and the panel itself.
     private static let bandGap: CGFloat = 12
@@ -253,10 +256,15 @@ struct PlanDoll: View {
     private var panel: some View {
         ZStack(alignment: .topLeading) {
             background
-            // The game renders the character's model here; without it the panel reads as a hole,
-            // so the backdrop it renders against is drawn on its own.
-            GameArtwork(path: doll.portraitBackground, size: doll.portrait.size)
-                .offset(x: doll.portrait.minX, y: doll.portrait.minY)
+            PortraitView(
+                backdrop: doll.portraitBackground,
+                size: doll.portrait.size,
+                character: character,
+                weaponSet: weaponSet,
+                renderer: renderer,
+                database: database
+            )
+            .offset(x: doll.portrait.minX, y: doll.portrait.minY)
 
             ForEach(doll.slots) { slot in
                 PlanDollBox(slot: slot, item: item(in: slot), choice: choice(for: slot), openItem: openItem)
@@ -407,13 +415,18 @@ private struct SocketBlock: View {
     let reading: BlockAlignment
     var openItem: ((String) -> Void)?
 
+    /// What a row sits on. The component and the augment carry their own, so a block where only one
+    /// of the two changes says which one.
+    private static let keepBackground = Color.black.opacity(0.28)
+    private static let changeBackground = Color.white.opacity(0.12)
+
     var body: some View {
         VStack(alignment: reading.horizontal, spacing: 3) {
             Text(title)
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            VStack(alignment: reading.horizontal, spacing: 6) {
+            VStack(alignment: reading.horizontal, spacing: 3) {
                 row(choice.component, worn: choice.socket.wornComponent)
                 row(choice.augment, worn: choice.socket.wornAugment)
             }
@@ -423,30 +436,42 @@ private struct SocketBlock: View {
 
     @ViewBuilder
     private func row(_ fitting: LoadoutFitting?, worn: String) -> some View {
-        if let fitting {
-            Button(action: { openItem?(fitting.recordPath) }) {
-                HStack(alignment: .top, spacing: 4) {
-                    // The artwork sits on the side the panel is on, so a column of blocks reads as one
-                    // edge rather than as a ragged one.
-                    if reading == .trailing {
-                        words(fitting, isChanged: fitting.recordPath != worn)
-                        GameIcon(path: fitting.iconPath, size: 15, fallbackSymbol: "circle.hexagongrid")
-                    } else {
-                        GameIcon(path: fitting.iconPath, size: 15, fallbackSymbol: "circle.hexagongrid")
-                        words(fitting, isChanged: fitting.recordPath != worn)
+        let isChanged = (fitting?.recordPath ?? "") != worn
+
+        Group {
+            if let fitting {
+                Button(action: { openItem?(fitting.recordPath) }) {
+                    HStack(alignment: .top, spacing: 4) {
+                        // The artwork sits on the side the panel is on, so a column of blocks reads as one
+                        // edge rather than as a ragged one.
+                        if reading == .trailing {
+                            words(fitting, isChanged: isChanged)
+                            GameIcon(path: fitting.iconPath, size: 15, fallbackSymbol: "circle.hexagongrid")
+                        } else {
+                            GameIcon(path: fitting.iconPath, size: 15, fallbackSymbol: "circle.hexagongrid")
+                            words(fitting, isChanged: isChanged)
+                        }
                     }
+                    .contentShape(.rect)
                 }
-                .contentShape(.rect)
+                .buttonStyle(.plain)
+                .pointerStyle(.link)
+                .help("Open \(fitting.name) in a window of its own")
+                .accessibilityLabel("\(fitting.kind.rawValue): \(fitting.name)")
+                .accessibilityHint("Opens it in a window of its own")
+            } else {
+                Text("empty")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.tertiary)
             }
-            .buttonStyle(.plain)
-            .pointerStyle(.link)
-            .help("Open \(fitting.name) in a window of its own")
-            .accessibilityLabel("\(fitting.kind.rawValue): \(fitting.name)")
-            .accessibilityHint("Opens it in a window of its own")
-        } else {
-            Text("empty")
-                .font(.system(size: 9.5))
-                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+        .background(isChanged ? Self.changeBackground : Self.keepBackground, in: .rect(cornerRadius: 4))
+        .overlay {
+            if isChanged {
+                RoundedRectangle(cornerRadius: 4).stroke(Theme.accent.opacity(0.5), lineWidth: 0.75)
+            }
         }
     }
 

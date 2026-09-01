@@ -10,9 +10,9 @@ import SwiftUI
 struct MonsterDetailView: View {
     let monster: ResolvedMonster
     let level: Int
-    let difficulty: Difficulty
+    let mode: MonsterMode
     let setLevel: (Int) -> Void
-    let setDifficulty: (Difficulty) -> Void
+    let setMode: (MonsterMode) -> Void
     /// Draws the game's own model, when the game folder is open.
     var renderer: ModelRenderer?
     /// The records behind the gear a human is drawn from.
@@ -83,13 +83,7 @@ struct MonsterDetailView: View {
 
     private var levelControl: some View {
         HStack(spacing: 10) {
-            MonsterLevelField(
-                range: monster.levelRange,
-                level: level,
-                setLevel: setLevel,
-                difficulty: difficulty,
-                setDifficulty: setDifficulty
-            )
+            MonsterLevelField(range: monster.levelRange, level: level, setLevel: setLevel, mode: mode, setMode: setMode)
 
             Button("All Stats…") { openWindow(id: MonsterStatsWindow.id) }
                 .help("Opens this monster's whole sheet, its attacks and its loot in a window of its own")

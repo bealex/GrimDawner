@@ -116,9 +116,9 @@ struct MonsterStatsWindow: View {
                 range: monster.levelRange,
                 level: model.monsterLevel,
                 setLevel: { model.selectMonster(path: monster.path, level: $0) },
-                difficulty: model.monsterDifficulty,
-                setDifficulty: {
-                    model.selectMonster(path: monster.path, level: model.monsterLevel, difficulty: $0)
+                mode: model.monsterMode,
+                setMode: {
+                    model.selectMonster(path: monster.path, level: model.monsterLevel, mode: $0)
                 }
             )
             .fixedSize()

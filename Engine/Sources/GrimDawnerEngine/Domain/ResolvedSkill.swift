@@ -81,6 +81,9 @@ public struct ResolvedSkill: Identifiable, Sendable {
     /// skills mostly do not, and their file name is an identifier rather than something to print.
     public let properName: String?
     public let description: String
+    /// What has to happen before it does anything, where the record states a condition — Arcane Will
+    /// only wakes below three quarters health. Empty for a skill that simply runs.
+    public var triggers: [String] = []
     /// Points the character actually spent.
     public let baseLevel: Int
     /// Extra ranks from devotion.

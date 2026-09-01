@@ -22,6 +22,9 @@ public struct MonsterAbility: Identifiable, Sendable {
 
     public let id = UUID()
     public let skill: ResolvedSkill
+    /// What to call it. Most of what a monster fights with is nameless — no display name, no file
+    /// description, nothing but the record's own file name — so that is tidied into words instead.
+    public let name: String
     /// The name the game gives it, absent for most of what a monster fights with: those records carry a
     /// developer's file name, which is worth nothing to a reader.
     public var title: String? { skill.properName }
@@ -124,6 +127,8 @@ public struct ResolvedMonster: Sendable {
     /// True for the celestial bosses, whose record carries an adjuster that cancels the game's own
     /// ascendant-mode bonus. Neither is in effect in an ordinary fight, so neither is counted.
     public let cancelsAscendantMode: Bool
+    /// Whether the ascendant adjustment is laid over this reading.
+    public var isAscendant = false
 
     public var armor: Double {
         stats.value("defensiveProtection") * (1 + stats.value("defensiveProtectionModifier") / 100)
@@ -165,10 +170,6 @@ public struct MonsterResolver {
         ("Finger1", "Ring"), ("Finger2", "Ring"), ("Misc1", "Drop 1"), ("Misc2", "Drop 2"), ("Misc3", "Drop 3"),
     ]
 
-    /// How deep a loot table is followed. A master table names a level table, which names the table for
-    /// the band the monster is in, which names the items — four steps, with room to spare.
-    private static let lootDepth = 6
-
     /// The adjustment the game lays over every enemy, by difficulty and party size. Each stat is written
     /// as twelve numbers: three difficulties of four party sizes.
     private static let difficultyAdjustmentPath = "records/game/balancingadjustment_mp+difficulty_enemies01.dbr"
@@ -176,7 +177,12 @@ public struct MonsterResolver {
     /// is this exactly negated, so neither counts in a fight that is not in that mode.
     private static let ascendantAdjustmentPath = "records/game/balancingadjustment_ultramode_enemies01.dbr"
 
-    public func monster(at path: String, level: Int, difficulty: Difficulty = .ultimate) -> ResolvedMonster? {
+    public func monster(
+        at path: String,
+        level: Int,
+        difficulty: Difficulty = .ultimate,
+        isAscendant: Bool = false
+    ) -> ResolvedMonster? {
         guard let record = database.record(path), record.text("Class") == "Monster" else { return nil }
 
         let bounds = Int(record.number("minLevel")) ... max(Int(record.number("maxLevel")), 1)
@@ -184,12 +190,13 @@ public struct MonsterResolver {
         let ascendant = adjustment(at: Self.ascendantAdjustmentPath, index: 0)
         let all = abilities(of: record, atLevel: level)
         let counted = all.filter { !cancels(ascendant, $0) }
-        let block = stats(
-            of: record,
-            atLevel: level,
-            abilities: counted,
-            adjustment: adjustment(at: Self.difficultyAdjustmentPath, index: Int(difficulty.rawValue) * 4)
-        )
+        var laid = adjustment(at: Self.difficultyAdjustmentPath, index: Int(difficulty.rawValue) * 4)
+        // Ascendant mode is not a fourth difficulty but a second adjustment over Ultimate: another
+        // 850% of health and 165% of damage, which is why a boss that was a fight becomes a wall. A
+        // celestial boss carries the skill that negates it stat for stat, and is left where it stands.
+        let cancelsAscendant = counted.count != all.count
+        if isAscendant, !cancelsAscendant { laid.merge(ascendant) }
+        let block = stats(of: record, atLevel: level, abilities: counted, adjustment: laid)
         let bio = bioValues(of: record, atLevel: level)
         let physique = scaled(block, base: bio["characterStrength"], "characterStrength")
         let cunning = scaled(block, base: bio["characterDexterity"], "characterDexterity")
@@ -239,7 +246,8 @@ public struct MonsterResolver {
             loot: carried.dropped,
             equipment: carried.equipped,
             animations: MonsterAnimations.of(record, in: database),
-            cancelsAscendantMode: counted.count != all.count
+            cancelsAscendantMode: cancelsAscendant,
+            isAscendant: isAscendant && !cancelsAscendant
         )
     }
 
@@ -363,6 +371,7 @@ public struct MonsterResolver {
             let reference = database.record(path)?.text("skillSpecialAnimationName") ?? ""
             abilities.append(MonsterAbility(
                 skill: skill,
+                name: Self.readableName(of: skill, firstSeenOn: record.path),
                 kind: SkillKind.phrase(forClass: skill.recordClass) ?? "Skill",
                 role: Self.role(of: skill, asked: role),
                 range: range,
@@ -417,6 +426,33 @@ public struct MonsterResolver {
     /// Where a skill belongs on the sheet. The record's own slot says what the monster uses it for, but
     /// its class overrules that slot for the two the slot gets wrong: a skill that only fires as the
     /// monster falls is not an attack, and one that simply holds while it lives is a passive.
+    /// What to call one of a monster's attacks.
+    ///
+    /// Almost none of them is named: the record carries a file name like `thedread_screechorb`, and
+    /// what stands in front of the underscore is the creature, which the reader already knows. So the
+    /// creature's own name is dropped and the rest is capitalised — nothing splits `screechorb` into
+    /// two words, because nothing in the game says where the seam is.
+    static func readableName(of skill: ResolvedSkill, firstSeenOn path: String) -> String {
+        if let proper = skill.properName, !proper.isEmpty { return proper }
+
+        let stem = (skill.recordPath.split(separator: "/").last ?? "")
+            .replacingOccurrences(of: ".dbr", with: "")
+        let creature = (path.split(separator: "/").last ?? "")
+            .replacingOccurrences(of: ".dbr", with: "")
+            .split(separator: "_")
+            .map(String.init)
+        var parts = stem.split(separator: "_").map(String.init)
+        // The leading part names the creature — sometimes exactly, sometimes run together with what
+        // the attack is about, as `ravagerminds` is.
+        if parts.count > 1, let first = parts.first,
+                creature.contains(where: { !$0.isEmpty && (first.contains($0) || $0.contains(first)) }) {
+            parts.removeFirst()
+        }
+        guard !parts.isEmpty else { return skill.name }
+
+        return parts.map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " · ")
+    }
+
     private static func role(of skill: ResolvedSkill, asked role: MonsterAbility.Role) -> MonsterAbility.Role {
         if skill.recordClass.contains("OnDeath") { return .onDeath }
         if skill.isAlwaysOn || skill.recordClass.hasPrefix("Skill_Passive") { return .passive }
@@ -443,15 +479,15 @@ public struct MonsterResolver {
 
     // MARK: - Loot
 
-    /// Whether a monster leaves anything behind.
+    /// Whether a monster leaves anything behind, which its own record states outright.
     ///
-    /// `dropItems` is not the question it looks like: it is off on 593 creatures that name loot tables
-    /// all the same — every nemesis among them — so reading it alone as the gate hid all of their drops.
-    /// A record that names a table has something to give whatever the flag says.
+    /// Every loot slot a monster record names is initial equipment — the template groups the hands and
+    /// the armour slots together under that name — and `dropItems`, "drop items on death?", is what
+    /// decides whether any of it is left behind. Every monster record in the game writes the flag, so
+    /// its default never applies and naming a table proves nothing: 528 creatures are spawned armed with
+    /// the flag off, and their weapons go with them.
     public static func leavesLoot(_ record: ArzRecord) -> Bool {
-        if record.number("dropItems") != 0 { return true }
-
-        return record.fieldOrder.contains { $0.hasPrefix("loot") && !record.text($0).isEmpty }
+        record.number("dropItems") != 0
     }
 
     /// Every slot the record fills, read once: what it drops and what it is wearing come from the same
@@ -527,74 +563,7 @@ public struct MonsterResolver {
         return ItemResolver.itemName(of: record, in: database) ?? ""
     }
 
-    /// The items one loot table can produce, with the share each takes of it.
-    ///
-    /// Tables nest three ways and this follows all of them: a master table names tables, a level table
-    /// names one table per level band — which is why the monster's own level decides what it drops — and
-    /// a weighted table names the items. Weights fold along the way, so a share is a share of the whole.
     private func contents(of path: String, atLevel level: Int) -> [MonsterLootEntry.Item] {
-        var shares = [String: Double]()
-        var names = [String: (name: String, path: String, icon: String, rarity: ItemRarity)]()
-
-        func walk(_ path: String, share: Double, depth: Int) {
-            guard share > 0.0001, depth < Self.lootDepth, let record = database.record(path) else { return }
-
-            switch record.recordClass {
-                case let recordClass where recordClass.hasPrefix("Loot"):
-                    var children = [(path: String, weight: Double)]()
-                    for index in 1 ... 60 {
-                        let child = record.text("lootName\(index)")
-                        guard !child.isEmpty else { continue }
-
-                        children.append((child, record.number("lootWeight\(index)")))
-                    }
-                    let total = children.reduce(0) { $0 + $1.weight }
-                    guard total > 0 else { return }
-
-                    for child in children {
-                        walk(child.path, share: share * child.weight / total, depth: depth + 1)
-                    }
-
-                case "LevelTable":
-                    // One table per level band, and the monster's own level picks the band.
-                    let bands = record["levels"]?.numbers ?? []
-                    let tables = record["records"]?.texts ?? []
-                    guard !tables.isEmpty else { return }
-
-                    let index = bands.lastIndex { $0 <= Double(level) } ?? 0
-                    walk(tables[min(index, tables.count - 1)], share: share, depth: depth + 1)
-
-                default:
-                    // Keyed by name rather than by record: the same item is written once per level it
-                    // is generated at, and one line each is what a reader wants.
-                    guard let name = ItemResolver.itemName(of: record, in: database) else { return }
-
-                    shares[name, default: 0] += share
-                    names[name] = (
-                        name,
-                        path,
-                        ItemResolver.iconPath(of: record),
-                        ItemRarity(recordClass: record.recordClass)
-                            ?? ItemRarity(classification: record.text("itemClassification"))
-                    )
-            }
-        }
-
-        walk(path, share: 100, depth: 0)
-        return
-            shares
-            // Ties are broken by name: a dictionary hands them over in a different order every launch,
-            // and what is drawn from this list — the weapon a monster is holding — would change with it.
-            .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
-            .prefix(60)
-            .map { name, share in
-                MonsterLootEntry.Item(
-                    name: name,
-                    recordPath: names[name]?.path ?? "",
-                    iconPath: names[name]?.icon ?? "",
-                    share: share,
-                    rarity: names[name]?.rarity ?? .common
-                )
-            }
+        LootTable.contents(of: path, atLevel: level, in: database)
     }
 }

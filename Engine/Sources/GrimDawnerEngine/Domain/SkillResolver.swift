@@ -225,6 +225,7 @@ public struct SkillResolver {
             name: skillName(record, path: path),
             properName: properName(of: record),
             description: description(of: record) ?? "",
+            triggers: SkillTrigger.conditions(ofSkillAt: path, in: database),
             baseLevel: baseLevel,
             devotionBonus: devotionBonus,
             itemBonus: itemBonus,

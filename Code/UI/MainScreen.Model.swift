@@ -104,7 +104,9 @@ extension MainScreen {
         private(set) var monsterLevel = 100
         /// Monsters are worth several times more on Ultimate than on Normal, so the difficulty is read
         /// alongside the level.
-        private(set) var monsterDifficulty: Difficulty = .ultimate
+        private(set) var monsterMode: MonsterMode = .ultimate
+
+        var monsterDifficulty: Difficulty { monsterMode.difficulty }
 
         /// What the loadout search is doing, which outlives any one view of it.
         let optimizer = OptimizerState()
@@ -203,7 +205,7 @@ extension MainScreen {
 
                 monsters = listed
                 monsterLevel = character?.level ?? monsterLevel
-                monsterDifficulty = character?.difficulty ?? monsterDifficulty
+                monsterMode = character.map { MonsterMode(difficulty: $0.difficulty) } ?? monsterMode
                 monsterState = .ready
             }
         }
@@ -262,7 +264,7 @@ extension MainScreen {
         }
 
         /// Reads one monster at a level and a difficulty, which is what every figure it has depends on.
-        func selectMonster(path: String, level: Int, difficulty: Difficulty? = nil) {
+        func selectMonster(path: String, level: Int, mode: MonsterMode? = nil) {
             guard let database else { return }
 
             let skills = SkillResolver(database: database)
@@ -273,8 +275,13 @@ extension MainScreen {
             )
             selectedMonsterPath = path
             monsterLevel = level
-            monsterDifficulty = difficulty ?? monsterDifficulty
-            selectedMonster = resolver.monster(at: path, level: level, difficulty: monsterDifficulty)
+            monsterMode = mode ?? monsterMode
+            selectedMonster = resolver.monster(
+                at: path,
+                level: level,
+                difficulty: monsterMode.difficulty,
+                isAscendant: monsterMode.isAscendant
+            )
         }
 
         /// The skills the attack plan can be measured on: the character's own, that it has spent a

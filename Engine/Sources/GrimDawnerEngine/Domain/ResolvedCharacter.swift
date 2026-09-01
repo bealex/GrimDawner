@@ -160,6 +160,10 @@ public struct ResolvedCharacter: Sendable {
     /// What the difficulty takes off the character's resistances, which the game's own sheet shows too.
     public let difficultyPenalty: StatBlock
     public let sheet: CharacterSheet
+    /// What the worn armour gives each hit region, and what the weapon does to the swing rate. Kept so
+    /// the sheet can be worked out again with a buff on that the resting sheet does not count.
+    public var bodyArmor: [EquipmentSlot: Double] = [:]
+    public var weaponSpeed: Double = 0
 
     /// Standings you earn through play, which is what the game's faction window lists. Both groups read
     /// alphabetically: the save's own order is positional and says nothing to a reader.
@@ -195,6 +199,60 @@ public struct ResolvedCharacter: Sendable {
 
         var seen = Set<String>()
         return ordered.filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+    }
+
+    /// Every skill the character actually has: the ones it has spent a point on and the ones its gear
+    /// confers.
+    public var everySkill: [ResolvedSkill] {
+        masteries.flatMap(\.skills).filter { $0.baseLevel > 0 } + itemGrantedSkills
+    }
+
+    /// The buffs already in the sheet: passives, auras and transmuters, which are on whether or not
+    /// anybody presses anything.
+    public var passiveBuffs: [ResolvedSkill] {
+        masteries.flatMap(\.sheetSkills).filter { !$0.isModifier && !$0.stats.hasNothingToShow }
+    }
+
+    /// The buffs the character has but that the sheet does not count: the ones a player presses before
+    /// a fight and that run out. Nothing says whether one is up, so they are a reader's to choose.
+    ///
+    /// Only what the character puts on itself. A skill that leaves a buff on an enemy is written the
+    /// same way — Spectral Wrath carries `defensiveAether` at −39 — and folding one of those into the
+    /// character's own contributions would take that off the character instead of off the target.
+    public var optionalBuffs: [ResolvedSkill] {
+        let counted = Set(passiveBuffs.map { $0.recordPath.lowercased() })
+
+        return (masteries.flatMap(\.skills) + itemGrantedSkills)
+            .filter { skill in
+                skill.baseLevel > 0 && !skill.isAlwaysOn && !skill.isModifier
+                    && skill.recordClass.contains("BuffSelf")
+                    && !skill.stats.hasNothingToShow
+                    && !counted.contains(skill.recordPath.lowercased())
+            }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// The sheet as it reads with those buffs up.
+    ///
+    /// A buff carries its numbers the same way a passive does, so it is folded into the contributions
+    /// and the whole sheet worked out again — armour, resistances and speeds included, since a buff
+    /// that raises Physique moves more than the line it is written on.
+    public func sheet(in database: GameDatabase, buffedBy buffs: [ResolvedSkill]) -> CharacterSheet {
+        guard !buffs.isEmpty else { return sheet }
+
+        let resolver = SkillResolver(database: database)
+        var total = sheet.contributions
+        for buff in buffs {
+            guard let record = database.record(buff.recordPath) else { continue }
+
+            total.merge(resolver.effects(of: record, atLevel: buff.totalLevel))
+        }
+        return StatEngine(database: database).sheet(
+            for: save,
+            contributions: total,
+            bodyArmor: bodyArmor,
+            weaponSpeed: weaponSpeed
+        )
     }
 
     public var equippedItems: [ResolvedItem] {

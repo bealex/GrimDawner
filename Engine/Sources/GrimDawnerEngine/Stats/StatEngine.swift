@@ -42,6 +42,12 @@ public struct CharacterSheet: Sendable {
     public var damageModifiers: [DamageType: Double] = [:]
     /// Flat damage the character adds to what it wields, by type.
     public var flatDamage: [DamageType: Double] = [:]
+    /// The same, as the band the game rolls it in.
+    ///
+    /// The game writes a flat bonus as a minimum with no maximum and a range as both, and the two keys
+    /// are summed apart, so a build whose flat bonuses outweigh its ranged ones has a maximum below its
+    /// minimum. The floor is the honest figure of the two, so the top never reads under it.
+    public var flatDamageRange: [DamageType: ClosedRange<Double>] = [:]
 
     /// The speeds as the game's own window prints them: the resulting percentage, not the bonus.
     public var attackSpeed: Double = 0
@@ -71,6 +77,9 @@ public struct StatEngine {
         public let lifePerSpiritPoint: Double
         public let energyPerSpiritPoint: Double
         public let armorAbsorption: Double
+        /// Where every resistance caps before gear raises the cap, which the engine record states per
+        /// difficulty and writes the same in all three.
+        public let resistanceCap: Double
         /// What the engine lets a player's speeds run between, in percent.
         public let attackSpeedRange: ClosedRange<Double>
         public let castSpeedRange: ClosedRange<Double>
@@ -232,10 +241,15 @@ public struct StatEngine {
             scaled(constants.armorAbsorption, percent: contributions.value("defensiveAbsorptionModifier"))
         )
         sheet.resistances = resistances(contributions)
-        sheet.maxResistances = maxResistances(contributions)
+        sheet.maxResistances = maxResistances(contributions, cap: constants.resistanceCap)
         sheet.damageModifiers = damageModifiers(contributions)
         sheet.flatDamage = Dictionary(uniqueKeysWithValues: DamageType.allCases.map {
             ($0, StatComposition.total(feeding: $0.minimumKey, in: contributions))
+        })
+        sheet.flatDamageRange = Dictionary(uniqueKeysWithValues: DamageType.allCases.map { type in
+            let low = StatComposition.total(feeding: type.minimumKey, in: contributions)
+            let high = StatComposition.total(feeding: type.maximumKey, in: contributions)
+            return (type, low ... max(low, high))
         })
     }
 
@@ -335,9 +349,9 @@ public struct StatEngine {
         })
     }
 
-    private func maxResistances(_ stats: StatBlock) -> [ResistanceKind: Double] {
+    private func maxResistances(_ stats: StatBlock, cap: Double) -> [ResistanceKind: Double] {
         Dictionary(uniqueKeysWithValues: ResistanceKind.allCases.map {
-            ($0, Self.baseResistanceCap + StatComposition.total(feeding: $0.maximumKey, in: stats))
+            ($0, cap + StatComposition.total(feeding: $0.maximumKey, in: stats))
         })
     }
 
@@ -351,9 +365,6 @@ public struct StatEngine {
                 .map { ($0, StatComposition.total(feeding: $0.modifierKey, in: stats)) }
         )
     }
-
-    /// Every resistance caps at 80% before gear raises the cap.
-    private static let baseResistanceCap: Double = 80
 
     // MARK: - Constants
 
@@ -371,6 +382,7 @@ public struct StatEngine {
             lifePerSpiritPoint: levels?.number("lifeIncrementIntelligence") ?? 12,
             energyPerSpiritPoint: levels?.number("manaIncrement") ?? 16,
             armorAbsorption: engine?.number("armorDefensiveAbsorption") ?? 70,
+            resistanceCap: engine.map { max($0.number("playerDefenseCap"), 1) } ?? 80,
             attackSpeedRange: Self.range(engine, "playerAttackSpeedCap"),
             castSpeedRange: Self.range(engine, "playerSpellCastSpeedCap"),
             runSpeedRange: Self.range(engine, "playerRunSpeedCap")

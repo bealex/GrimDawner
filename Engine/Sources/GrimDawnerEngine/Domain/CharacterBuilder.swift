@@ -70,7 +70,9 @@ public struct CharacterBuilder {
                 contributions: total,
                 bodyArmor: bodyArmor(from: equipment),
                 weaponSpeed: weaponSpeed(of: weaponSets)
-            )
+            ),
+            bodyArmor: bodyArmor(from: equipment),
+            weaponSpeed: weaponSpeed(of: weaponSets)
         )
     }
 

@@ -15,11 +15,11 @@ struct MonstersTab: View {
     let selectedPath: String?
     let selected: ResolvedMonster?
     let level: Int
-    let difficulty: Difficulty
+    let mode: MonsterMode
     /// Draws the game's own models, when the game folder is open.
     let renderer: ModelRenderer?
     let database: GameDatabase?
-    let select: (_ path: String, _ level: Int, _ difficulty: Difficulty?) -> Void
+    let select: (_ path: String, _ level: Int, _ mode: MonsterMode?) -> Void
 
     @State
     private var filter = MonsterFilter()
@@ -49,9 +49,9 @@ struct MonstersTab: View {
                 MonsterDetailView(
                     monster: selected,
                     level: level,
-                    difficulty: difficulty,
+                    mode: mode,
                     setLevel: { select(selected.path, $0, nil) },
-                    setDifficulty: { select(selected.path, level, $0) },
+                    setMode: { select(selected.path, level, $0) },
                     renderer: renderer,
                     database: database,
                     openMonster: { select($0, level, nil) }

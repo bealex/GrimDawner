@@ -32,6 +32,9 @@ struct SectionCard<Content: View>: View {
     /// The artwork of the thing the card is named after, drawn before its name. A card titled with an
     /// item wears that item's own icon there rather than repeating the picture inside itself.
     var iconPath: String?
+    /// A control that belongs to the card's own heading — a picker choosing what the card is about —
+    /// which sits at the end of the title row in place of a subtitle.
+    var accessory: AnyView?
     @ViewBuilder
     var content: Content
 
@@ -54,8 +57,12 @@ struct SectionCard<Content: View>: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
+                if let accessory {
+                    Spacer(minLength: 8)
+                    accessory
+                }
             }
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .contain)
 
             content
         }
