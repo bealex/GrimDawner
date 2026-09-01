@@ -51,7 +51,8 @@ the parameter list does not read them:
 - `projectileLaunchNumber` — "{%d0} Projectile(s)", 718 records
 - `projectilePiercingChance` — "{%.1f0}% Chance to pass through Enemies", 318 records
 - `cooldownCharges` — "{%d0} Charges", 70 records
-- `skillChargeLevel` and `skillChargeDuration` — charge level and how long it holds, 109 records each
+- `skillChargeDuration` — how long a charge holds, 109 records; `skillChargeLevel` beside it now paces
+  a charged finale in the Interaction tab
 
 Read by nothing and worded by nothing: `projectileDamageRange1..3` (damage by distance, 442 records),
 `instantCast`, `notDispelable`, `refreshCooldownTrigger`, `refreshDurationTrigger`, `skillTargetAngle`,
@@ -61,7 +62,7 @@ Read by nothing and worded by nothing: `projectileDamageRange1..3` (damage by di
 
 Nearly all of it is behaviour the app has no use for. The exceptions:
 
-- `specialAttackChance`, `specialAttack2Chance`, `specialAttack3Chance` — how often a monster reaches
-  for each of its specials, which is what a damage-per-second figure for one attack cannot say.
 - `giveXP` — whether it grants experience at all, the twin of `dropItems`.
 - `hitThreshold` and `gibThreshold` — what it takes to stagger or dismember it.
+- `upperDisplayPercentage` / `lowerDisplayPercentage` — the share of one continuous health bar each
+  phase of a chained boss shows.

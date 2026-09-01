@@ -107,18 +107,36 @@ much of each of fire, cold and lightning, and the elemental percentage does not 
 over time. The game's Fire panel settles the second — Burn should read +446% rather than +599% for the
 character checked here.
 
-**Which damage band a swing lands in.** The record states the six thresholds and their multipliers but
-not how the roll picks between them, and the published sources disagree. The app reads the roll as even
-across the pairing's hit figure. Settling it needs the binary.
+**A monster's damage against a live reference.** The interaction arithmetic is pinned to the game's
+own binary and to one controlled community measurement — the roll model, the additive pools, the
+attribute bonus and the multiplicative total-damage layer, all in
+[AttackPipeline.md](AttackPipeline.md), with `EncounterTests` holding the composition. Checked
+against GrimTools' monster database — The Dread matches to the unit — and against three live
+Ascendant fights: Beronath, the Keeper of the Seal, and Grand Magus Morgoneth on video. Both
+domain-laid health bars reproduce to a rounding error (10,983,503 computed against 10,983,499
+shown; 13,256,500 against 13,256,496 under the Forbidden layer), the game's printed ×2.32 crit
+reproduces exactly, misses appear at the computed hit chance, and the beam's per-tick damage lands
+once the reader dials in resistance reduction and timed buffs — the two things a save cannot state.
+A domain's random mutators are unknowable from outside the run, but none touches monster health, so
+a mutated fight's bar is still exact; what they shift is its damage. The engine's combat log,
+compiled in behind a flag, remains the fixture for anything finer.
 
-**What the game scopes a monster's per-type damage modifier to.** The Dread's `offensivePhysicalModifier`
-comes to −107% at level 100 and would leave a boss hitting for nothing, so the app uses only the
-creature-wide `offensiveTotalDamageModifier`. Leaving it out is incomplete; applying it is wrong.
+**Finding that took two corrections.** The Shattered Realm's own databases were overriding world
+records, reading every reused boss as its retuned Shattered Realm self — a third of The Dread's real
+health; they now load weakest. And an attack was read from its record alone: the modifier skills
+hanging off it and what items change about it now ride the attack — Disintegration is most of an
+Aether Ray, and the skill-aimed crit damage is what makes the game print ×2.32.
 
-**A monster's damage against a reference.** `MonsterStatsTests` pins Ravager of Minds' health, attributes,
-abilities, armour and resistances to GrimTools, which is the only reference there is. GrimTools' monster
-database returns 403 to fetching, so nothing pins a monster's *damage* — the one figure that would settle
-whether the interaction numbers are right.
+**A monster's equipped weapon adds nothing to its blow here.** The engine collects the weapon a
+creature spawned holding into every swing — a Dreadguard's axe is 318–491 physical, and Crate's
+modding guide states the monster is "actively benefiting from" its Initial Equipment — but the app
+does not roll one for the fight, so an armed humanoid reads low. The Dread carries nothing and is
+unaffected.
+
+**Night-only buffs count around the clock.** 57 monsters carry a `nightBuffSkill`, every one a
+toggled buff the resolver reads as permanent; the modding guide says it is active only at night.
+Whether GrimTools counts them the same always-on way is unchecked, so which reading to show is
+undecided — matching GrimTools and matching the game at noon diverge for those 57.
 
 **Whether Nemesis is the right tier around −12000.** The band runs from the floor at −20000 up to −8000,
 which follows from reading `factionValueN` as lower bounds — consistent with 25000 being both the Revered
@@ -186,8 +204,17 @@ window, and a window of its own, each a drag to turn and a scroll to move in.
 and picking one plays the animation that attack asks for *and* shows what its skill throws. A second menu
 shows any one skill's effects on their own, which is how a passive's aura is looked at, and playback runs
 at full, half or quarter speed — which is what makes a two-frame difference between two casts readable.
-Along the top is what the animation calls out and when: each effect it spawns, and the frames a blow lands
-on.
+Along the top is what the animation calls out and when: each effect it spawns, the frames a blow lands
+on, and what the skill fires when it does.
+
+**What an attack fires is drawn in flight.** The skill's projectile leaves the point its record names,
+on the animation's hit callback, as many at a time and across the spread the record states, and crosses
+the world along the creature's own facing at the record's speed and distance — The Dread's ravine is ten eruptions crawling out in
+a circle, its screech orb one dark ball from the mouth. What each looks like is the game's own: the
+projectile's model where it has a visible one, its flight effect or the trail it lays where the model
+is the game's invisible stand-in. The launch machinery was read out of the engine —
+[AttackPipeline.md](AttackPipeline.md#what-an-attack-spawns) — and cast flashes now hang on the attach
+points the skill record pairs them with rather than on the creature's middle.
 
 **A creature is assembled and then posed.** Every part is skinned to a rig merged from all of them — a
 head, a body and a breastplate each carry their own copy of the same bones — so a shoulder moves the
@@ -281,6 +308,13 @@ called out as a one shot. Each card carries a picker: yours chooses which of you
 starting on the weapon attack, and the monster's chooses which of its attacks it swings back with, since
 a boss carries six and they are not close in what they throw.
 
+The arithmetic behind both cards is the engine's own, decompiled and cross-checked —
+[AttackPipeline.md](AttackPipeline.md). A monster's Cunning and Spirit raise its damage exactly as a
+character's do, additively into each type's percentage pool, which is what its negative adjuster
+passives are balanced against; the summed total-damage modifier multiplies once over the pool; the
+band roll is uniform across the hit figure; crit damage adds to the band; dodge and deflection come
+off the blows they meet; a charged finale lands once per its charge count with bare swings between.
+
 **Rates are per attack, not per weapon.** A beam, cone, drain, tether or spin ticks at its own
 `timeBetweenAttacks` — Albrecht's Aether Ray at 300ms and cast speed — while a charge or a growing radius
 ticks that fast within one use and is governed by its cooldown instead. A cooldown shorter than the swing
@@ -292,8 +326,10 @@ up and which of the monster's debuffs had landed, so those are checkboxes: your 
 side, and on the other everything the monster leaves on you — Sundered, and its reductions to your
 abilities and damage. Only the strongest of each kind counts.
 
-**Mode covers Ascendant.** It is not a difficulty the save records but a second adjustment over Ultimate,
-and it roughly doubles a boss's health and triples its damage.
+**Mode covers Ascendant, and a Domain picker sits beside it.** Ascendant is not a difficulty the save
+records but a second adjustment over Ultimate, roughly doubling a boss's health and tripling its
+damage; a challenge area — Dangerous, Treacherous or Forbidden Domain — lays one adjustment more, and
+picking one reads the monster as the fight inside it.
 
 **What is still one attack at a time.** The monster's combined figure reads its own attack at full rate
 plus each special at its stated chance once per its timeout. That is an estimate: the record says how

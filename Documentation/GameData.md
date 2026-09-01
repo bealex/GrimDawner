@@ -13,6 +13,10 @@ Everything the app knows about Grim Dawn it reads at runtime. This is where each
 
 Load order is base then gdx1, gdx2, gdx3; **later wins**. `GameDatabase` searches its databases in reverse
 so the first hit is the winning override, and `TextureStore` searches the newest expansion's archive first.
+The `survivalmode*` databases are the Shattered Realm's own and the game mounts them only inside that
+mode; they carry retuned copies of world records — `SurvivalMode3.arz` writes The Dread's health
+equation at a third of what `GDX3.arz` states — so they load weakest, adding only the records that
+exist nowhere else.
 
 Record paths are lowercase and are matched that way.
 
@@ -168,6 +172,11 @@ numbers per stat — three difficulties of four party sizes, single-player first
 life, +200% energy, +10% to cunning and spirit, +50 offensive and +75 defensive ability, and resistances
 besides. Nothing about a monster reads right without it.
 
+**Difficulty indexing is not one convention.** The adjustment paks count three difficulties of four
+party sizes; chest loot tables count three difficulties alone; and `healthGainOnKillDifficulty` counts
+four — 0 Normal, 1 Veteran, 2 Elite, 3 Ultimate — with Veteran surviving as an index though it is a
+checkbox in the game. A new difficulty-indexed field has to be checked against all three.
+
 **Twelve celestial bosses cancel the game's ascendant-mode bonus.** `balancingadjustment_ultramode_enemies01.dbr`
 is what ascendant mode grants — +850% life, +165% damage — and Ravager, Callagadra, Mogdrogen, Lokarr and
 the rest each hold `superboss_ascendantmodeadjustment_01`, which is that adjustment negated stat for stat.
@@ -216,6 +225,10 @@ plain attack states no damage at all and is worth exactly the creature's own blo
 out for all skill use") and `specialAttackDelay`. The Dread's are 70/100/70 with an eight second timeout.
 The order it picks them in is not stated anywhere.
 
+A `Skill_WeaponPool_ChargedFinale` attack — The Dread's own is one — is not every swing: it fires once
+the plain swings before it have built `skillChargeLevel` charges, so it lands at the swing rate over
+that count and the swings between are the creature's bare blow.
+
 Its `offensive<Type>Modifier` total is not usable as a damage multiplier. The Dread's comes to −107%
 physical at level 100, from three passives that are balanced against each other:
 
@@ -228,9 +241,19 @@ physical at level 100, from three passives that are balanced against each other:
 
 `armorbase06` is a shared armour passive whose `offensivePhysicalModifier` slides from 0 at rank 1 to
 −135 at rank 100, paired with its own `offensiveTotalDamageModifier` going −90 to +25 over the same
-range. Laying the per-type total over a skill's stated damage leaves a boss hitting for nothing, so the
-app uses `offensiveTotalDamageModifier` — creature-wide, +89% for The Dread on Ultimate — and leaves the
-per-type figure alone. What the game scopes the −135% to is not established.
+range. What the negative figure is balanced against is the attribute bonus: every `offensive…Modifier`
+sums into one per-type pool alongside the percentage the creature's own Cunning or Spirit adds, and
+The Dread's 1188 Cunning is worth +485% physical against the adjusters' −107. The summed
+`offensiveTotalDamageModifier` then multiplies the pooled result once — which is how a boss the
+adjusters read as hitting for nothing lands five times its stated figures.
+[AttackPipeline.md](AttackPipeline.md) has the pipeline and the measurement that pins the shape.
+
+Two of a creature's passives are not its own. A modifier written beside a `…ModifierChance` rolls per
+blow — `damagebase_physical06`'s +10% physical is a 15% chance — so the pool carries the expected
+share, the way the game's own damage display weighs it. And a toggled aura that drives a
+`SkillBuff_Debuf` is aimed at whoever stands in it: Dread Presence's −135 offensive and defensive
+ability and −25% crit damage belong to the player's sheet, and folding them into the creature's read
+the boss as weaker than the fight it gives. GrimTools reads both the same way.
 
 ### The model format
 
@@ -393,10 +416,23 @@ format of their own and unread, so that texture is what an effect can be drawn a
 **A skill names its effects in four places**, and only three of them are the creature's. A passive carries
 its aura in `charFxPakSelfNames`, a pack naming both the points of the model to hang effects on
 (`particleEffectAttachPoints`) and the effects themselves (`particleEffectNames`); a cast's own flash is
-`particleEffectName1…N` and what it spreads around itself is `radiusEffectName`. The fourth,
+`particleEffectName1…3`, each paired with its own `particleEffectAttachPoint1…3` — the engine's profile
+loader reads the pair by number — and what it spreads around itself is `radiusEffectName`. The fourth,
 `skillProjectileName`, names a projectile, and the flight and impact effects inside that record belong to
 the thing in flight — hung on the caster they read as a swarm of meteors circling a beast that is merely
 standing there.
+
+**What a skill fires is an actor of its own**, and the engine states its whole flight
+([AttackPipeline.md](AttackPipeline.md) has the decompiled loader). The projectile record carries a
+`mesh` — often dressed in `system/textures/invisible.tex`, the game's way of saying the effect is the
+whole look — a `projectileFlightFX` riding it, `projectileImpactFX` for where it lands,
+`projectileVelocity`, `projectileDistance` and `actorRadius`. A crawler with no flight effect lays its
+look behind it instead: `inflightGroundFxPakName` dropped every `inflightGroundFxDropTime` seconds is
+what a fault line's eruptions are. The skill says the rest: it leaves from the model point
+`launchAttachPointName` names, `projectileLaunchNumber` at a time (per rank), fanned across
+`projectileLaunchRotation` degrees — The Dread's ravine is ten across the full circle — and the launch
+happens on the animation's hit callback, which is the frame the engine's attack action fires the skill
+on.
 
 **A particle texture carries no transparency.** It is painted on black and added to what is behind it, so
 its own brightness is what says where it is see-through — drawn as it is, an effect is a black square with
@@ -541,19 +577,19 @@ the same `lootTable` field, and all 184 of its records carry meshes too.
 the record; nothing here is transcribed.
 
 **Whether it lands.** `probabilityToHitEquation` takes the attacker's offensive ability and the
-defender's defensive ability and produces one figure. `pthMinimum` (55) is the floor the app reads it
-against, and the figure is capped at 100 to read as a chance.
+defender's defensive ability and produces one figure, floored at `pthMinimum` (55). The engine rolls
+once, uniformly over `0 … max(figure, 100)`: a roll above the figure misses, so the chance to land is
+the figure capped at 100 — never below 55, never certain until 100. Dodge meets a weapon swing and
+deflection a projectile in separate rolls before any of it; a ground effect meets neither.
+[AttackPipeline.md](AttackPipeline.md) is the decompiled account of all of this.
 
 **How hard.** `pthThreshold1..6` (70, 90, 105, 120, 130, 135) and `pthDamageModifier1..6` (1.0 to 1.5)
-are six bands: a blow landing past a threshold is multiplied by that band's modifier. Below the first
-threshold `normalPTHEquation` applies, which is `probabilityToHit / 70` — a pairing that never clears 70
-hits softer as well as less often.
-
-Which band a given swing lands in is the one thing the record does not state. Sources disagree: the Dawn
-Index reads it as fixed by the hit figure, the forums describe a d100 whose ranges the thresholds carve
-up, and the Index itself says the behaviour needs a live fixture to settle. The app reads the roll as
-even across the pairing's whole hit figure, so a band is worth the span it covers. That is an
-assumption, and it is labelled as one in the code and in the tooltip.
+are six bands, and the same roll that landed the blow picks one: the highest threshold it clears.
+Landed rolls are uniform across the hit figure, so a band is worth the span it covers of it — settled
+by the binary and by the guide's own worked examples, after the published sources had disagreed. Below
+the first threshold `normalPTHEquation` applies to every landed hit — `probabilityToHit / 70` — so a
+pairing that never clears 70 hits softer as well as less often. A crit-damage bonus adds to the band
+figure rather than multiplying it: +50% turns a 1.1 band into 1.6.
 
 **Attributes.** Three more equations scale damage by attribute, and they are easy to miss because the
 character sheet's own damage figures exclude them:
@@ -563,8 +599,11 @@ character sheet's own damage figures exclude them:
     magicalDamageEquation  = magicalDamageDV*((intelligenceDV/215)+1)
 
 Cunning raises physical and pierce, Spirit everything else. The variables carry the engine's old names:
-`dexterityDV` is Cunning, `intelligenceDV` is Spirit. At 874 Spirit that is a fivefold multiplier on
-aether, so leaving it out understates a caster by more than any other single omission.
+`dexterityDV` is Cunning, `intelligenceDV` is Spirit. The equation's excess is read as a percentage
+into the type's own modifier pool — additive with the gear and skill percentages, not a multiplier
+over them — so 874 Spirit is +407% aether alongside whatever the build carries, and a monster's
+attributes count exactly the same way. `offensiveTotalDamageModifier` is the one layer that does
+multiply: every source of it sums, and the sum scales the pooled result once.
 
 **What stops it.** Two armour equations, picked by whether the blow is bigger than the armour:
 `physicalDamageDefenseEquationDGP` is `(protection × (1 − absorption)) + (damage − protection)` for a
@@ -582,7 +621,7 @@ what a blow meets.
 **Damage absorption.** `damageAbsorptionPercent` is a share of everything that reaches the target,
 swallowed after resistance and armour both. It is aimed at every damage type where armour absorption
 stops only physical, and Mirror of Ereoctes states 100% of it, which is what makes it a few seconds of
-immunity.
+immunity. `damageAbsorption` is its flat twin, taken off last of all.
 
 **Resistance caps.** `playerDefenseCap` on `gameengine.dbr` is 80 for all three difficulties, raised per
 type by `defensive<Type>MaxResist`. Everything past the cap is overcap. It stops nothing by itself and is
@@ -624,8 +663,9 @@ longer carry the other two families, so the negative-resistance kind is all a mo
 
 **Sundered** is the game's name for `offensiveSlowDamageMult`: the target takes that much more damage for
 `offensiveSlowDamageMultDuration` seconds. Sixteen boss skills are named for it and every one carries the
-field, 30–65% for 3–5 seconds. Only the strongest instance applies. No field in the game is called
-sunder; the name lives in the file names and the patch notes.
+field, 30–65% for 3–5 seconds. Only the strongest instance applies, and it multiplies before the
+target's mitigation, so armour absorbs the same flat amount off a bigger blow. No field in the game is
+called sunder; the name lives in the file names and the patch notes.
 
 ### Reduction in duration
 
@@ -757,13 +797,38 @@ the shoulders and legs raise exactly those two regions.
 **Absorption multiplies.** "Increases Armor Absorption by X%" scales the base 70%, capped at 100 — the same
 wording, and the same behaviour, as "Increases Armor by X%".
 
+**Two traps Crate's modding guide states outright.** Every shield's block absorption is 100%, so a
+blocked amount is simply subtracted. And a conversion whose out-type is left blank does not convert:
+it acts as multiplicative damage reduction.
+
 **Ascendant is not a fourth difficulty.** The save records three, and
 `balancingadjustment_ultramode_enemies01.dbr` is a second adjustment laid over Ultimate:
 `characterLifeModifier` +850, `offensiveTotalDamageModifier` +165, `offensiveCritDamageModifier` +40,
 +80 flat to both abilities, +12% attack speed. Net on a boss that is roughly twice the health and about
-three times the damage — The Dread goes 2.30M to 4.95M — which matches Crate's own "roughly double enemy
+three times the damage — The Dread goes 8.21M to 20.1M — which matches Crate's own "roughly double enemy
 health". A celestial boss carries a skill that negates the adjustment stat for stat and is left where it
 stands, which is why Ravager of Minds reads the same in both.
+
+**A challenge area is one more adjustment again.** The gdx3 "Domain" banners are
+`records/game/challengeareas/` ChallengeArea records: `nameTag` is the banner and `difficultyAdjustment`
+an AttributePak read like the difficulty's own — twelve values, three difficulties by four party sizes.
+Dangerous (`challengelayerscaling_easy01`), Treacherous (`_hard01`, +90% health, +70 and +3% to both
+abilities, +35% total damage on Ultimate single-player) and Forbidden (`_roguelike01`) stack over
+Ascendant additively in the same pools: the Keeper of the Seal at level 109 computes to 10,983,503 against
+the live game's 10,983,499, and Grand Magus Morgoneth at 111 under the Forbidden layer to 13,256,500
+against a recorded 13,256,496. An area also rolls mutators — `mutatorPakList`, `minMutators`/`maxMutators`,
+the minimap icons — which are that run's alone and beyond a reader's reach; they add attack and cast
+speed, flat typed damage, regeneration, leech or damage reduction, and none touches health, so a bar
+stays exact whatever rolled. Several records share one banner and one scaling, differing only in
+mutator count.
+
+A monster's level inside a challenge area is the player's plus the area's own offset, clamped to the
+area's limits — Crate's modding guide states the offset is used only there, which is why a level-100
+character meets the Keeper at 109 and Morgoneth at 111. The offset and the zone-to-layer binding live
+in world data rather than the database: each expansion's `Levels.arc` holds one compiled
+`world001.map`, and gdx3's embeds the sector styles that name the challengelayer records. The
+`ModdingTutorial` mod Crate ships is an uncompiled specimen of those formats — a `.wrl` world, `.lvl`
+regions and a sub-kilobyte `.sd` of sector layers — if reading them is ever worth it.
 
 **Blanket bonuses fold into every figure they reach**, and the figure never names them. A resistance takes
 `defensiveAllResistance`, and fire, cold and lightning also take `defensiveElementalResistance`; a maximum

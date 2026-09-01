@@ -1,7 +1,7 @@
 # The `player.gdc` format
 
-Verified byte-for-byte against a Fangs of Asterkarn save. The parser in `Code/Save` requires the whole file
-to be consumed with nothing left over, so anything below that stops being true will surface as an error.
+Verified byte-for-byte against a Fangs of Asterkarn save. The parser in `Engine/…/Save` requires the whole
+file to be consumed with nothing left over, so anything below that stops being true will surface as an error.
 
 The community references — [lost.org.uk](https://www.lost.org.uk/grimdawn.html),
 [AaronHutchinson/Grim-Dawn-Save-Decryption](https://github.com/AaronHutchinson/Grim-Dawn-Save-Decryption),

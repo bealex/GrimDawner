@@ -76,16 +76,18 @@ middle button drags.
 
 **Monsters** — every named monster in the game, filtered by rank, by race and by name, each marked with
 where the game keeps its record — Nemesis, Hero, Bounty, Wave Event — which is the only thing telling two
-of the same name apart. A monster is read
-at a level and a mode — the three difficulties and Ascendant, which is a second adjustment over Ultimate
-worth roughly twice the health and three times the damage — since everything it has is an equation of
-both: what it is worth in a fight,
-its attacks with their ranges and timings, its passives, and what it drops from each equipment slot with
-the odds. Double-clicking opens it in a window of its own, with its whole sheet, its attacks, its loot,
-and its **model** — the game's own, drawn live, dressed in its own gear and holding a weapon rolled from
-the tables it draws one from. Pick an attack and it plays that attack's animation with the effects the
-skill throws; pick a passive and it wears its aura. Half and quarter speed make the moment a blow lands
-readable, and the frames it lands on are listed beside it. Drag to turn it, scroll to move in.
+of the same name apart. Everything a monster has is an equation of how it is met, so it is read at a
+level, a mode — the three difficulties and Ascendant, a second adjustment over Ultimate worth roughly
+twice the health and three times the damage — and, when the fight is inside one, a challenge-area
+Domain, which lays one adjustment more. The sidebar gives what it is worth in a fight, its attacks with
+their ranges and timings, its passives, and what it drops from each equipment slot with the odds.
+Double-clicking opens it in a window of its own, with its whole sheet, its attacks, its loot, an
+**Interaction** tab that reads your character against it — both sides' chance to hit and to crit, what
+a blow lands, what a second of the fight costs each of you — and its **model**: the game's own, drawn
+live, dressed in its own gear and holding a weapon rolled from the tables it draws one from. Pick an
+attack and it plays that attack's animation with the effects the skill throws; pick a passive and it
+wears its aura. Half and quarter speed make the moment a blow lands readable, and the frames it lands
+on are listed beside it. Drag to turn it, scroll to move in.
 
 **Optimizer** — what to socket into the gear the character already wears, so that every resistance sits
 at its cap and what is left over goes as far as it can. Thirteen sockets over a few dozen components and
@@ -138,10 +140,12 @@ do the rolled figures on individual items, bands included. The damage panel and 
 not modelled.
 
 Monsters have no such window in the game, so they are checked against GrimTools' monster database, which
-reads the same records: Ravager of Minds at level 100 on Ultimate matches to the unit. Its *damage* is
-pinned to nothing — GrimTools refuses to be fetched — so the interaction figures rest on the equations
-alone. The armour equations and the resistance-reduction order are pinned to Crate's own worked examples.
-[Documentation/Status.md](Documentation/Status.md) has the whole of it.
+reads the same records — Ravager of Minds at level 100 on Ultimate matches to the unit — and the fight
+arithmetic against the game itself: the attack pipeline was decompiled from the game's binary
+([Documentation/AttackPipeline.md](Documentation/AttackPipeline.md)) and validated against live fights,
+where the app reproduces a domain-laid boss's health bar to a rounding error and the game's own printed
+crit multiplier exactly. The armour equations and the resistance-reduction order are pinned to Crate's
+own worked examples. [Documentation/Status.md](Documentation/Status.md) has the whole of it.
 
 ## Documentation
 
@@ -150,6 +154,8 @@ alone. The armour equations and the resistance-reduction order are pinned to Cra
   devotion record, and whether the engine reads it.
 - [Documentation/GameData.md](Documentation/GameData.md) — the `.arz`, `.arc` and `.tex` formats, which
   record holds which fact, and the rules the engine encodes.
+- [Documentation/AttackPipeline.md](Documentation/AttackPipeline.md) — the engine's attack, decompiled:
+  how a blow is assembled, rolled and mitigated.
 - [Documentation/Status.md](Documentation/Status.md) — how far the stat engine goes.
 
 ## Sources
@@ -168,6 +174,9 @@ The formats are not published by the game's authors. What this implementation wa
   that reference does not model.
 - **[grimtools.com/monsterdb](https://www.grimtools.com/monsterdb/)** — the reference every monster figure
   was checked against, and what showed that the difficulty's own adjustment had to be in there.
+- **The game's own binary** — `x64/Game.dll` exports its C++ symbols, and the attack pipeline in
+  [AttackPipeline.md](Documentation/AttackPipeline.md) was decompiled from it, cross-checked against
+  Crate's combat guide and a controlled community measurement.
 - **The game's own tooltips and character window**, used as the ground truth every character number was
   checked against.
 
