@@ -2,6 +2,7 @@
 
 import AppKit
 import GrimDawnerEngine
+import GrimDawnerRender
 import SwiftUI
 
 /// Every item in the game, listed and searchable, with whichever one is picked shown in full.
@@ -17,6 +18,8 @@ struct ItemsTab: View {
     let select: (String) -> Void
     /// Opens an item in a window of its own, which is what a double click is for.
     var open: ((String) -> Void)?
+    /// Draws the model of a world object, which has no inventory icon to show instead.
+    var renderer: ModelRenderer?
 
     @State
     private var filter = DirectoryFilter()
@@ -54,7 +57,8 @@ struct ItemsTab: View {
                     vendor: vendor(of: selectedPath),
                     tiers: openGroup?.variants ?? [],
                     tierPath: selectedPath,
-                    selectTier: select
+                    selectTier: select,
+                    renderer: renderer
                 )
                 // The query found this item by name, so the whole item is the match and none of
                 // its stats should dim.

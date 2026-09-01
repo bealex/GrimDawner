@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Alex Babaev. Licensed under the MIT licence — see LICENSE.
 
 import GrimDawnerEngine
+import GrimDawnerRender
 import SwiftUI
 
 /// The awakened item an epic piece becomes, and where to find it.
@@ -30,6 +31,8 @@ struct ItemDetailView: View {
     var tiers: [CataloguedItem] = []
     var tierPath: String?
     var selectTier: ((String) -> Void)?
+    /// Draws the model of a world object, which is the only picture the game has of one.
+    var renderer: ModelRenderer?
 
     @Environment(\.quickSearch)
     private var search
@@ -66,6 +69,27 @@ struct ItemDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .accessibilityElement(children: .combine)
+            }
+
+            if showsModel {
+                SectionCard(title: "Model") {
+                    // The pane's own height: an `SCNView` asks a scroll view for none and would come
+                    // out zero pixels tall.
+                    ItemModelView(meshPath: item.meshPath, texturePath: item.texturePath, renderer: renderer)
+                        .frame(height: 260)
+                        .frame(maxWidth: .infinity)
+                        .clipShape(.rect(cornerRadius: 6))
+                }
+            }
+
+            if !item.contents.isEmpty {
+                SectionCard(title: "What it holds", subtitle: contentsSubtitle) {
+                    VStack(spacing: 0) {
+                        ForEach(item.contents) { entry in
+                            contentRow(entry)
+                        }
+                    }
+                }
             }
 
             if !item.requirements.isEmpty {
@@ -150,6 +174,40 @@ struct ItemDetailView: View {
                 }
             }
         }
+    }
+
+    /// A world object has no inventory icon — it is never carried — so its model stands in for one.
+    /// Everything that does have artwork keeps showing that instead.
+    private var showsModel: Bool { item.iconPath.isEmpty && !item.meshPath.isEmpty && renderer != nil }
+
+    /// How much comes out, and whether the list is all of it. The engine reads the likeliest sixty,
+    /// which for a deep chest is a fraction of what it can roll.
+    private var contentsSubtitle: String {
+        let drops = item.drops == 1 ? "1 drop" : "\(item.drops) drops"
+        return item.contents.count >= 60
+            ? "\(drops) — the 60 likeliest, as a share of each" : "\(drops), as a share of each"
+    }
+
+    private func contentRow(_ entry: MonsterLootEntry.Item) -> some View {
+        Button {
+            selectItem?(entry.recordPath)
+        } label: {
+            HStack(spacing: 8) {
+                GameIcon(path: entry.iconPath, size: 20, fallbackSymbol: "shippingbox")
+                Text(entry.name)
+                    .foregroundStyle(entry.rarity.color)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text(entry.share.formatted(.number.precision(.fractionLength(entry.share < 1 ? 2 : 1))) + "%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 3)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(selectItem == nil || entry.recordPath.isEmpty)
+        .help("Show \(entry.name)")
     }
 
     @ViewBuilder

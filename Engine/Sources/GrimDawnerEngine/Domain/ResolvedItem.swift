@@ -144,6 +144,15 @@ public struct ResolvedItem: Identifiable, Sendable {
     public let statsHighest: StatBlock
     /// What the item grants every pet the character has, which the game lists in a panel of its own.
     public var petBonus = StatBlock()
+    /// The model the game draws it with, for the world objects that carry one instead of an inventory
+    /// icon — a chest, a breakable — and the skin that model wears.
+    public var meshPath = ""
+    public var texturePath = ""
+    /// What a container can produce, most likely first, as a share of one thing that comes out of it.
+    /// Empty for anything that holds nothing.
+    public var contents = [MonsterLootEntry.Item]()
+    /// How many things it drops when it is opened.
+    public var drops = 0
 
     public var displayName: String {
         [ prefixName, baseName, suffixName ]

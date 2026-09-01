@@ -71,3 +71,39 @@ struct CharacterModelView: NSViewRepresentable {
         )
     }
 }
+
+/// The character's own model where the game renders it, over the backdrop the game renders it against.
+struct PortraitView: View {
+    let backdrop: String
+    let size: CGSize
+    /// Ringed while the sidebar is reading the character rather than a piece of gear.
+    var isSelected = false
+    let character: ResolvedCharacter
+    let weaponSet: WeaponSet?
+    let renderer: ModelRenderer?
+    let database: GameDatabase?
+
+    var body: some View {
+        ZStack {
+            // The game lights its own backdrop from in front of the model; drawn flat it is a pale wall
+            // that the gear disappears into, so it is taken down to something the model stands out of.
+            GameArtwork(path: backdrop, size: size)
+                .colorMultiply(Color(white: 0.3))
+            model
+        }
+        .frame(width: size.width, height: size.height)
+        .clipped()
+        .overlay(
+            Rectangle()
+                .stroke(isSelected ? Theme.accent : .clear, lineWidth: 2)
+        )
+        .accessibilityHidden(true)
+    }
+
+    /// An `SCNView` takes every click that lands on it, and the inventory panel's portrait is a button.
+    private var model: some View {
+        CharacterModelView(character: character, weaponSet: weaponSet, renderer: renderer, database: database)
+            .frame(width: size.width, height: size.height)
+            .allowsHitTesting(false)
+    }
+}

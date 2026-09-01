@@ -156,11 +156,16 @@ public final class GameDatabase: Sendable {
         return record.text("bitmapName")
     }
 
-    /// Removes the game's inline colour codes — a caret followed by one letter, as in `^kPrismatic Diamond`.
+    /// Removes the game's inline colour codes — a caret followed by one letter, as in `^kPrismatic
+    /// Diamond` — and turns its line break, `{}`, into one. A lore note writes a blank line as `{}{}`.
+    ///
+    /// The line break is taken first: a colour code is also written braced, as `{^E}`, and stripping the
+    /// caret before the braces would leave an empty pair that reads as a line break it never was.
     private static func stripped(_ text: String) -> String {
-        guard text.contains("^") else { return text }
+        guard text.contains("^") || text.contains("{}") else { return text }
 
         var output = ""
+        let text = text.replacingOccurrences(of: "{}", with: "\n")
         var characters = text.makeIterator()
         while let character = characters.next() {
             guard
@@ -173,7 +178,8 @@ public final class GameDatabase: Sendable {
             // Drop the code letter that follows the caret; a trailing caret is left as-is.
             if let code = characters.next(), !code.isLetter { output.append(code) }
         }
-        return output
+        // What a braced colour code leaves behind once its caret is gone.
+        return output.replacingOccurrences(of: "{}", with: "")
     }
 
     /// A sweep of every record, kept so the second caller pays nothing.

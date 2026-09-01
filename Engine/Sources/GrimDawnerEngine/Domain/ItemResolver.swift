@@ -63,7 +63,7 @@ public struct ItemResolver {
             rarity: rarity
         ))
 
-        return ResolvedItem(
+        var resolved = ResolvedItem(
             raw: item,
             parts: parts,
             iconPath: basePart.iconPath,
@@ -82,6 +82,25 @@ public struct ItemResolver {
             statsHighest: highest,
             petBonus: petBonus
         )
+        resolved.meshPath = base.text("mesh")
+        resolved.texturePath = base.text("baseTexture")
+        let held = contents(of: base)
+        resolved.contents = held.items
+        resolved.drops = held.drops
+        return resolved
+    }
+
+    /// What a container leaves behind.
+    ///
+    /// A chest names one table per difficulty and they hold the same things at different bands; the
+    /// last is the deepest, and reading them together would count every item several times over. The
+    /// level offset beside it is how far above the area the chest rolls.
+    private func contents(of record: ArzRecord) -> (items: [MonsterLootEntry.Item], drops: Int) {
+        let tables = record["lootTable"]?.texts.filter { !$0.isEmpty } ?? []
+        guard let table = tables.last else { return ([], 0) }
+
+        let level = 100 + Int(record["levelOffset"]?.numbers.last ?? 0)
+        return LootTable.contents(ofContainerAt: table, atLevel: level, in: database)
     }
 
     /// Classes whose numbers never roll: a component and an augment read the same on every copy.
@@ -414,6 +433,12 @@ public struct ItemResolver {
             var skill = grantedSkill(at: itemSkill, level: itemSkillLevel(record), kind: .granted)
             skill.trigger = SkillTrigger.text(ofControllerAt: record.text("itemSkillAutoController"), in: database)
             granted.append(skill)
+        }
+
+        // A formula unlocks several skills at once and names them in one field, at a rank of its own:
+        // the potion blueprints write a tier's whole effect this way.
+        for path in record["skillNames"]?.texts ?? [] where !path.isEmpty {
+            granted.append(grantedSkill(at: path, level: max(1, record.integer("skillLevel")), kind: .granted))
         }
     }
 

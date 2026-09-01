@@ -55,7 +55,8 @@ struct ItemDetailWindow: View {
             ScrollView {
                 switch tab {
                     case .info:
-                        ItemDetailView(item: item, showsRolls: false, showsHeader: false).padding(16)
+                        ItemDetailView(item: item, showsRolls: false, showsHeader: false, renderer: model.modelRenderer)
+                            .padding(16)
                     case .loot: ItemLootView(item: item, model: model)
                     case .affixes: ItemAffixesView(item: item, model: model)
                 }
