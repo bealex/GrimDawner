@@ -157,9 +157,6 @@ private struct MonsterRow: View {
     /// Opens the monster's own window, which is what a double click is for.
     let open: () -> Void
 
-    @Environment(\.quickSearch)
-    private var search
-
     var body: some View {
         Button(action: select) {
             HStack(spacing: 10) {
