@@ -10,14 +10,21 @@ import Synchronization
 /// game itself uses.
 public final class GameDatabase: Sendable {
     /// Database and localisation archives in load order; missing ones are skipped.
+    ///
+    /// The Shattered Realm databases come first, which makes them the weakest override: the game
+    /// mounts them only inside that mode, and they carry retuned copies of world records —
+    /// `SurvivalMode3.arz` writes The Dread's health equation at a third of what `GDX3.arz` states —
+    /// so read over the world they turned every reused boss into its Shattered Realm self. They still
+    /// load at all because the records that exist nowhere else — the endless-dungeon copies that
+    /// carry twelve nemeses' loot — have to come from somewhere.
     private static let databasePaths = [
+        "survivalmode1/database/SurvivalMode1.arz",
+        "survivalmode2/database/SurvivalMode2.arz",
+        "survivalmode3/database/SurvivalMode3.arz",
         "database/database.arz",
         "gdx1/database/GDX1.arz",
         "gdx2/database/GDX2.arz",
         "gdx3/database/GDX3.arz",
-        "survivalmode1/database/SurvivalMode1.arz",
-        "survivalmode2/database/SurvivalMode2.arz",
-        "survivalmode3/database/SurvivalMode3.arz",
     ]
 
     private static let textPaths = [
