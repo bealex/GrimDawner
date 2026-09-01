@@ -111,7 +111,7 @@ struct MonsterModelView: NSViewRepresentable {
 /// The model, what it is doing, and how fast — with what the animation calls out while it plays.
 ///
 /// A creature's animation table names every move it has, and the ones its attacks ask for by name are
-/// named after those attacks. It opens on the first, which is the creature standing about.
+/// named after those attacks. It opens on the first, which is the combat stance when the creature has one.
 struct MonsterModelPane: View {
     let monster: ResolvedMonster
     let renderer: ModelRenderer?

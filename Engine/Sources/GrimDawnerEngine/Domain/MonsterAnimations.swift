@@ -66,7 +66,9 @@ public enum MonsterAnimations {
     private static let prefix = "unarmed"
 
     /// The actions a reader looks for first; everything else keeps the order the table wrote it in.
-    private static let leading = [ "LongIdle", "AttackIdle", "Walk", "Run", "Attack", "SpellAttack", "Special" ]
+    /// AttackIdle leads because the list's first animation is the pose a monster is first shown in,
+    /// and the combat stance reads better than standing about.
+    private static let leading = [ "AttackIdle", "LongIdle", "Walk", "Run", "Attack", "SpellAttack", "Special" ]
 
     private static func order(of animation: MonsterAnimation) -> Int {
         leading.firstIndex(of: animation.action) ?? leading.count

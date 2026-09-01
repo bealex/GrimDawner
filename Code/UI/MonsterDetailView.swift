@@ -29,11 +29,18 @@ struct MonsterDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             header
             if !monster.meshPath.isEmpty, renderer != nil {
-                MonsterModelView(monster: monster, renderer: renderer, database: database)
-                    .frame(height: 220)
-                    .frame(maxWidth: .infinity)
-                    .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: Theme.cardCornerRadius))
-                    .help("The game's own model — drag to turn it, scroll to move in")
+                // Played rather than left in the bind pose: the first animation is the combat stance,
+                // and a creature standing ready reads far better than one with its arms hanging.
+                MonsterModelView(
+                    monster: monster,
+                    renderer: renderer,
+                    database: database,
+                    animation: monster.animations.first
+                )
+                .frame(height: 220)
+                .frame(maxWidth: .infinity)
+                .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: Theme.cardCornerRadius))
+                .help("The game's own model — drag to turn it, scroll to move in")
             }
             levelControl
             summaryCard
