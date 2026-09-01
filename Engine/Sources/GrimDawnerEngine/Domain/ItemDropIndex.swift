@@ -26,7 +26,13 @@ public struct ItemDropSource: Codable, Sendable, Identifiable, Hashable {
 /// answer is built once per installed version and kept beside the item and monster listings.
 public struct ItemDropIndex: Codable, Sendable {
     /// Bumped whenever an entry means something different, so an older index on disk is discarded.
-    public static let version = 2
+    public static let version = 3
+
+    /// The record trees a monster the player can kill is written in. The Shattered Realm keeps its own
+    /// copies, and for several nemeses those are the only ones that drop: the world's Kaisan has the
+    /// drop flag off and nothing in its carried slots, while the endless-dungeon copy holds his own
+    /// necklace table. Everything else under `records/` is developer sandbox or summons.
+    private static let monsterTrees = [ "records/creatures/enemies/", "records/endlessdungeon/creatures/enemies/" ]
 
     public let fingerprint: String
     public let version: Int
@@ -58,16 +64,18 @@ public struct ItemDropIndex: Codable, Sendable {
 
         var wanted = [(path: String, name: String, rank: MonsterRank)]()
         var seen = Set<String>()
-        database.sweep(prefix: "records/creatures/enemies/") { path, record in
-            guard
-                record.text("Class") == "Monster",
-                MonsterResolver.leavesLoot(record),
-                let rank = MonsterRank(rawValue: record.text("monsterClassification")),
-                let name = database.localised(record.text("description")),
-                !name.isEmpty
-            else { return }
+        for tree in Self.monsterTrees {
+            database.sweep(prefix: tree) { path, record in
+                guard
+                    record.text("Class") == "Monster",
+                    MonsterResolver.leavesLoot(record),
+                    let rank = MonsterRank(rawValue: record.text("monsterClassification")),
+                    let name = database.localised(record.text("description")),
+                    !name.isEmpty
+                else { return }
 
-            wanted.append((path, name, rank))
+                wanted.append((path, name, rank))
+            }
         }
 
         var sources = [String: [ItemDropSource]]()

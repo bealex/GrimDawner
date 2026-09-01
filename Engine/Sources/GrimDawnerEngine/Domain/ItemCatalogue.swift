@@ -304,7 +304,7 @@ public struct ItemCatalogue: Codable, Sendable {
     {
         guard
             record.recordClass == "LootRandomizer",
-            case let kind:CataloguedAffix.Kind? = path.contains("/prefix/")
+            case let kind: CataloguedAffix.Kind? = path.contains("/prefix/")
                 ? .prefix : (path.contains("/suffix/") ? .suffix : nil),
             let kind,
             let name = database.localised(record.text("lootRandomizerName")),
