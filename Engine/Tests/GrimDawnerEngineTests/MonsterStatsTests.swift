@@ -53,4 +53,53 @@ struct MonsterStatsTests {
         #expect(monster.resistances[.physical]?.rounded() == 87)
         #expect(monster.cancelsAscendantMode)
     }
+
+    /// The Keeper of the Seal at level 109, Ultimate Ascendant, inside a Treacherous Domain — pinned to
+    /// the running game itself, whose health bar read 10,983,499. The challenge layer is the last piece
+    /// of that figure: without it the sheet stops five percent short.
+    @Test
+    func laysAChallengeAreaOverAnAscendantBoss() throws {
+        guard let database = Self.database else { return }
+
+        let skills = SkillResolver(database: database)
+        let resolver = MonsterResolver(
+            database: database,
+            skills: skills,
+            items: ItemResolver(database: database, skills: skills)
+        )
+
+        let areas = ChallengeArea.all(in: database)
+        #expect(areas.map(\.name) == [ "Dangerous Domain", "Treacherous Domain", "Forbidden Domain" ])
+
+        guard
+            let treacherous = areas.first(where: { $0.name == "Treacherous Domain" }),
+            let monster = resolver.monster(
+                at: "records/creatures/enemies/boss&quest/statue_roguelike_entranceguardian_01.dbr",
+                level: 109,
+                difficulty: .ultimate,
+                isAscendant: true,
+                challengeArea: treacherous.adjustment
+            )
+        else { return }
+
+        #expect(abs(monster.health - 10_983_499) < 10)
+        #expect(monster.offensiveAbility.rounded() == 2991)
+        #expect(monster.defensiveAbility.rounded() == 2721)
+
+        // Grand Magus Morgoneth at level 111 inside a Forbidden Domain, from a recorded fight whose
+        // bar read 13,256,496. Mutators were rolled and unknown, and it does not matter: none of the
+        // game's monster mutators touches health.
+        guard
+            let forbidden = areas.first(where: { $0.name == "Forbidden Domain" }),
+            let magus = resolver.monster(
+                at: "records/creatures/enemies/boss&quest/eldritcharmor_roguelike_02a.dbr",
+                level: 111,
+                difficulty: .ultimate,
+                isAscendant: true,
+                challengeArea: forbidden.adjustment
+            )
+        else { return }
+
+        #expect(abs(magus.health - 13_256_496) < 10)
+    }
 }

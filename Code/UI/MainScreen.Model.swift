@@ -105,8 +105,19 @@ extension MainScreen {
         /// Monsters are worth several times more on Ultimate than on Normal, so the difficulty is read
         /// alongside the level.
         private(set) var monsterMode: MonsterMode = .ultimate
+        /// The challenge area the fight is read in, when it is in one at all.
+        private(set) var monsterChallengeArea: ChallengeArea?
 
         var monsterDifficulty: Difficulty { monsterMode.difficulty }
+
+        /// The named challenge areas the game defines, read once — the tree they live in never changes.
+        var challengeAreas: [ChallengeArea] {
+            if knownChallengeAreas == nil { knownChallengeAreas = database.map(ChallengeArea.all(in:)) ?? [] }
+            return knownChallengeAreas ?? []
+        }
+
+        @ObservationIgnored
+        private var knownChallengeAreas: [ChallengeArea]?
 
         /// What the loadout search is doing, which outlives any one view of it.
         let optimizer = OptimizerState()
@@ -280,8 +291,15 @@ extension MainScreen {
                 at: path,
                 level: level,
                 difficulty: monsterMode.difficulty,
-                isAscendant: monsterMode.isAscendant
+                isAscendant: monsterMode.isAscendant,
+                challengeArea: monsterChallengeArea?.adjustment
             )
+        }
+
+        /// Lays a challenge area over the selected monster, or lifts it off.
+        func selectChallengeArea(_ area: ChallengeArea?) {
+            monsterChallengeArea = area
+            if let selectedMonsterPath { selectMonster(path: selectedMonsterPath, level: monsterLevel) }
         }
 
         /// The skills the attack plan can be measured on: the character's own, that it has spent a

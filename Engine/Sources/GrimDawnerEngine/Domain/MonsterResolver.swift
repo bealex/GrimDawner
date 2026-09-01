@@ -181,7 +181,11 @@ public struct MonsterResolver {
         at path: String,
         level: Int,
         difficulty: Difficulty = .ultimate,
-        isAscendant: Bool = false
+        isAscendant: Bool = false,
+        /// The adjustment record of the challenge area the fight happens in — the "Dangerous Domain"
+        /// banner over a gdx3 endgame zone — laid over the monster like the difficulty's own. The
+        /// area's random mutators are that run's and are not modelled.
+        challengeArea: String? = nil
     ) -> ResolvedMonster? {
         guard let record = database.record(path), record.text("Class") == "Monster" else { return nil }
 
@@ -196,6 +200,9 @@ public struct MonsterResolver {
         // celestial boss carries the skill that negates it stat for stat, and is left where it stands.
         let cancelsAscendant = counted.count != all.count
         if isAscendant, !cancelsAscendant { laid.merge(ascendant) }
+        if let challengeArea {
+            laid.merge(adjustment(at: challengeArea, index: Int(difficulty.rawValue) * 4))
+        }
         let block = stats(of: record, atLevel: level, abilities: counted, adjustment: laid)
         let bio = bioValues(of: record, atLevel: level)
         let physique = scaled(block, base: bio["characterStrength"], "characterStrength")

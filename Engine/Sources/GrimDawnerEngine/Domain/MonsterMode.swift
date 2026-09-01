@@ -44,3 +44,36 @@ public enum MonsterMode: String, CaseIterable, Sendable, Identifiable {
         }
     }
 }
+
+/// A challenge area — the "Dangerous Domain" banner over a gdx3 endgame zone. The game lays the
+/// area's stated adjustment over every monster inside, one column per difficulty like its own, and
+/// rolls the area's mutators besides; the mutators are that run's alone and beyond a save's reach.
+public struct ChallengeArea: Sendable, Identifiable, Hashable {
+    /// The adjustment pak the resolver folds in.
+    public let adjustment: String
+    /// The banner's word for it: Dangerous, Treacherous or Forbidden Domain.
+    public let name: String
+
+    public var id: String { adjustment }
+
+    /// The named areas the game defines, mildest first. Several records share one banner and one
+    /// adjustment, differing only in mutator count, so each adjustment appears once.
+    public static func all(in database: GameDatabase) -> [ChallengeArea] {
+        var named = [String: ChallengeArea]()
+        var severity = [String: Double]()
+        database.sweep(prefix: "records/game/challengeareas/") { _, record in
+            guard record.text("Class") == "ChallengeArea" else { return }
+
+            let adjustment = record.text("difficultyAdjustment").lowercased()
+            guard
+                !adjustment.isEmpty,
+                let name = database.localised(record.text("nameTag")),
+                let scaling = database.record(adjustment)
+            else { return }
+
+            named[adjustment] = ChallengeArea(adjustment: adjustment, name: name)
+            severity[adjustment] = scaling["characterLifeModifier"]?.numbers.max() ?? 0
+        }
+        return named.values.sorted { (severity[$0.adjustment] ?? 0) < (severity[$1.adjustment] ?? 0) }
+    }
+}

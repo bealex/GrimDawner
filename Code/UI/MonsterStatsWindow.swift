@@ -119,7 +119,10 @@ struct MonsterStatsWindow: View {
                 mode: model.monsterMode,
                 setMode: {
                     model.selectMonster(path: monster.path, level: model.monsterLevel, mode: $0)
-                }
+                },
+                areas: model.challengeAreas,
+                area: model.monsterChallengeArea,
+                setArea: { model.selectChallengeArea($0) }
             )
             .fixedSize()
             .layoutPriority(1)

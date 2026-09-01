@@ -10,6 +10,9 @@ struct MonsterLevelField: View {
     let setLevel: (Int) -> Void
     var mode: MonsterMode?
     var setMode: ((MonsterMode) -> Void)?
+    var areas: [ChallengeArea] = []
+    var area: ChallengeArea?
+    var setArea: ((ChallengeArea?) -> Void)?
 
     @State
     private var text = ""
@@ -40,6 +43,23 @@ struct MonsterLevelField: View {
                     "A monster on Ultimate carries several times the health it does on Normal, and "
                         + "Ascendant lays another adjustment over Ultimate again — 850% more health and "
                         + "165% more damage. A celestial boss carries a skill that cancels it."
+                )
+            }
+
+            if let setArea, !areas.isEmpty {
+                Picker("Domain", selection: Binding(get: { area }, set: setArea)) {
+                    Text("No Domain").tag(ChallengeArea?.none)
+                    ForEach(areas) { area in
+                        Text(area.name).tag(ChallengeArea?.some(area))
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .fixedSize()
+                .help(
+                    "A challenge area lays its own adjustment over every monster inside — a Treacherous "
+                        + "Domain grants 90% more health on Ultimate — and rolls mutators besides, "
+                        + "which are that run's alone and not counted here."
                 )
             }
         }
