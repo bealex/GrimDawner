@@ -82,12 +82,30 @@ struct MonsterInteractionView: View {
         MonsterDebuff.worst(of: debuffs.filter { suffered.contains($0.id) })
     }
 
+    /// What enhances the chosen attack: the modifier skills hanging off it at their learned ranks, and
+    /// what the worn items change about it. Their flat damage, percentages and crit damage ride the
+    /// attack exactly as the skill's own figures do — Disintegration is most of an Aether Ray.
+    private var enhancements: [StatBlock] {
+        guard let chosen else { return [] }
+
+        let modifiers = character.masteries.flatMap(\.skills)
+            .filter {
+                $0.isModifier && $0.baseLevel > 0
+                    && $0.modifies?.lowercased() == chosen.recordPath.lowercased()
+            }
+            .map(\.stats)
+        let changes = (character.skillModifications[chosen.recordPath.lowercased()] ?? [])
+            .map(\.changes.stats)
+        return modifiers + changes
+    }
+
     private var encounter: Encounter {
         EncounterEngine(database: database)
             .encounter(
                 of: sheet,
                 against: monster,
                 using: chosen,
+                enhancedBy: enhancements,
                 swinging: monsterAttack,
                 reducing: TargetReduction.of(character),
                 suffering: landed

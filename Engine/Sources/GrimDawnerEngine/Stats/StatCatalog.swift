@@ -129,6 +129,7 @@ public enum StatCatalog {
         StatDefinition("defensiveProtectionModifier", "Armor", .defence, .percent, order: 9),
         StatDefinition("defensiveAbsorptionModifier", "Armor Absorption", .defence, .percent, order: 10),
         StatDefinition("damageAbsorptionPercent", "Damage Absorption", .defence, .percent, order: 11),
+        StatDefinition("damageAbsorption", "Damage Absorption", .defence, .flat, order: 11),
         StatDefinition("characterDefensiveAbility", "Defensive Ability", .defence, .flat, order: 11),
         StatDefinition("characterDefensiveAbilityModifier", "Defensive Ability", .defence, .percent, order: 12),
         StatDefinition("defensiveBlock", "Shield Block", .defence, .flat, order: 13),

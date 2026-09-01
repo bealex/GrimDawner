@@ -316,7 +316,29 @@ public struct MonsterResolver {
         }
 
         for ability in abilities where ability.role == .passive {
-            block.merge(ability.skill.stats)
+            // A toggled aura that drives a debuff is aimed at whoever stands in it, not at the
+            // creature itself: Dread Presence's −135 offensive ability belongs to the player's sheet,
+            // and folding it in here read the boss as weaker than the fight it gives.
+            if case let buff = database.record(ability.skill.recordPath)?.text("buffSkillName") ?? "",
+                    !buff.isEmpty,
+                    database.record(buff.replacingOccurrences(of: "\\", with: "/").lowercased())?
+                        .recordClass.hasPrefix("SkillBuff_Debuf") == true {
+                continue
+            }
+
+            var stats = ability.skill.stats
+            // A chance-gated modifier is not always on — the engine rolls it per blow, and its own
+            // damage display weights it by the chance — so the pool carries the expected share.
+            if let record = database.record(ability.skill.recordPath) {
+                for type in DamageType.allCases {
+                    let chance = record.number(type.modifierKey + "Chance")
+                    let value = stats.value(type.modifierKey)
+                    guard chance > 0, chance < 100, value != 0 else { continue }
+
+                    stats.increase(type.modifierKey, by: value * (chance / 100 - 1))
+                }
+            }
+            block.merge(stats)
         }
         block.merge(adjustment)
         return block

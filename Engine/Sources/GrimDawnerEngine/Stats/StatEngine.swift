@@ -38,7 +38,8 @@ public struct CharacterSheet: Sendable {
     public var resistances: [ResistanceKind: Double] = [:]
     public var maxResistances: [ResistanceKind: Double] = [:]
 
-    /// Percentage damage bonus by type, including the attribute-driven scaling the game applies.
+    /// Percentage damage bonus by type, as the game's own panel prints it: the blanket bonuses folded
+    /// in, the attribute-driven scaling excluded.
     public var damageModifiers: [DamageType: Double] = [:]
     /// Flat damage the character adds to what it wields, by type.
     public var flatDamage: [DamageType: Double] = [:]

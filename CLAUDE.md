@@ -7,6 +7,8 @@ what it does; the references below are what you need before changing it.
   and different from every public reference.
 - [Documentation/GameData.md](Documentation/GameData.md) — the `.arz` / `.arc` / `.tex` formats, which
   record holds which fact, and the game rules the engine encodes.
+- [Documentation/AttackPipeline.md](Documentation/AttackPipeline.md) — the engine's attack, decompiled
+  from `Game.dll`: how a blow is assembled, rolled and mitigated.
 - [Documentation/Coverage.md](Documentation/Coverage.md) — every field on an item, monster, skill or
   devotion record, and whether the engine reads it.
 - [Documentation/Status.md](Documentation/Status.md) — what is done, what the stat engine does not yet

@@ -75,7 +75,7 @@ public struct ResolvedSkill: Identifiable, Sendable {
     /// The record's own class, which says whether the skill is permanently in effect.
     public let recordClass: String
     /// The skill this one modifies, for the round nodes that hang off another skill.
-    private(set) var modifies: String?
+    public private(set) var modifies: String?
     public let name: String
     /// The name the game gives it, absent for the thousands of records that carry none — a monster's
     /// skills mostly do not, and their file name is an identifier rather than something to print.
