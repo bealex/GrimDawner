@@ -34,11 +34,22 @@ public struct LoadoutOptimizer: Sendable {
         goal == .attack ? 0 : target.minimumDefensiveAbility
     }
 
+    /// The Armor Absorption the goal is asked to reach, held the same way and by the same plans.
+    public func wantedAbsorption(for goal: LoadoutGoal) -> Double {
+        goal == .attack ? 0 : target.minimumArmorAbsorption
+    }
+
     /// How many sweeps one run takes. Coordinate ascent settles in a handful; the rest is the price
     /// climbing until the resistances are met.
     public static let sweeps = 80
     /// How many runs each goal makes, from a different starting point each time.
     public static let runs = 8
+    /// How many times the pair pass may go round. One swap can open another, and it stops the moment a
+    /// whole pass finds nothing, so the cap is only there to bound the worst case.
+    public static let passes = 4
+    /// How many times the triple pass may go round. One is minutes, so this is a hard stop rather
+    /// than a bound on the worst case.
+    public static let triplePasses = 2
 
     /// One run of the search. `seed` picks its starting point: run 0 starts from what is worn.
     public func run(goal: LoadoutGoal, seed: UInt64, progress: (Double) -> Void) -> [LoadoutChoiceIndex] {
@@ -47,9 +58,9 @@ public struct LoadoutOptimizer: Sendable {
         // The running total carries the character underneath it, so a candidate is scored by adding
         // one option to it rather than by adding every socket up again.
         var total = problem.evaluator.base + stats(of: choice)
-        var prices = [Double](repeating: 0, count: wanted.count)
-        let wantedAbility = self.wantedAbility(for: goal)
-        var abilityPrice = 0.0
+        var pressure = LoadoutPressure(wantedResistance: wanted)
+        pressure.wantedDefensiveAbility = wantedAbility(for: goal)
+        pressure.wantedAbsorption = wantedAbsorption(for: goal)
 
         var best = choice
         var bestScore = -Double.infinity
@@ -58,11 +69,11 @@ public struct LoadoutOptimizer: Sendable {
         for round in 0 ..< Self.sweeps {
             guard !Task.isCancelled else { break }
 
-            sweep(&choice, &total, goal: goal, prices: prices, wantedAbility: wantedAbility, abilityPrice: abilityPrice)
+            sweep(&choice, &total, goal: goal, under: pressure)
 
             let figures = problem.evaluator.figures(absolute: total)
             let short = shortfall(figures)
-            let value = problem.evaluator.score(figures, goal: goal)
+            let value = score(figures, goal: goal)
             if short <= 0, value > bestScore || !hasFeasible {
                 best = choice
                 bestScore = value
@@ -71,19 +82,51 @@ public struct LoadoutOptimizer: Sendable {
 
             // The price rises while anything is short and eases back once everything is met, so a run
             // that has already paid too much for resistances can spend the slack on the goal again.
-            for index in prices.indices where wanted[index] > 0 {
+            for index in pressure.resistancePrices.indices where wanted[index] > 0 {
                 let missing = max(0, wanted[index] - figures.resistance[index])
-                prices[index] = max(0, prices[index] + Self.step * (missing > 0 ? 1 : -0.25))
+                pressure.resistancePrices[index] = max(
+                    0,
+                    pressure.resistancePrices[index] + Self.step * (missing > 0 ? 1 : -0.25)
+                )
             }
-            if wantedAbility > 0 {
-                let missing = wantedAbility - figures.defensiveAbility
-                abilityPrice = max(0, abilityPrice + Self.abilityStep * (missing > 0 ? 1 : -0.25))
+            if pressure.wantedDefensiveAbility > 0 {
+                let missing = pressure.wantedDefensiveAbility - figures.defensiveAbility
+                pressure.defensiveAbilityPrice = max(
+                    0,
+                    pressure.defensiveAbilityPrice + Self.abilityStep * (missing > 0 ? 1 : -0.25)
+                )
             }
-            progress(Double(round + 1) / Double(Self.sweeps))
+            if pressure.wantedAbsorption > 0 {
+                let missing = pressure.wantedAbsorption - figures.armorAbsorption
+                pressure.absorptionPrice = max(0, pressure.absorptionPrice + Self.step * (missing > 0 ? 1 : -0.25))
+            }
+            progress(Double(round + 1) / Double(Self.sweeps) * shares.sweeps)
         }
 
         // Nothing feasible was found, so the last state is the closest this run came.
-        return hasFeasible ? best : choice
+        var settled = hasFeasible ? best : choice
+        guard target.refinesPairs || target.refinesTriples else { return settled }
+
+        // The pair pass first whatever was asked for: it is three hundred times cheaper than the triple
+        // pass, and every move it makes is one the triple pass would otherwise find the expensive way.
+        refine(&settled, goal: goal, under: pressure) { fraction in
+            progress(shares.sweeps + shares.pairs * fraction)
+        }
+        guard target.refinesTriples else { return settled }
+
+        refineTriples(&settled, goal: goal, under: pressure) { fraction in
+            progress(shares.sweeps + shares.pairs + (1 - shares.sweeps - shares.pairs) * fraction)
+        }
+        return settled
+    }
+
+    /// How a run's progress bar is divided, which is nothing like how its work is: the triple pass is
+    /// minutes where the sweeps are a tenth of a second.
+    private var shares: (sweeps: Double, pairs: Double) {
+        if target.refinesTriples { return (0.04, 0.06) }
+        if target.refinesPairs { return (0.75, 0.25) }
+
+        return (1, 0)
     }
 
     /// What a set of choices comes to, for a caller that has one and wants it read.
@@ -104,14 +147,19 @@ public struct LoadoutOptimizer: Sendable {
         problem.evaluator.shortfalls(figures(of: choice), wanted: wanted)
     }
 
+    /// What a plan is worth under this target, which is the ask's own armour ceiling included.
+    public func score(_ figures: LoadoutFigures, goal: LoadoutGoal) -> Double {
+        problem.evaluator.score(figures, goal: goal, armorCeiling: target.armorCeiling)
+    }
+
     // MARK: - The sweep
 
     /// How fast the price on a point of missing resistance climbs. Small enough that a run does not
     /// buy resistance it does not need on the first round it falls short.
     private static let step: Double = 0.004
     /// The same for a point of missing Defensive Ability. Ability runs in the thousands where a
-    /// resistance runs in tens, so a point of it is charged proportionally less — but still enough
-    /// that a run will give up armour and health to reach the figure it was asked for.
+    /// resistance and absorption run in tens, so a point of it is charged proportionally less — but
+    /// still enough that a run will give up armour and health to reach the figure it was asked for.
     private static let abilityStep: Double = 0.000_2
 
     /// Walks every coordinate once, taking each one's best option with the others held still.
@@ -119,29 +167,11 @@ public struct LoadoutOptimizer: Sendable {
         _ choice: inout [LoadoutChoiceIndex],
         _ total: inout LoadoutStats,
         goal: LoadoutGoal,
-        prices: [Double],
-        wantedAbility: Double,
-        abilityPrice: Double
+        under pressure: LoadoutPressure
     ) {
         for socket in choice.indices {
-            pick(
-                &choice[socket].component,
-                &total,
-                among: problem.componentStats[socket],
-                goal: goal,
-                prices: prices,
-                wantedAbility: wantedAbility,
-                abilityPrice: abilityPrice
-            )
-            pick(
-                &choice[socket].augment,
-                &total,
-                among: problem.augmentStats[socket],
-                goal: goal,
-                prices: prices,
-                wantedAbility: wantedAbility,
-                abilityPrice: abilityPrice
-            )
+            pick(&choice[socket].component, &total, among: problem.componentStats[socket], goal: goal, under: pressure)
+            pick(&choice[socket].augment, &total, among: problem.augmentStats[socket], goal: goal, under: pressure)
         }
     }
 
@@ -151,9 +181,7 @@ public struct LoadoutOptimizer: Sendable {
         _ total: inout LoadoutStats,
         among options: [LoadoutStats],
         goal: LoadoutGoal,
-        prices: [Double],
-        wantedAbility: Double,
-        abilityPrice: Double
+        under pressure: LoadoutPressure
     ) {
         total -= options[chosen]
 
@@ -164,10 +192,8 @@ public struct LoadoutOptimizer: Sendable {
                 total,
                 plus: options[index],
                 goal: goal,
-                wanted: wanted,
-                prices: prices,
-                wantedAbility: wantedAbility,
-                abilityPrice: abilityPrice
+                under: pressure,
+                armorCeiling: target.armorCeiling
             )
             if value > bestScore {
                 bestScore = value
@@ -177,6 +203,242 @@ public struct LoadoutOptimizer: Sendable {
 
         chosen = best
         total += options[best]
+    }
+
+    // MARK: - The pair pass
+
+    /// Every pair of coordinates walked together, which is what one at a time cannot see.
+    ///
+    /// Coordinate ascent settles where no single change helps, and two sockets that only pay off
+    /// together — the half of a resistance neither can cap alone — are invisible to it. This tries every
+    /// pair against every pair of their options, which is exact over pairs and takes in every single
+    /// change besides, as the case where one of the two stays where it is. It goes round again while it
+    /// keeps finding something, since one swap can open another.
+    func refine(
+        _ choice: inout [LoadoutChoiceIndex],
+        goal: LoadoutGoal,
+        under pressure: LoadoutPressure,
+        progress: (Double) -> Void
+    ) {
+        var total = problem.evaluator.base + stats(of: choice)
+        let coordinates = problem.sockets.count * 2
+
+        for pass in 0 ..< Self.passes {
+            var improved = false
+            for first in 0 ..< coordinates {
+                guard !Task.isCancelled else { return }
+
+                for second in (first + 1) ..< coordinates {
+                    if swapped(&choice, &total, first, second, goal: goal, under: pressure) { improved = true }
+                }
+                progress((Double(pass) + Double(first + 1) / Double(coordinates)) / Double(Self.passes))
+            }
+            guard improved else { return }
+        }
+    }
+
+    /// Every triple of coordinates walked together, the whole of it — every option of each against
+    /// every option of the other two, nothing shortlisted.
+    ///
+    /// It is to the pair pass what the pair pass is to the sweeps, one level up: three sockets that only
+    /// pay off together are invisible to both. On a full character that is 2,600 triples over some two
+    /// hundred million combinations a pass, which is minutes rather than seconds, so it runs only when
+    /// it is asked for. The pair pass runs again between rounds, since a triple swap can leave a cheap
+    /// pair move behind it.
+    func refineTriples(
+        _ choice: inout [LoadoutChoiceIndex],
+        goal: LoadoutGoal,
+        under pressure: LoadoutPressure,
+        progress: (Double) -> Void
+    ) {
+        var total = problem.evaluator.base + stats(of: choice)
+        let coordinates = problem.sockets.count * 2
+
+        for pass in 0 ..< Self.triplePasses {
+            var improved = false
+            for first in 0 ..< coordinates {
+                guard !Task.isCancelled else { return }
+
+                for second in (first + 1) ..< coordinates {
+                    for third in (second + 1) ..< coordinates {
+                        if swappedThree(&choice, &total, first, second, third, goal: goal, under: pressure) {
+                            improved = true
+                        }
+                    }
+                }
+                progress((Double(pass) + Double(first + 1) / Double(coordinates)) / Double(Self.triplePasses))
+            }
+            guard improved else { return }
+
+            refine(&choice, goal: goal, under: pressure) { _ in }
+            total = problem.evaluator.base + stats(of: choice)
+        }
+    }
+
+    /// Three coordinates against every triple of their options, taking the best that neither drops a
+    /// resistance further under its cap nor scores worse. True where it moved.
+    ///
+    /// The merit is two of the game's equations interpreted, so it is read only for a candidate the
+    /// shortfall already allows — which on a plan that holds its caps is a small part of the whole.
+    private func swappedThree(
+        _ choice: inout [LoadoutChoiceIndex],
+        _ total: inout LoadoutStats,
+        _ first: Int,
+        _ second: Int,
+        _ third: Int,
+        goal: LoadoutGoal,
+        under pressure: LoadoutPressure
+    ) -> Bool {
+        let firstOptions = options(at: first)
+        let secondOptions = options(at: second)
+        let thirdOptions = options(at: third)
+        let wasFirst = index(in: choice, at: first)
+        let wasSecond = index(in: choice, at: second)
+        let wasThird = index(in: choice, at: third)
+
+        var bestShort = shortfall(of: total)
+        var bestScore = merit(total, goal: goal, under: pressure)
+        var bestFirst = wasFirst
+        var bestSecond = wasSecond
+        var bestThird = wasThird
+
+        total -= firstOptions[wasFirst]
+        total -= secondOptions[wasSecond]
+        total -= thirdOptions[wasThird]
+
+        for candidate in firstOptions.indices {
+            total += firstOptions[candidate]
+            for other in secondOptions.indices {
+                total += secondOptions[other]
+                for last in thirdOptions.indices {
+                    total += thirdOptions[last]
+                    let short = shortfall(of: total)
+                    if short < bestShort + Self.margin {
+                        let value = merit(total, goal: goal, under: pressure)
+                        if short < bestShort - Self.margin || value > bestScore + Self.margin {
+                            bestShort = short
+                            bestScore = value
+                            bestFirst = candidate
+                            bestSecond = other
+                            bestThird = last
+                        }
+                    }
+                    total -= thirdOptions[last]
+                }
+                total -= secondOptions[other]
+            }
+            total -= firstOptions[candidate]
+        }
+
+        total += firstOptions[bestFirst]
+        total += secondOptions[bestSecond]
+        total += thirdOptions[bestThird]
+        setIndex(&choice, at: first, to: bestFirst)
+        setIndex(&choice, at: second, to: bestSecond)
+        setIndex(&choice, at: third, to: bestThird)
+        return bestFirst != wasFirst || bestSecond != wasSecond || bestThird != wasThird
+    }
+
+    /// Two coordinates against every pair of their options, taking the best that neither drops a
+    /// resistance further under its cap nor scores worse. True where it moved.
+    private func swapped(
+        _ choice: inout [LoadoutChoiceIndex],
+        _ total: inout LoadoutStats,
+        _ first: Int,
+        _ second: Int,
+        goal: LoadoutGoal,
+        under pressure: LoadoutPressure
+    ) -> Bool {
+        let firstOptions = options(at: first)
+        let secondOptions = options(at: second)
+        let wasFirst = index(in: choice, at: first)
+        let wasSecond = index(in: choice, at: second)
+
+        total -= firstOptions[wasFirst]
+        total -= secondOptions[wasSecond]
+
+        // Where it already stands, so nothing moves for a tie: a swap worth nothing would only send the
+        // pass round again.
+        total += firstOptions[wasFirst]
+        total += secondOptions[wasSecond]
+        var bestShort = shortfall(of: total)
+        var bestScore = merit(total, goal: goal, under: pressure)
+        total -= secondOptions[wasSecond]
+        total -= firstOptions[wasFirst]
+
+        var bestFirst = wasFirst
+        var bestSecond = wasSecond
+        for candidate in firstOptions.indices {
+            total += firstOptions[candidate]
+            for other in secondOptions.indices {
+                total += secondOptions[other]
+                let short = shortfall(of: total)
+                // Scored only where the shortfall allows it at all: the merit is two equations, and
+                // this runs a few hundred thousand times a pass.
+                if short < bestShort + Self.margin {
+                    let value = merit(total, goal: goal, under: pressure)
+                    if short < bestShort - Self.margin || value > bestScore + Self.margin {
+                        bestShort = short
+                        bestScore = value
+                        bestFirst = candidate
+                        bestSecond = other
+                    }
+                }
+                total -= secondOptions[other]
+            }
+            total -= firstOptions[candidate]
+        }
+
+        total += firstOptions[bestFirst]
+        total += secondOptions[bestSecond]
+        setIndex(&choice, at: first, to: bestFirst)
+        setIndex(&choice, at: second, to: bestSecond)
+        return bestFirst != wasFirst || bestSecond != wasSecond
+    }
+
+    /// Close enough to call two plans the same. Without it a swap worth a billionth would keep the pass
+    /// going round for ever.
+    private static let margin = 0.000_001
+    /// One empty option, so scoring a whole total allocates nothing.
+    private static let nothing = LoadoutStats()
+
+    /// A coordinate is one socket's component or its augment, so socket *n* holds coordinates 2n and
+    /// 2n + 1.
+    private func options(at coordinate: Int) -> [LoadoutStats] {
+        coordinate.isMultiple(of: 2)
+            ? problem.componentStats[coordinate / 2] : problem.augmentStats[coordinate / 2]
+    }
+
+    private func index(in choice: [LoadoutChoiceIndex], at coordinate: Int) -> Int {
+        coordinate.isMultiple(of: 2) ? choice[coordinate / 2].component : choice[coordinate / 2].augment
+    }
+
+    private func setIndex(_ choice: inout [LoadoutChoiceIndex], at coordinate: Int, to index: Int) {
+        if coordinate.isMultiple(of: 2) {
+            choice[coordinate / 2].component = index
+        } else {
+            choice[coordinate / 2].augment = index
+        }
+    }
+
+    private func merit(_ total: LoadoutStats, goal: LoadoutGoal, under pressure: LoadoutPressure) -> Double {
+        problem.evaluator.penalisedScore(
+            total,
+            plus: Self.nothing,
+            goal: goal,
+            under: pressure,
+            armorCeiling: target.armorCeiling
+        )
+    }
+
+    /// How far short of the caps a running total falls, read off the stats rather than off figures
+    /// built for it: the pair pass asks this hundreds of thousands of times.
+    private func shortfall(of stats: LoadoutStats) -> Double {
+        var missing = 0.0
+        for index in wanted.indices where wanted[index] > 0 {
+            missing += max(0, wanted[index] - stats.resistance[index])
+        }
+        return missing
     }
 
     private func shortfall(_ figures: LoadoutFigures) -> Double {

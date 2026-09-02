@@ -41,6 +41,12 @@ struct PlanDetail: View {
                     .foregroundStyle(Color.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if plan.armorAbsorptionShortfall > 0.5 {
+                Text("Armor Absorption lands \(Int(plan.armorAbsorptionShortfall.rounded()))% under what was asked.")
+                    .font(.caption)
+                    .foregroundStyle(Color.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -89,20 +95,38 @@ struct PlanDetail: View {
     }
 
     private var resistances: some View {
-        SectionCard(title: "Resistances") {
+        SectionCard(title: "Resistances", subtitle: "on \(Self.title(of: plan.difficulty))") {
             VStack(spacing: 0) {
                 ForEach(ResistanceKind.allCases, id: \.self) { kind in
                     let held = plan.sheet.resistances[kind] ?? 0
                     let cap = plan.sheet.maxResistances[kind] ?? 80
+                    // What actually stops damage is the capped figure; the rest is the buffer a
+                    // resistance-stripping enemy eats into before the cap starts falling.
                     StatRow(
                         title: kind.title,
-                        value: "\(Int(held))%",
+                        value: "\(Int(min(held, cap)))%",
                         valueColor: held >= cap ? .primary : .orange,
-                        range: held > cap ? "↑\(Int(held - cap))%" : nil
+                        range: aside(held: held, cap: cap, taken: plan.difficultyPenalty[kind] ?? 0)
                     )
                 }
             }
         }
+    }
+
+    /// What sits beside a resistance: how much of it stands over the cap as a buffer, and what the
+    /// difficulty took off it to begin with — the two figures that say how hard the cap was to hold.
+    private func aside(held: Double, cap: Double, taken: Double) -> String? {
+        let parts = [
+            held > cap ? "↑\(Int(held - cap))%" : nil,
+            taken < 0 ? "\(Int(taken))% taken" : nil,
+        ]
+        .compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Ascendant takes nothing further off a character, so the two share a line.
+    static func title(of difficulty: Difficulty) -> String {
+        difficulty == .ultimate ? "Ultimate / Ascendant" : difficulty.title
     }
 
     private var merchants: some View {

@@ -147,8 +147,16 @@ public struct Encounter: Sendable {
     public let monsterRate: Double
     /// What the character takes off the monster before its resistances are weighed.
     public let reduction: TargetReduction
+    /// Health a second the character gets back while the fight runs: what its regeneration gives, and
+    /// what its attack leeches out of the monster. A build that leeches is not standing still under the
+    /// blows it takes, and reading how long it lasts without this is what made a boss look lethal that
+    /// its own healing outruns.
+    public let regeneration: Double
+    public let leeched: Double
 
     public var damagePerSecond: Double { attacking.expected * attackRate }
+    /// Everything the character heals over a second.
+    public var healedPerSecond: Double { regeneration + leeched }
     /// What the monster's chosen attack comes to over a second. One attack only: a boss throws several
     /// and cycles them, so this is what that one costs while it is the one being used.
     public var monsterDamagePerSecond: Double { defending.expected * monsterRate }
@@ -251,7 +259,11 @@ public struct EncounterEngine {
             )
         )
         let defending = defendingBlow(
-            damage: swung.map { Self.damage(of: $0, swungBy: monster) } ?? [:],
+            // A creature whose record names no attack skill at all still swings: 293 of the game's
+            // monsters fight with nothing but their own body, and the flat damage on their passives is
+            // what that blow is worth. Reading them as having no attack showed the Oversized Maggot
+            // dealing nothing while it killed you.
+            damage: swung.map { Self.damage(of: $0, swungBy: monster) } ?? Self.baseDamage(of: monster),
             skillStats: swung?.skill.stats,
             recordClass: swung?.skill.recordClass,
             monster: monster,
@@ -259,13 +271,19 @@ public struct EncounterEngine {
             defensive: defensive,
             sundered: sundered
         )
+        let swings = rate(of: skill, on: sheet)
         return Encounter(
             attacking: attacking,
             defending: defending,
-            attackRate: rate(of: skill, on: sheet),
+            attackRate: swings,
             monsterAttack: swung,
             monsterRate: rate(of: swung, on: monster),
-            reduction: reduction
+            reduction: reduction,
+            regeneration: sheet.healthRegen,
+            // "% of Attack Damage converted to Health" — the game's own `offensiveLifeLeechMin`, a share
+            // of what the attack actually lands rather than of what it threw.
+            leeched: attacking.expected * swings
+                * ((attackStats?.value(Self.leechKey) ?? 0) + sheet.contributions.value(Self.leechKey)) / 100
         )
     }
 
@@ -344,7 +362,13 @@ public struct EncounterEngine {
     ) -> Double {
         let armed = monster.abilities
             .filter { ($0.role == .attack || $0.role == .special) && Self.thrown(of: $0, of: monster) > 0 }
-        guard let plain = Self.attack(of: monster) else { return 0 }
+        guard
+            let plain = Self.attack(of: monster)
+        else {
+            // Nothing but its own body to swing, so that swing is the whole of what it throws.
+            return encounter(of: sheet, against: monster, reducing: reduction, suffering: debuffs)
+                .monsterDamagePerSecond
+        }
 
         // Three slots hold a chance; a boss with more attacks than slots reuses the last one stated.
         let chances = [ "specialAttackChance", "specialAttack2Chance", "specialAttack3Chance" ]
@@ -512,6 +536,9 @@ public struct EncounterEngine {
         let cooldown = level(record, "skillCooldownTime", at: ability.skill.baseLevel)
         return cooldown > 0 ? min(1 / cooldown, swing) : swing
     }
+
+    /// What the game calls "% of Attack Damage converted to Health".
+    private static let leechKey = "offensiveLifeLeechMin"
 
     private static let chargedFinaleClass = "Skill_WeaponPool_ChargedFinale"
 

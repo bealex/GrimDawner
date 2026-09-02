@@ -263,12 +263,14 @@ struct GrantedSkillGroup: Identifiable {
     }
 
     /// A skill the item confers is the item's own and always works. Ranks and enhancements only count
-    /// where the character has spent a point on the skill they name.
+    /// where they land on something of the character's: a point in the skill they name, or the mastery
+    /// they lift.
     private static func reachable(_ entries: [GrantedSkill], for wearer: SkillContext?) -> Bool {
         guard let wearer else { return true }
         guard !entries.contains(where: { $0.kind == .granted }) else { return true }
 
-        return wearer.learned.contains(entries[0].recordPath.lowercased())
+        let lead = entries[0]
+        return wearer.benefits(fromRankAt: lead.recordPath, reach: lead.reach)
     }
 }
 
@@ -298,11 +300,16 @@ struct GrantedSkillView: View {
     private var isOpened: Bool?
 
     /// Whether the skill belongs to the character at all. An ability the item confers is always theirs;
-    /// a class skill is theirs only where they took that mastery.
+    /// a class skill is theirs only where they took that mastery, a mastery line only where it names
+    /// their mastery, and a bonus to every skill is anybody's.
     private var isAvailable: Bool {
-        guard wearer != nil else { return true }
+        guard let wearer else { return true }
 
-        return granted.kind == .granted || isOwn
+        return switch granted.reach {
+            case .skill: granted.kind == .granted || isOwn
+            case .mastery: wearer.masteries.contains(granted.recordPath.lowercased())
+            case .everySkill: true
+        }
     }
 
     /// A skill of a mastery the character never took opens closed: it is there to say what the item

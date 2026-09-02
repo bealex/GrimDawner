@@ -25,7 +25,7 @@ public enum LoadoutSearch {
         progress: @escaping @Sendable (LoadoutProgress) -> Void
     ) async -> [LoadoutPlan] {
         let problem = LoadoutProblemBuilder(database: database, catalogue: catalogue)
-            .problem(for: character, skill: skill)
+            .problem(for: character, skill: skill, readAt: target.difficulty)
         guard !problem.isEmpty else { return [] }
 
         let optimizer = LoadoutOptimizer(problem: problem, target: target)
@@ -41,7 +41,7 @@ public enum LoadoutSearch {
                         return Finding(
                             goal: goal,
                             choice: choice,
-                            score: problem.evaluator.score(figures, goal: goal),
+                            score: optimizer.score(figures, goal: goal),
                             isFeasible: optimizer.shortfalls(of: choice).isEmpty
                         )
                     }
@@ -72,7 +72,8 @@ public enum LoadoutSearch {
                 optimizer: optimizer,
                 character: character,
                 database: database,
-                skill: skill
+                skill: skill,
+                readAt: target.difficulty
             )
         }
     }
@@ -85,7 +86,8 @@ public enum LoadoutSearch {
         optimizer: LoadoutOptimizer,
         character: ResolvedCharacter,
         database: GameDatabase,
-        skill: ResolvedSkill?
+        skill: ResolvedSkill?,
+        readAt difficulty: Difficulty
     ) -> LoadoutPlan {
         let choices = problem.sockets.indices.map { index in
             LoadoutChoice(
@@ -95,8 +97,10 @@ public enum LoadoutSearch {
             )
         }
 
+        // Read on the difficulty the plan was made for, so the sheet shown agrees with the resistances
+        // the search was holding to.
         let rebuilt = CharacterBuilder(database: database)
-            .build(save(of: character, wearing: choices), file: character.file)
+            .build(save(of: character, wearing: choices), file: character.file, readAt: difficulty)
         let damage = skill.map { EncounterEngine.damage(of: $0) } ?? [:]
         var thrown = 0.0
         for (type, band) in damage {
@@ -107,13 +111,21 @@ public enum LoadoutSearch {
 
         return LoadoutPlan(
             goal: finding.goal,
+            difficulty: difficulty,
             choices: choices,
             sheet: rebuilt.sheet,
+            difficultyPenalty: Dictionary(uniqueKeysWithValues: ResistanceKind.allCases.map {
+                ($0, rebuilt.difficultyPenalty.value($0.resistanceKey))
+            }),
             skillDamagePerSecond: damage.isEmpty ? nil : thrown * rebuilt.sheet.attacksPerSecond,
             shortfalls: optimizer.shortfalls(of: finding.choice),
             defensiveAbilityShortfall: max(
                 0,
                 optimizer.wantedAbility(for: finding.goal) - rebuilt.sheet.defensiveAbility
+            ),
+            armorAbsorptionShortfall: max(
+                0,
+                optimizer.wantedAbsorption(for: finding.goal) - rebuilt.sheet.armorAbsorption
             )
         )
     }

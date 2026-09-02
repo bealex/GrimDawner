@@ -7,6 +7,18 @@ import Foundation
 public struct SkillContext: Sendable {
     public let own: Set<String>
     public let learned: Set<String>
+    /// The record paths of the masteries the character has taken, lowercased.
+    public let masteries: Set<String>
+
+    /// Whether a `+N` line gives the character anything: a named skill must hold a point, a named
+    /// mastery must be one of theirs, and a bonus to every skill always lands.
+    public func benefits(fromRankAt path: String, reach: GrantedSkill.Reach) -> Bool {
+        switch reach {
+            case .skill: learned.contains(path.lowercased())
+            case .mastery: masteries.contains(path.lowercased())
+            case .everySkill: true
+        }
+    }
 }
 
 /// Ranks one worn item or set adds to a skill, and how far that reaches.
@@ -144,7 +156,11 @@ public struct ResolvedCharacter: Sendable {
     }
 
     public var skillContext: SkillContext {
-        SkillContext(own: masterySkillPaths, learned: learnedSkillPaths)
+        SkillContext(
+            own: masterySkillPaths,
+            learned: learnedSkillPaths,
+            masteries: Set(masteries.map { $0.recordPath.lowercased() })
+        )
     }
 
     /// The equipment panel's own geometry, absent only when the game's UI records cannot be read.

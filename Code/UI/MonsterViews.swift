@@ -97,7 +97,7 @@ struct MonsterAbilityView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel("\(ability.title ?? ability.kind): \(ability.skill.description)")
+                    .accessibilityLabel("\(ability.name): \(ability.skill.description)")
             }
             if !ability.skill.parameters.isEmpty {
                 ForEach(ability.skill.parameters) { parameter in
@@ -122,13 +122,11 @@ struct MonsterAbilityView: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
-                if let title = ability.title {
-                    Text(title)
-                        .font(.callout.weight(.medium))
-                }
-                Text(detail)
-                    .font(ability.title == nil ? .callout : .caption2)
-                    .foregroundStyle(ability.title == nil ? .primary : .secondary)
+                Text(ability.name)
+                    .font(.callout.weight(.medium))
+                Text(ability.detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
             Text("rank \(ability.skill.totalLevel)")
@@ -136,29 +134,6 @@ struct MonsterAbilityView: View {
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
         }
-    }
-
-    /// What kind of thing it is, how it reaches and how often — the line that stands in for a name.
-    ///
-    /// The slot and the record's class often say the same thing, and "Passive · Passive bonus" says it
-    /// twice, so the slot is named only where it adds something.
-    private var detail: String {
-        let slot: String? =
-            switch ability.role {
-                case .attack: "Auto attack"
-                case .special: "Special attack"
-                case .onDeath: "On death"
-                case .passive: nil
-            }
-
-        return [
-            slot,
-            ability.kind,
-            ability.range.map(Self.rangeTitle),
-            ability.cooldown.flatMap { $0 > 0 ? "every \(Int($0))s" : nil },
-        ]
-        .compactMap { $0 }
-        .joined(separator: " · ")
     }
 
     /// What the skill calls in, and what the thing it calls in is worth.
@@ -184,16 +159,62 @@ struct MonsterAbilityView: View {
                 .padding(.leading, 16)
         }
     }
+}
 
-    /// The record words a range as one token — `ShortRange` — which reads badly as it stands.
-    private static func rangeTitle(_ range: String) -> String {
-        switch range {
-            case "ShortRange": "close up"
-            case "MediumRange": "mid range"
-            case "LongRange": "at range"
-            case "AnyRange": "any range"
-            default: range
+/// The creature's own blow, for a monster whose record names no attack skill at all.
+///
+/// 293 of the game's 3,081 named monsters fight with nothing but their body. There is no skill record
+/// to describe, so what stands in for one is the flat damage its passives carry — which is exactly what
+/// the engine swings for it, at its own attack rate.
+struct MonsterBareSwingView: View {
+    let monster: ResolvedMonster
+
+    /// Whether this is what the creature fights with: it has no attack of its own, and a body worth
+    /// something.
+    static func swingsBareHanded(_ monster: ResolvedMonster) -> Bool {
+        !monster.abilities.contains { $0.role == .attack || $0.role == .special }
+            && !EncounterEngine.baseDamage(of: monster).isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Its own blow")
+                    .font(.callout.weight(.medium))
+                Text("Attack · Nothing but its body")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Text(
+                "This one's record names no attack skill. What it swings is itself, and the flat damage "
+                    + "its passives carry is what that blow is worth."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            ForEach(bands, id: \.title) { band in
+                StatRow(title: band.title, value: band.value, accents: [ band.accent ])
+            }
         }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.subtleBorder))
+    }
+
+    private var bands: [(title: String, value: String, accent: Theme.Accent)] {
+        EncounterEngine.baseDamage(of: monster)
+            .map { type, band in
+                (
+                    type.title,
+                    band.upperBound - band.lowerBound < 0.5
+                        ? "\(Int(band.lowerBound))"
+                        : "\(Int(band.lowerBound))–\(Int(band.upperBound))",
+                    Theme.Accent(word: type.title, color: type.color)
+                )
+            }
+            .sorted { $0.0 < $1.0 }
     }
 }
 

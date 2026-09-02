@@ -8,7 +8,14 @@ public struct CharacterBuilder {
 
     public let database: GameDatabase
 
-    public func build(_ save: Gdc.SaveFile, file: CharacterFile) -> ResolvedCharacter {
+    /// `readAt` reads the character as it would stand on another difficulty, since the game takes more
+    /// off its resistances the deeper it goes. Nothing else about a character depends on where it is,
+    /// so this changes the penalty and nothing more. Absent, the save's own difficulty is used.
+    public func build(
+        _ save: Gdc.SaveFile,
+        file: CharacterFile,
+        readAt difficulty: Difficulty? = nil
+    ) -> ResolvedCharacter {
         let skills = SkillResolver(database: database)
         let items = ItemResolver(database: database, skills: skills)
         let devotions = DevotionResolver(database: database, skills: skills)
@@ -29,12 +36,14 @@ public struct CharacterBuilder {
         let devotionStats = devotions.stats(from: save)
         let masteries = skills.masteries(from: save, gearBonuses: gearStats, devotionBonuses: devotionStats)
 
-        let penalty = difficultyPenalty(for: save.difficulty, resolver: skills)
+        let read = difficulty ?? save.difficulty
+        let penalty = DifficultyPenalty.of(read, in: database, resolver: skills)
 
         var total = gearStats
         for mastery in masteries { total.merge(mastery.bonuses) }
         total.merge(devotionStats)
         total.merge(passiveStats(masteries: masteries, resolver: skills))
+        total.merge(Self.enhancementStats(of: equipped, over: masteries))
         total.merge(penalty)
 
         let claimed = Set(
@@ -49,7 +58,7 @@ public struct CharacterBuilder {
             className: database.text(save.header.classTag),
             level: Int(save.biography.level),
             isHardcore: save.header.isHardcore,
-            difficulty: save.difficulty,
+            difficulty: read,
             greatestDifficulty: save.greatestDifficulty,
             masteries: masteries,
             devotion: devotions.map(from: save),
@@ -89,6 +98,36 @@ public struct CharacterBuilder {
             }
         }
         return changes
+    }
+
+    /// What the gear's "Enhances" lines put on the sheet.
+    ///
+    /// An item that enhances a skill carries the figures on a modifier record of its own rather than on
+    /// the item, and those figures are on the sheet exactly as a mastery's own modifier is — but only
+    /// where the skill they enhance is one the character keeps up. A modifier that rides an attack the
+    /// reader has to press belongs to that attack, not to the sheet.
+    ///
+    /// A ring's ascendant affix granting +100 Health to Spectral Binding is 113 health the game shows
+    /// and the app did not.
+    private static func enhancementStats(
+        of items: [ResolvedItem],
+        over masteries: [ResolvedMastery]
+    ) -> StatBlock {
+        let permanent = Set(
+            masteries.flatMap(\.skills)
+                .filter { $0.isLearned && $0.isAlwaysOn }
+                .map { $0.recordPath.lowercased() }
+        )
+        var block = StatBlock()
+        for item in items {
+            for granted in item.grantedSkills
+            where granted.kind == .enhanced && permanent.contains(granted.recordPath.lowercased()) {
+                guard let modifications = granted.modifications else { continue }
+
+                block.merge(modifications.stats)
+            }
+        }
+        return block
     }
 
     /// What the character grants every pet it has: from gear, from the skills that are always in
@@ -202,21 +241,6 @@ public struct CharacterBuilder {
             ),
         ]
     }
-
-    /// What the difficulty itself takes off the character's resistances.
-    ///
-    /// The game states this in `balancingadjustment_mp+difficulty_players01.dbr`: an array of four player
-    /// counts per difficulty, so Ultimate single-player reads the ninth entry — −50% to fire, cold,
-    /// lightning, pierce and poison, −25% to aether, chaos, vitality, bleeding and life leech resistance.
-    private func difficultyPenalty(for difficulty: Difficulty, resolver: SkillResolver) -> StatBlock {
-        guard let record = database.record(Self.difficultyAdjustmentPath) else { return StatBlock() }
-
-        return resolver.stats(of: record, atLevel: Int(difficulty.rawValue) * Self.playerCounts + 1)
-    }
-
-    private static let difficultyAdjustmentPath = "records/game/balancingadjustment_mp+difficulty_players01.dbr"
-    /// The adjustment is written once per party size; a save read from disk is one character alone.
-    private static let playerCounts = 4
 
     /// Stats from the skills that are permanently in effect, read at their effective rank.
     ///

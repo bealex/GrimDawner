@@ -93,38 +93,76 @@ public enum LoadoutGoal: String, CaseIterable, Sendable, Identifiable {
     }
 }
 
-/// What every plan has to reach before anything else is weighed.
+/// What the search is being asked for: what every plan has to reach, and how hard to look for it.
 public struct LoadoutTarget: Sendable {
-    /// The resistances that have to be at their maximum, and how far past it to push each.
-    public var required: Set<ResistanceKind>
+    /// The difficulty the plan is for, which decides how much the game itself takes off the character's
+    /// resistances before anything is socketed. A set of fittings that caps on Elite is under the cap
+    /// the moment Ultimate starts, so this is what says which fight is being planned for. Ascendant is
+    /// Ultimate here: the game's ascendant adjustment is the monsters' alone.
+    public var difficulty: Difficulty
     /// Percentage points beyond the cap to aim for, which is what survives a resistance-reducing enemy.
     public var overcap: Double
     /// The Defensive Ability the defence and balanced plans should reach. Unlike the caps this is a
     /// thing to aim at rather than a thing to hold: a plan that cannot reach it is still returned, and
     /// says by how much it fell short.
     public var minimumDefensiveAbility: Double
+    /// The Armor Absorption, as a percentage, those same plans should reach. Aimed at the same way:
+    /// a plan short of it comes back all the same and says so.
+    public var minimumArmorAbsorption: Double
+    /// The Armor Rating past which more is worth nothing to the plan, so a socket that would have gone
+    /// on armour goes somewhere else instead. Zero asks for no ceiling. It is not a limit the search is
+    /// held to — armour that comes along with something else worth having is kept, and a plan may land
+    /// above it.
+    public var armorCeiling: Double
+    /// Whether to finish each run with a pass over every pair of sockets. Coordinate ascent settles
+    /// where no single change helps, which is blind to two that only pay off together — the half of a
+    /// resistance neither socket can cap alone. The pass is exact over pairs and costs several times the
+    /// sweeps, so it can be turned off.
+    public var refinesPairs: Bool
+    /// Whether to go one level further and walk every trio of sockets too, which is exact over three at
+    /// a time and nothing is shortlisted out of it. Two hundred million combinations a pass on a full
+    /// character — minutes rather than seconds — so it is off unless it is asked for.
+    public var refinesTriples: Bool
 
-    public init(required: Set<ResistanceKind>, overcap: Double = 0, minimumDefensiveAbility: Double = 0) {
-        self.required = required
+    public init(
+        difficulty: Difficulty = .ultimate,
+        overcap: Double = 0,
+        minimumDefensiveAbility: Double = 0,
+        minimumArmorAbsorption: Double = 0,
+        armorCeiling: Double = 0,
+        refinesPairs: Bool = true,
+        refinesTriples: Bool = false
+    ) {
+        self.difficulty = difficulty
         self.overcap = overcap
         self.minimumDefensiveAbility = minimumDefensiveAbility
+        self.minimumArmorAbsorption = minimumArmorAbsorption
+        self.armorCeiling = armorCeiling
+        self.refinesPairs = refinesPairs
+        self.refinesTriples = refinesTriples
     }
 
-    /// The resistances the game caps at 80 and a build is expected to hold there. Physical caps
-    /// nowhere near it and is left out.
-    public static var standard: LoadoutTarget {
-        LoadoutTarget(required: Set(ResistanceKind.allCases.filter { $0 != .physical }))
-    }
+    /// The resistances the game caps at 80 and a build is expected to hold there, which every plan is
+    /// held to. Physical caps nowhere near it and is left out.
+    public static let capped = Set(ResistanceKind.allCases.filter { $0 != .physical })
+
+    /// The ask a plan is made against unless the reader changes it: the hardest fight in the game.
+    public static var standard: LoadoutTarget { LoadoutTarget() }
 }
 
 /// One answer: what to socket, and what the character is worth once it is.
 public struct LoadoutPlan: Sendable, Identifiable {
     public let id = UUID()
     public let goal: LoadoutGoal
+    /// The difficulty it was planned for, which is what its sheet's resistances are read on.
+    public let difficulty: Difficulty
     public let choices: [LoadoutChoice]
     /// The character as it stands with this plan socketed, built the same way the app builds any
     /// character, so every figure on it is the app's own rather than the search's.
     public let sheet: CharacterSheet
+    /// What the difficulty itself takes off each resistance. It is already inside the sheet's figures,
+    /// and is most of why a plan has to work as hard as it does.
+    public let difficultyPenalty: [ResistanceKind: Double]
     /// The chosen skill's damage a second, absent when no skill was chosen.
     public let skillDamagePerSecond: Double?
     /// Resistances still short of their target, which is what makes a plan infeasible.
@@ -132,6 +170,8 @@ public struct LoadoutPlan: Sendable, Identifiable {
     /// How far under the asked-for Defensive Ability it landed, if it did. Not a reason to call the
     /// plan infeasible — only the caps are.
     public let defensiveAbilityShortfall: Double
+    /// The same for Armor Absorption, in percentage points.
+    public let armorAbsorptionShortfall: Double
 
     public var isFeasible: Bool { shortfalls.isEmpty }
 

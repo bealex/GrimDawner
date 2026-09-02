@@ -38,6 +38,33 @@ public struct MonsterAbility: Identifiable, Sendable {
     public let cooldown: Double?
     /// The animation the creature plays for it, when its record asks for one by name.
     public let animation: MonsterAnimation?
+
+    /// What kind of thing it is, how it reaches and how often — the line that goes under its name
+    /// wherever it is listed, so one ability reads the same on every tab that offers it.
+    ///
+    /// The slot and the record's class often say the same thing, and "Passive · Passive bonus" says it
+    /// twice, so the slot is named only where it adds something.
+    public var detail: String {
+        [
+            role == .passive ? nil : role.title,
+            kind,
+            range.map(Self.rangeTitle),
+            cooldown.flatMap { $0 > 0 ? "every \(Int($0))s" : nil },
+        ]
+        .compactMap { $0 }
+        .joined(separator: " · ")
+    }
+
+    /// The record words a range as one token — `ShortRange` — which reads badly as it stands.
+    private static func rangeTitle(_ range: String) -> String {
+        switch range {
+            case "ShortRange": "close up"
+            case "MediumRange": "mid range"
+            case "LongRange": "at range"
+            case "AnyRange": "any range"
+            default: range
+        }
+    }
 }
 
 /// One thing a monster can leave behind, either an item or a table of them.

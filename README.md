@@ -86,16 +86,24 @@ Double-clicking opens it in a window of its own, with its whole sheet, its attac
 a blow lands, what a second of the fight costs each of you — and its **model**: the game's own, drawn
 live, dressed in its own gear and holding a weapon rolled from the tables it draws one from. Pick an
 attack and it plays that attack's animation with the effects the skill throws; pick a passive and it
-wears its aura. Half and quarter speed make the moment a blow lands readable, and the frames it lands
+wears its aura. Those effects are the game's own particle systems, read out of its `.pfx` files — the
+rate they throw at, how long a particle lives, its size, colour and spin all come from the file, with
+the curves handed over as the shapes they are. Half and quarter speed make the moment a blow lands readable, and the frames it lands
 on are listed beside it. Drag to turn it, scroll to move in.
 
 **Optimizer** — what to socket into the gear the character already wears, so that every resistance sits
 at its cap and what is left over goes as far as it can. Thirteen sockets over a few dozen components and
 augments each come to some 10^39 combinations, so it does not enumerate: it is coordinate ascent under a
 price on falling short that climbs until nothing is under cap, several runs from different starts, every
-goal at once across the machine's cores — a second or two. Three plans come back, for attack, for defence
-and for both, each drawn on the game's own character panel with the fittings written out beside the piece
-they go into and the faction each augment is bought from. Every figure shown is the app's own sheet: the
+goal at once across the machine's cores, and a closing pass over every pair of sockets that catches what
+one-at-a-time cannot — two that only pay off together — so no change to one socket and no change to any
+two can improve the answer. A few seconds. A second checkbox extends that to every trio, exact and
+nothing shortlisted, which takes minutes and is worth a fraction of a percent. Plans are made for Ultimate by default, where
+the game itself has taken half a character's elemental resistance away, so what caps there caps anywhere;
+ask for a Defensive Ability or an Armor Absorption to reach, or an Armor Rating past which more is worth
+nothing, and the search spends elsewhere. Three plans come back — for attack, for defence and for both — each drawn on the game's
+own character panel with the fittings written out beside the piece they go into and the faction each
+augment is bought from. Every figure shown is the app's own sheet: the
 winning plan is socketed into a copy of the save and read back as a whole character.
 
 **Stats** — every number the sheet knows, grouped: attributes, offence, defence, armour per hit region,

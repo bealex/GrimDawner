@@ -48,8 +48,13 @@ public struct LoadoutProblemBuilder {
     public let catalogue: [CataloguedItem]
 
     /// Builds the problem for one character. `skill` is what the attack goal is scored on; without one
-    /// it falls back to Offensive Ability alone.
-    public func problem(for character: ResolvedCharacter, skill: ResolvedSkill?) -> LoadoutProblem {
+    /// it falls back to Offensive Ability alone. `readAt` is the difficulty being planned for, which is
+    /// what decides how much of the character's resistance the game takes before anything is socketed.
+    public func problem(
+        for character: ResolvedCharacter,
+        skill: ResolvedSkill?,
+        readAt difficulty: Difficulty = .ultimate
+    ) -> LoadoutProblem {
         let resolver = ItemResolver(database: database, skills: SkillResolver(database: database))
         let weights = hitRegionWeights()
         // The search weighs a type by what the skill throws of it, which is the middle of its band.
@@ -111,7 +116,7 @@ public struct LoadoutProblemBuilder {
             augmentStats: augmentStats,
             evaluator: evaluator(
                 for: character,
-                sockets: sockets,
+                readAt: difficulty,
                 weights: weights,
                 places: places,
                 damageWeights: damageWeights
@@ -192,7 +197,7 @@ public struct LoadoutProblemBuilder {
     /// The character with every component and augment taken back out, which is what the search adds to.
     private func evaluator(
         for character: ResolvedCharacter,
-        sockets: [LoadoutSocket],
+        readAt difficulty: Difficulty,
         weights: [EquipmentSlot: Double],
         places: [Place],
         damageWeights: [DamageType: Double]
@@ -204,6 +209,15 @@ public struct LoadoutProblemBuilder {
                 bare.subtract(part.stats)
                 worn.merge(part.stats)
             }
+        }
+
+        // The plan is for the difficulty being fought on rather than the one the save happens to sit in:
+        // the game takes more off a character's resistances the deeper it goes, so a set of fittings that
+        // caps on Elite is under the cap the moment Ultimate starts. The save's own penalty comes back
+        // out and the planned one goes in.
+        if difficulty != character.difficulty {
+            bare.subtract(character.difficultyPenalty)
+            bare.merge(DifficultyPenalty.of(difficulty, in: database, resolver: SkillResolver(database: database)))
         }
 
         // Armour is stored weighted, and a block on its own cannot know which region each piece of it

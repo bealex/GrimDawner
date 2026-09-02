@@ -62,6 +62,12 @@ struct MonsterInteractionView: View {
         monsterAttacks.first { $0.skill.recordPath == monsterAttackPath }
     }
 
+    /// The one actually being read, named the way every other tab names it: the reader's pick, or the
+    /// one the engine falls back to when nobody has chosen.
+    private var swung: MonsterAbility? {
+        monsterAttack ?? EncounterEngine.attack(of: monster)
+    }
+
     /// The buffs the reader has raised, in the order the character lists them.
     private var chosenBuffs: [ResolvedSkill] {
         character.optionalBuffs.filter { raised.contains($0.recordPath.lowercased()) }
@@ -139,6 +145,9 @@ struct MonsterInteractionView: View {
                 )
                 blowCard(
                     title: "What it lands on you",
+                    subtitle: swung?.name
+                        ?? (MonsterBareSwingView.swingsBareHanded(monster)
+                            ? "its own blow" : "no attack the app reads"),
                     blow: fight.defending,
                     rate: fight.monsterRate,
                     target: ("Kills you in", sheet.health),
@@ -149,6 +158,7 @@ struct MonsterInteractionView: View {
                         reducing: TargetReduction.of(character),
                         suffering: landed
                     ),
+                    healed: (fight.regeneration, fight.leeched),
                     accessory: AnyView(monsterPicker)
                 )
             }
@@ -335,7 +345,7 @@ struct MonsterInteractionView: View {
                 Text("Its own attack").tag(String?.none)
                 Divider()
                 ForEach(monsterAttacks) { ability in
-                    Text("\(ability.name) — \(ability.kind)").tag(String?.some(ability.skill.recordPath))
+                    Text(ability.name).tag(String?.some(ability.skill.recordPath))
                 }
             }
             .pickerStyle(.menu)
@@ -355,6 +365,8 @@ struct MonsterInteractionView: View {
         oneShots: Double? = nil,
         /// What everything it throws comes to, where one attack is not the whole story.
         everything: Double? = nil,
+        /// What the character gets back over the same second, where it is the side being hit.
+        healed: (regeneration: Double, leeched: Double)? = nil,
         accessory: AnyView? = nil
     ) -> some View {
         SectionCard(title: title, subtitle: subtitle, accessory: accessory) {
@@ -414,71 +426,115 @@ struct MonsterInteractionView: View {
 
                 Divider()
 
-                if blow.absorbed > 0.5 {
-                    StatRow(
-                        title: "Damage absorption",
-                        value: percent(blow.absorbed),
-                        valueColor: blow.absorbed >= 99.5 ? .green : .primary,
-                        range: blow.absorbed >= 99.5 ? "nothing gets through" : "of everything, after armour"
-                    )
-                    .help(
-                        "A share of every blow swallowed whole, whatever type it is — armour absorption "
-                            + "is the armour's own and stops physical only."
-                    )
-                }
-                StatRow(title: "Landing per hit", value: span(blow.landed), valueColor: Theme.accent)
-                StatRow(
-                    title: "At its hardest",
-                    value: whole(blow.best),
-                    valueColor: oneShots.map { blow.best >= $0 ? .red : .primary } ?? .primary,
-                    range: "top of the range, best band"
-                )
-                if let oneShots, blow.best >= oneShots {
-                    StatRow(
-                        title: "One shot",
-                        value: "kills you outright",
-                        valueColor: .red,
-                        icon: "exclamationmark.triangle.fill"
-                    )
-                    .help("Its hardest blow is more than the whole of your health, misses aside.")
-                }
-                StatRow(title: "Averaged over misses and bands", value: whole(blow.expected))
-                if let rate {
-                    StatRow(
-                        title: "Over a second",
-                        value: whole(blow.expected * rate),
-                        valueColor: Theme.accent,
-                        range: "\(rate.formatted(.number.precision(.fractionLength(2)))) hits/s"
-                    )
-                }
-                if let everything, everything > 0.5 {
-                    StatRow(
-                        title: "Everything it throws",
-                        value: whole(everything),
-                        valueColor: Theme.accent,
-                        range: "per second, all its attacks"
-                    )
-                    .help(
-                        "Its own attack at full rate, and every special at its stated chance once per "
-                            + "the timeout its record names. The record says how often, not in what "
-                            + "order, so this is an estimate."
-                    )
-                }
-                if let rate, let kill = timeToKill(everything ?? (blow.expected * rate), of: target) {
-                    StatRow(title: kill.title, value: kill.value, valueColor: kill.colour)
-                }
+                totals(blow, rate: rate, target: target, oneShots: oneShots, everything: everything, healed: healed)
             }
+        }
+    }
+
+    /// What the blow comes to once every layer is in: what one lands, what a second of it costs, what
+    /// the character heals back over the same second, and how long that leaves it standing.
+    @ViewBuilder
+    private func totals(
+        _ blow: Blow,
+        rate: Double?,
+        target: (title: String, health: Double)?,
+        oneShots: Double?,
+        everything: Double?,
+        healed: (regeneration: Double, leeched: Double)?
+    ) -> some View {
+        if blow.absorbed > 0.5 {
+            StatRow(
+                title: "Damage absorption",
+                value: percent(blow.absorbed),
+                valueColor: blow.absorbed >= 99.5 ? .green : .primary,
+                range: blow.absorbed >= 99.5 ? "nothing gets through" : "of everything, after armour"
+            )
+            .help(
+                "A share of every blow swallowed whole, whatever type it is — armour absorption "
+                    + "is the armour's own and stops physical only."
+            )
+        }
+        StatRow(title: "Landing per hit", value: span(blow.landed), valueColor: Theme.accent)
+        StatRow(
+            title: "At its hardest",
+            value: whole(blow.best),
+            valueColor: oneShots.map { blow.best >= $0 ? .red : .primary } ?? .primary,
+            range: "top of the range, best band"
+        )
+        if let oneShots, blow.best >= oneShots {
+            StatRow(
+                title: "One shot",
+                value: "kills you outright",
+                valueColor: .red,
+                icon: "exclamationmark.triangle.fill"
+            )
+            .help("Its hardest blow is more than the whole of your health, misses aside.")
+        }
+        StatRow(title: "Averaged over misses and bands", value: whole(blow.expected))
+        if let rate {
+            StatRow(
+                title: "Over a second",
+                value: whole(blow.expected * rate),
+                valueColor: Theme.accent,
+                range: "\(rate.formatted(.number.precision(.fractionLength(2)))) hits/s"
+            )
+        }
+        if let everything, everything > 0.5 {
+            StatRow(
+                title: "Everything it throws",
+                value: whole(everything),
+                valueColor: Theme.accent,
+                range: "per second, all its attacks"
+            )
+            .help(
+                "Its own attack at full rate, and every special at its stated chance once per "
+                    + "the timeout its record names. The record says how often, not in what "
+                    + "order, so this is an estimate."
+            )
+        }
+        if let healed, healed.regeneration + healed.leeched > 0.5 {
+            StatRow(
+                title: "You heal back",
+                value: whole(healed.regeneration + healed.leeched),
+                valueColor: .green,
+                range: healed.leeched > 0.5
+                    ? "\(whole(healed.leeched)) leeched, \(whole(healed.regeneration)) regenerated"
+                    : "per second, regeneration"
+            )
+            .help(
+                "Health a second the character gets back while it fights: its regeneration, and "
+                    + "the share of what its attack lands that comes back as health. A build that "
+                    + "leeches is not standing still under the blows it takes."
+            )
+        }
+        if let rate,
+                let kill = timeToKill(
+                    everything ?? (blow.expected * rate),
+                    of: target,
+                    healing: (healed?.regeneration ?? 0) + (healed?.leeched ?? 0)
+                ) {
+            StatRow(title: kill.title, value: kill.value, valueColor: kill.colour)
         }
     }
 
     /// How long the side being hit lasts at that rate, which is the figure a reader is really after.
     private func timeToKill(
         _ perSecond: Double,
-        of target: (title: String, health: Double)?
+        of target: (title: String, health: Double)?,
+        /// What the side being hit gets back over the same second. A build that heals faster than it is
+        /// hit is never killed by this attack at all, which is the answer rather than a missing row.
+        healing: Double = 0
     ) -> (title: String, value: String, colour: Color)? {
         guard perSecond > 0.5, let target, target.health > 0 else { return nil }
 
-        let seconds = target.health / perSecond
+        let net = perSecond - healing
+        guard
+            net > 0.5
+        else {
+            return (target.title, "never — you heal faster", .green)
+        }
+
+        let seconds = target.health / net
         return (
             target.title,
             seconds < 60

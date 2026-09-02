@@ -28,6 +28,29 @@ public struct LoadoutFigures: Sendable {
     }
 }
 
+/// What the search is being charged for falling short of, and what a point of each is costing this
+/// round.
+///
+/// The prices start at nothing, so the first sweeps chase the goal alone, and climb while anything is
+/// short — which is what makes a target bind without ever being searched for directly. They ride
+/// together because the search's inner loop is handed all of them at once, on every option of every
+/// socket.
+public struct LoadoutPressure: Sendable {
+    /// What each resistance has to reach, by `ResistanceKind.allCases` position, and what a point short
+    /// of it costs. A resistance nothing asks for is zero, which nothing can fall short of.
+    public var wantedResistance: [Double]
+    public var resistancePrices: [Double]
+    public var wantedDefensiveAbility: Double = 0
+    public var defensiveAbilityPrice: Double = 0
+    public var wantedAbsorption: Double = 0
+    public var absorptionPrice: Double = 0
+
+    public init(wantedResistance: [Double]) {
+        self.wantedResistance = wantedResistance
+        resistancePrices = [Double](repeating: 0, count: wantedResistance.count)
+    }
+}
+
 /// Ranks a set of fittings, quickly enough for a search that tries hundreds of thousands of them.
 ///
 /// It evaluates the game's own equations, read once here rather than per call, over the reduced figures
@@ -138,11 +161,11 @@ public struct LoadoutEvaluator: Sendable {
         return figures
     }
 
-    /// The resistances a plan has to reach, by `ResistanceKind.allCases` position. A resistance the
-    /// target leaves out reads as zero, which nothing can fall short of.
+    /// The resistances a plan has to reach, by `ResistanceKind.allCases` position. One the game does not
+    /// cap reads as zero, which nothing can fall short of.
     public func wanted(for target: LoadoutTarget) -> [Double] {
         ResistanceKind.allCases.map { kind in
-            guard target.required.contains(kind) else { return 0 }
+            guard LoadoutTarget.capped.contains(kind) else { return 0 }
 
             return reference.maximumResistance(kind) + target.overcap
         }
@@ -167,10 +190,8 @@ public struct LoadoutEvaluator: Sendable {
         _ chosen: LoadoutStats,
         plus option: LoadoutStats,
         goal: LoadoutGoal,
-        wanted: [Double],
-        prices: [Double],
-        wantedAbility: Double = 0,
-        abilityPrice: Double = 0
+        under pressure: LoadoutPressure,
+        armorCeiling: Double = 0
     ) -> Double {
         var value = 0.0
 
@@ -212,16 +233,20 @@ public struct LoadoutEvaluator: Sendable {
                     * (1 + (chosen.physiquePercent + option.physiquePercent) / 100),
                 percent: chosen.defensivePercent + option.defensivePercent
             )
-            if wantedAbility > defensiveAbility {
-                value -= (wantedAbility - defensiveAbility) * abilityPrice
+            if pressure.wantedDefensiveAbility > defensiveAbility {
+                value -= (pressure.wantedDefensiveAbility - defensiveAbility) * pressure.defensiveAbilityPrice
+            }
+            let absorption = min(
+                100,
+                baseAbsorption * (1 + (chosen.absorptionPercent + option.absorptionPercent) / 100)
+            )
+            if pressure.wantedAbsorption > absorption {
+                value -= (pressure.wantedAbsorption - absorption) * pressure.absorptionPrice
             }
             let defence =
                 ratio(defensiveAbility, reference.defensiveAbility)
-                + ratio(armor, reference.armor)
-                + ratio(
-                    min(100, baseAbsorption * (1 + (chosen.absorptionPercent + option.absorptionPercent) / 100)),
-                    reference.armorAbsorption
-                )
+                + ratio(capped(armor, at: armorCeiling), reference.armor)
+                + ratio(absorption, reference.armorAbsorption)
                 + ratio(
                     health(
                         physiqueFlat: chosen.physiqueFlat + option.physiqueFlat,
@@ -238,16 +263,16 @@ public struct LoadoutEvaluator: Sendable {
             value += goal == .balanced ? defence / 2 : defence
         }
 
-        for index in wanted.indices where wanted[index] > 0 {
-            let short = wanted[index] - chosen.resistance[index] - option.resistance[index]
-            if short > 0 { value -= short * prices[index] }
+        for index in pressure.wantedResistance.indices where pressure.wantedResistance[index] > 0 {
+            let short = pressure.wantedResistance[index] - chosen.resistance[index] - option.resistance[index]
+            if short > 0 { value -= short * pressure.resistancePrices[index] }
         }
         return value
     }
 
     /// What the goal is worth, as a multiple of what the character has now, so figures in percent,
     /// in points and in damage can be weighed against one another at all.
-    public func score(_ figures: LoadoutFigures, goal: LoadoutGoal) -> Double {
+    public func score(_ figures: LoadoutFigures, goal: LoadoutGoal, armorCeiling: Double = 0) -> Double {
         var value = 0.0
         if goal != .defence {
             var attack = ratio(figures.offensiveAbility, reference.offensiveAbility)
@@ -264,12 +289,18 @@ public struct LoadoutEvaluator: Sendable {
         if goal != .attack {
             let defence =
                 ratio(figures.defensiveAbility, reference.defensiveAbility)
-                + ratio(figures.armor, reference.armor)
+                + ratio(capped(figures.armor, at: armorCeiling), reference.armor)
                 + ratio(figures.armorAbsorption, reference.armorAbsorption)
                 + ratio(figures.health, reference.health)
             value += goal == .balanced ? defence / 2 : defence
         }
         return value
+    }
+
+    /// Armour past the ceiling is worth nothing, which is what makes the search spend a socket on
+    /// something else rather than on more of it. No ceiling leaves the figure alone.
+    private func capped(_ armor: Double, at ceiling: Double) -> Double {
+        ceiling > 0 ? min(armor, ceiling) : armor
     }
 
     /// The character as it stands, for reading a plan against.

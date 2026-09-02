@@ -154,20 +154,37 @@ struct MonsterStatsWindow: View {
         let attacks = matching.filter { $0.role != .passive }
         let passives = matching.filter { $0.role == .passive }
 
+        // A creature whose record names no attack skill still swings its own body, and that is the
+        // only thing the Attacks column has to show for it.
+        let bare = MonsterBareSwingView.swingsBareHanded(monster) && !query.isActive
+
         return HStack(alignment: .top, spacing: 14) {
-            column("Attacks", subtitle: "at level \(monster.level)", abilities: attacks)
+            column(
+                "Attacks",
+                subtitle: "at level \(monster.level)",
+                abilities: attacks,
+                bareSwing: bare ? monster : nil
+            )
             column("Passives", subtitle: "always in effect", abilities: passives)
         }
         .padding(16)
     }
 
     @ViewBuilder
-    private func column(_ title: String, subtitle: String, abilities: [MonsterAbility]) -> some View {
-        if abilities.isEmpty {
+    private func column(
+        _ title: String,
+        subtitle: String,
+        abilities: [MonsterAbility],
+        bareSwing: ResolvedMonster? = nil
+    ) -> some View {
+        if abilities.isEmpty, bareSwing == nil {
             Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
         } else {
             SectionCard(title: title, subtitle: subtitle) {
                 VStack(alignment: .leading, spacing: 10) {
+                    if let bareSwing {
+                        MonsterBareSwingView(monster: bareSwing)
+                    }
                     ForEach(abilities) { ability in
                         MonsterAbilityView(ability: ability)
                     }

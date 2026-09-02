@@ -44,9 +44,12 @@ struct MonsterDetailView: View {
             }
             levelControl
             summaryCard
-            if !monster.attacks.isEmpty {
+            if !monster.attacks.isEmpty || MonsterBareSwingView.swingsBareHanded(monster) {
                 SectionCard(title: "Attacks", subtitle: "at level \(monster.level)") {
                     VStack(alignment: .leading, spacing: 10) {
+                        if MonsterBareSwingView.swingsBareHanded(monster) {
+                            MonsterBareSwingView(monster: monster)
+                        }
                         ForEach(monster.attacks) { ability in
                             MonsterAbilityView(ability: ability, openMonster: openMonster)
                         }

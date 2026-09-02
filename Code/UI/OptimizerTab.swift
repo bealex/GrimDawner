@@ -6,7 +6,8 @@ import SwiftUI
 
 /// What to socket into the gear the character already wears.
 ///
-/// The left side is the ask — which resistances have to be at their cap, how far past it, and which
+/// The left side is the ask — which difficulty the caps are held on, how far past them to push, the
+/// Defensive Ability and absorption to reach, the Armor Rating past which more is wasted, and which
 /// skill the attack plan is measured on — and each answer the search found. The right side is one plan
 /// in full: what it is worth, and every socket it changes.
 struct OptimizerTab: View {
@@ -24,10 +25,7 @@ struct OptimizerTab: View {
     var openItem: ((String) -> Void)?
 
     @State
-    private var target = LoadoutTarget(
-        required: Set(ResistanceKind.allCases.filter { $0 != .physical }),
-        minimumDefensiveAbility: 2800
-    )
+    private var target = LoadoutTarget(minimumDefensiveAbility: 2800)
     @State
     private var skillPath: String?
 
@@ -64,7 +62,7 @@ struct OptimizerTab: View {
             } else {
                 DetailPlaceholder(
                     title: "No plan yet",
-                    hint: "Pick what has to be capped and press Find loadouts. "
+                    hint: "Say what to hold and press Find loadouts. "
                         + "The search reads every component and augment the game says fits each piece."
                 )
             }
@@ -77,26 +75,33 @@ struct OptimizerTab: View {
         SectionCard(title: "What to hold") {
             VStack(alignment: .leading, spacing: 12) {
                 Text(
-                    "Every resistance ticked here has to reach its maximum. Nothing else is allowed to trade that away."
+                    "Every resistance the game caps has to reach its maximum, read on the difficulty being "
+                        + "planned for — the deeper the game goes the more of them it takes away. Nothing "
+                        + "else is allowed to trade that away."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-                resistanceChips
-
                 HStack(spacing: 16) {
+                    difficultyPicker
                     overcap
                     leastAbility
-                    skillPicker
                 }
+                HStack(spacing: 16) {
+                    leastAbsorption
+                    armorCeiling
+                    skillPicker
+                    Spacer()
+                }
+                passes
 
                 HStack(spacing: 10) {
                     Button(state.isSearching ? "Searching…" : "Find loadouts") {
                         start(target, skill)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(state.isSearching || target.required.isEmpty || isListing)
+                    .disabled(state.isSearching || isListing)
 
                     if state.isSearching {
                         Button("Stop", action: cancel)
@@ -112,24 +117,28 @@ struct OptimizerTab: View {
         }
     }
 
-    private var resistanceChips: some View {
-        FlowRow(spacing: 6) {
-            ForEach(ResistanceKind.allCases, id: \.self) { kind in
-                ResistanceChip(
-                    kind: kind,
-                    isOn: target.required.contains(kind),
-                    held: character.sheet.resistances[kind] ?? 0,
-                    cap: character.sheet.maxResistances[kind] ?? 80,
-                    toggle: {
-                        if target.required.contains(kind) {
-                            target.required.remove(kind)
-                        } else {
-                            target.required.insert(kind)
-                        }
-                    }
-                )
+    /// What the plan is for. Ascendant is Ultimate: the game's ascendant adjustment is laid over the
+    /// monsters, and takes nothing more off the character.
+    private var difficultyPicker: some View {
+        HStack(spacing: 6) {
+            Text("Plan for")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Picker("Plan for", selection: $target.difficulty) {
+                ForEach(Difficulty.allCases, id: \.self) { difficulty in
+                    Text(PlanDetail.title(of: difficulty)).tag(difficulty)
+                }
             }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .fixedSize()
         }
+        .help(
+            "The difficulty the plan holds the caps on. Ultimate takes 50% off fire, cold, lightning, "
+                + "pierce and poison and 25% off the rest, so a plan that caps on \(character.difficulty.title) "
+                + "is under the cap the moment Ultimate starts. Ascendant takes nothing further: its "
+                + "adjustment is the monsters' alone."
+        )
     }
 
     private var overcap: some View {
@@ -172,6 +181,80 @@ struct OptimizerTab: View {
             .frame(width: 66)
         }
         .help("The Defensive Ability the defence and balanced plans aim for. The attack plan is not held to it.")
+    }
+
+    private var armorCeiling: some View {
+        HStack(spacing: 6) {
+            Text("Armor up to")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField(
+                "0",
+                value: Binding(get: { target.armorCeiling }, set: { target.armorCeiling = max($0, 0) }),
+                format: .number
+            )
+            .textFieldStyle(.roundedBorder)
+            .monospacedDigit()
+            .multilineTextAlignment(.trailing)
+            .frame(width: 66)
+        }
+        .help(
+            "Armor Rating past this is worth nothing to a plan, so the search spends the socket elsewhere. "
+                + "It is not a limit: armour that rides along with something else worth having is kept. "
+                + "Leave it at 0 for no ceiling. The character stands at "
+                + "\(Int(character.sheet.armor.rounded())) now."
+        )
+    }
+
+    private var leastAbsorption: some View {
+        HStack(spacing: 6) {
+            Text("Least absorption")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField(
+                "0",
+                value: Binding(
+                    get: { target.minimumArmorAbsorption },
+                    set: { target.minimumArmorAbsorption = min(max($0, 0), 100) }
+                ),
+                format: .number
+            )
+            .textFieldStyle(.roundedBorder)
+            .monospacedDigit()
+            .multilineTextAlignment(.trailing)
+            .frame(width: 56)
+            Text("%")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .help(
+            "The share of a physical blow the armour swallows that the defence and balanced plans aim "
+                + "for. The attack plan is not held to it. The character stands at "
+                + "\(Int(character.sheet.armorAbsorption.rounded()))% now."
+        )
+    }
+
+    private var passes: some View {
+        HStack(spacing: 16) {
+            Toggle("Check every pair of sockets", isOn: $target.refinesPairs)
+                .toggleStyle(.checkbox)
+                .help(
+                    "On, each run finishes by trying every pair of sockets against every pair of their "
+                        + "fittings, so nothing is left that two sockets could improve together — which "
+                        + "one at a time cannot see. It is exact over pairs and takes several times as "
+                        + "long as the sweeps. Off, the search stops where no single change helps."
+                )
+            Toggle("…and every trio", isOn: $target.refinesTriples)
+                .toggleStyle(.checkbox)
+                .help(
+                    "One level further: every trio of sockets against every trio of their fittings, "
+                        + "nothing shortlisted out of it. Two hundred million combinations a run, so a "
+                        + "search takes minutes rather than seconds. It is worth a fraction of a percent "
+                        + "where it finds anything at all — the eight starting points already cover most "
+                        + "of what it reaches."
+                )
+            Spacer()
+        }
     }
 
     private var skillPicker: some View {
@@ -249,42 +332,6 @@ struct OptimizerTab: View {
                 }
             }
         }
-    }
-}
-
-/// One resistance of the ask: on or off, and where the character stands on it now.
-private struct ResistanceChip: View {
-    let kind: ResistanceKind
-    let isOn: Bool
-    let held: Double
-    let cap: Double
-    let toggle: () -> Void
-
-    private var isAtCap: Bool { held >= cap }
-
-    var body: some View {
-        Button(action: toggle) {
-            HStack(spacing: 5) {
-                Image(systemName: isAtCap ? "checkmark.circle.fill" : "exclamationmark.circle")
-                    .font(.caption2)
-                    .foregroundStyle(isAtCap ? Color.green : Color.orange)
-                Text(kind.shortTitle)
-                Text("\(Int(held))")
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
-            .font(.caption)
-            .lineLimit(1)
-            .fixedSize()
-            .foregroundStyle(isOn ? kind.color : Color.secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(isOn ? kind.color.opacity(0.16) : .clear, in: .capsule)
-            .overlay(Capsule().stroke(kind.color.opacity(isOn ? 0.6 : 0.25), lineWidth: 1))
-            .contentShape(.capsule)
-        }
-        .buttonStyle(.plain)
-        .help(isOn ? "\(kind.title) must reach its cap of \(Int(cap))%" : "\(kind.title) is left to the search")
     }
 }
 

@@ -232,6 +232,35 @@ The visuals travel beside the damage, not inside it, and the same dig read their
   point of the model it leaves from; `projectileLaunchNumber` (per rank) is how many leave at once and
   `projectileLaunchRotation` the spread they fan across.
 
+## How a projectile flies
+
+Every projectile is aimed at something. It is launched at the target entity's own coordinates — which
+for a creature are at its feet — and falls back on the skill's target point where there is no entity.
+Which of the two launches it gets is its class's business: `ProjectileGrenade::ProjectileGo`
+@ `0x1803f9a90` always throws, `ProjectileExploding::ProjectileGo` @ `0x1803f83c0` throws only where
+`useTrajectory` is set, and every other class goes straight.
+
+- **Straight.** `ProjectileBase::MoveStraightLine` @ `0x1803f3200` turns gravity off, points the actor
+  at the target and sets its motion to `projectileVelocity` along that line.
+- **Thrown.** `ProjectileBase::MoveTrajectory` @ `0x1803f34e0` turns gravity **on**, pitches the launch
+  up by the record's `launchAngle`, and solves for the speed that arc needs to land on the target
+  (@ `0x1803fec70`):
+
+  ```
+  v = √( d²·g / (2·cos²θ·(d·tanθ − Δh)) )
+  ```
+
+  with `d` the horizontal distance to the target, `Δh` its height above the launch point, `θ` the
+  launch angle and `g` the world's gravity. The result is floored at 5 and capped at
+  `projectileVelocity`; a bracket that comes out at or below zero means the angle cannot reach, and the
+  speed is the floor. When the target sits on the launch point the aim is pushed `projectileDistance`
+  along the facing first.
+- **Gravity is 14.** `GAME::PhysicsEngine2::kGravity`, a `const float` exported from `Engine.dll`
+  (RVA `0x3124b4`) — world units a second squared.
+- **`projectileScaleFactor` is growth, not size.** `ProjectileBase::UpdateSelf` @ `0x1803f22a0` ramps an
+  accumulator to it at `factor × 0.001` per millisecond — one second to full — and draws the actor at
+  `baseScale × (1 + accumulator)`.
+
 ## Smaller facts worth keeping
 
 - The engine's combat log is compiled in and gated on a flag (`gLogCombat`): "`    PTH %f, Rand
