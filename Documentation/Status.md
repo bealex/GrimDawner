@@ -107,6 +107,35 @@ much of each of fire, cold and lightning, and the elemental percentage does not 
 over time. The game's Fire panel settles the second — Burn should read +446% rather than +599% for the
 character checked here.
 
+**A creature with no attack skill swings its own body.** 293 of the game's 3,081 named monsters name
+nothing in any attack slot — the Oversized Maggot among them — and what they fight with is the flat
+damage their passives carry, at their own attack rate. The app read them as having no attack at all, so
+the Attacks card was empty and the Interaction tab said a monster that one-shots a level 100 character
+throws nothing. The bare swing is now what the encounter uses where no skill is named, and the Attacks
+card says so in place of a skill it does not have.
+
+**Checked against the game's own character window** (a level 100 Spellbinder, Ultimate, from 2026-09-01
+footage). Twelve figures are exact: Offensive Ability 2797, Energy 7166, Armor Rating 3200, Physique
+1375, Cunning 404, Spirit 840, and all ten resistances at their own caps — 83/83/86/80/80 and
+80/87/80/80/24, Health 16,339 and Defensive Ability 2,859. Every figure that window shows matches, to
+the digit the game truncates at.
+
+The last two did not, until the gear's **"Enhances" lines were put on the sheet**. An item that enhances
+a skill carries its figures on a modifier record of its own — `modifiedSkillName1` names the skill,
+`modifierSkillName1` the record holding the numbers — and the app read those lines for the sidebar but
+never fed them in. Where the skill enhanced is one the character keeps up they belong on the sheet
+exactly as a mastery's own modifier does; where it rides an attack that has to be pressed they belong to
+that attack. A ring's ascendant affix granting +100 Health to Spectral Binding was 113 health the game
+showed and the app did not, and the same omission was the whole of the Defensive Ability gap.
+
+**A character heals while it fights, and now that is counted.** The Interaction tab reads what its
+regeneration gives and what its attack leeches — `offensiveLifeLeechMin`, the game's "% of Attack Damage
+converted to Health" — against what the monster throws, and says *never — you heal faster* where the
+healing wins. Without it a boss looked lethal that the character's own sustain outruns, which is what a
+channelled build actually does. **The figure is only as good as the attacking side**, and that is the
+open gap below: the app reads 4,284 damage a second for Albrecht's Aether Ray where the game's own
+character window says 261,553, so the leech it derives is far too small.
+
 **A monster's damage against a live reference.** The interaction arithmetic is pinned to the game's
 own binary and to one controlled community measurement — the roll model, the additive pools, the
 attribute bonus and the multiplicative total-damage layer, all in
@@ -200,21 +229,149 @@ there is a background and a floor at all.
 The app draws that same scene live rather than from a picture — the monster sidebar, the model tab of its
 window, and a window of its own, each a drag to turn and a scroll to move in.
 
-**An attack is picked as one thing.** The model menu lists the creature's attacks above its raw animations,
-and picking one plays the animation that attack asks for *and* shows what its skill throws. A second menu
-shows any one skill's effects on their own, which is how a passive's aura is looked at, and playback runs
-at full, half or quarter speed — which is what makes a two-frame difference between two casts readable.
-Along the top is what the animation calls out and when: each effect it spawns, the frames a blow lands
+**Every skill the creature has is picked as one thing.** The model tab's skill menu lists all of them —
+its attacks, then its passives, then the ones the game gives nothing to draw — each under the name the
+Attacks tab and the Interaction tab call it by, and picking one plays the animation that skill asks for
+*and* shows what it throws. A buff's aura is on the buff record the skill points at rather than on the
+skill (370 monster skills name one, 193 of those buffs carry the look), so that pointer is followed and
+an aura now shows. A second menu plays any raw animation on its own, and playback runs at full, half or
+quarter speed — which is what makes a two-frame difference between two casts readable. Along the top is
+the skill being watched and what the animation calls out: each effect it spawns, the frames a blow lands
 on, and what the skill fires when it does.
 
-**What an attack fires is drawn in flight.** The skill's projectile leaves the point its record names,
-on the animation's hit callback, as many at a time and across the spread the record states, and crosses
-the world along the creature's own facing at the record's speed and distance — The Dread's ravine is ten eruptions crawling out in
-a circle, its screech orb one dark ball from the mouth. What each looks like is the game's own: the
-projectile's model where it has a visible one, its flight effect or the trail it lays where the model
-is the game's invisible stand-in. The launch machinery was read out of the engine —
-[AttackPipeline.md](AttackPipeline.md#what-an-attack-spawns) — and cast flashes now hang on the attach
+**What an attack fires flies the way the game flies it.** The projectile leaves the point its record
+names, on the animation's hit callback, as many at a time and across the spread the record states, and is
+aimed at a target standing in front of the creature at the skill's own `distanceProfile` range —
+`records/game/gameengine.dbr` says how far that is. A straight one goes at it with gravity off; one the
+engine throws — a grenade, or an exploding projectile that says `useTrajectory` — leaves at the record's
+`launchAngle` above the ground, at exactly the speed that arc needs to land on the target, and falls under
+the world's own gravity of 14 from there. It is pointed the way it is going the whole way down, and swells
+over its first second where the record's `projectileScaleFactor` says it should. What each looks like is
+the game's own: the projectile's model where it has a visible one, its flight effect or the trail it lays
+where the model is the game's invisible stand-in. All of it was read out of the engine —
+[AttackPipeline.md](AttackPipeline.md#how-a-projectile-flies) — and cast flashes hang on the attach
 points the skill record pairs them with rather than on the creature's middle.
+
+**The particle systems are read, and every curve in them is mapped.** `PfxFile` takes the `.pfx` apart the
+way the engine's own reader does, and all 4,452 of the game's come back whole. What a slot *means* is not
+in the file — the emitter fetches every one by index — so each of the 26 curves was traced to where
+`Engine.dll` uses it. [GameData.md](GameData.md#effects) has the table. Twenty-four have a use; the two
+left are read by nothing in the emitter and keep a clock of their own.
+
+What the app draws now comes from the file: the emission rate, how long a particle lives, how big it is,
+how fast and into what cone it is thrown, the box the emitter throws from, what pulls it down, how fast it
+spins, and the colour the game paints it. Before, every one of those was a number the app made up from
+the skill's reach.
+
+**Nine of the curves run both ways, and their nothing is half their own range.** Read straight, a claw
+swipe was born across eight units of ground, fell at five and spun at 425 degrees a second; read off
+their centre it is born within a unit, does not fall, and the left and right claws spin *against* each
+other at −70 and +65, as a mirrored pair must. That is the proof.
+[GameData.md](GameData.md#effects) has which nine and how it was counted. Everything an emitter does is
+now the game's own figure.
+
+**The shapes go in whole, not as one figure each.** A curve is a shape over time, and SceneKit takes a
+shape: the size, alpha, spin and colour curves are handed over as they are written, so a particle swells
+and fades the way the file says rather than holding one value. The three colour curves are read together,
+since a colour moves as one thing.
+
+**What an animation spawns is a burst, not a flash.** Every effect an attack throws carries the frame it
+starts on, and those went down a path that drew one picture for a moment and never read the emitter at
+all. Auras improved and attacks did not. They now throw the game's own particles, opening
+on their frame and following the rate curve while they do. That curve is where a burst is: a rate
+curve's domain is the emitter's clock, not how long it throws for, and the yeti's swipe stands at
+nothing for a third of its three tenths of a second, opens to 149 a second for a fiftieth, and shuts —
+three or four billboards nine units across. That is a claw swipe.
+
+**An effect rides the bone it hangs on.** The attach point is a node of the posed rig, so the emitter is
+carried where the claw or the mouth goes and leaves its particles along the way, at the game's own rate.
+Nothing about the emitter is invented any more: no cap on how many are alive, no stood-off sweep, no
+made-up spawn volume.
+
+**A particle is drawn the size the file states, and the size is easy to state twice.** SceneKit measures
+a particle from its middle — a `particleSize` of one draws two units across — and a size *controller*
+multiplies that rather than replacing it. Both were being handed the stated figure, which squared it:
+the Dread's eleven-unit claw swipe drew at 242 and crossed the whole frame. The size goes in halved, and
+the curve goes in as a share of its own peak.
+
+**Two systems in three add their light; the rest are laid over the scene.** The shader the system names
+says which, and drawing all of them additively lost anything painted dark — the Dread's stomp threw up
+no rubble at all. [GameData.md](GameData.md#effects) has the counts.
+
+**An emitter that opens near the end of an animation wraps round to the start.** The stomp opens its
+rubble on frame 129 of 131, so all but a fifteenth of that burst belongs to the next time round; cut off
+at the end of the loop it threw nothing.
+
+**A thing in flight is its own emitter, not a sticker.** A projectile's `projectileFlightFX` was read
+for its texture alone and drawn as one still billboard sized by `actorRadius`, which is the thing's
+collision radius rather than its picture — so every projectile came out the same grey puff. The emitter
+is carried down the flight now: the Bloatworm's aether orb is 1.10 across where its radius says 0.50,
+and green-cyan where nothing said any colour at all.
+
+**The frame takes in what a projectile is aimed at.** The flight was built and parented to the scene but
+never counted in the bounds, so a creature spitting fourteen units threw at nothing off the edge of the
+picture. The whole path now opens the frame — and past the cap an effect that merely wraps the creature
+is held to, since where a thing lands is half of what there is to see.
+
+**A flight can outlast the animation that throws it.** The Bloatworm's spit crosses fourteen units in
+1.17s and the spitting takes 0.60s, and the copy was squeezed into what was left of one turn — four
+times too fast. It gets as many whole turns of the animation as it needs instead, which keeps the two in
+step and lets it fly at the speed the record states.
+
+**A carried emitter throws per unit, not per second.** `EmitParticles` has a second mode that accumulates
+`rate × distance`, and a thing in flight is what it exists for. Which mode a system is in is still not
+read, so this much is the app's: an emitter being carried has its rate multiplied by how fast it is
+carried. It is the difference between six sparks strung out behind the orb and a trail.
+
+**A projectile leaves the limb the animation calls out.** Only 9 of the game's 1,325 projectile skills
+name a launch point, so nearly every one fell back to `FXCentered` — on a mesh that does not parent that
+point to a bone, the model's own middle, which is where the Bloatworm's spit came from. The animation's
+hit callback names the limb instead: `RightHandHit` → `R Hand`.
+
+**The model stands on a check.** A faint grey floor, one square to the world unit, so how big a creature
+is and how far an effect reaches can be read off it rather than guessed. `SceneConfiguration.showsFloor`.
+It writes no depth of its own but is tested against what does, and is drawn after the creature, so
+anything below it reads as being under it rather than on top of it.
+
+**A creature dies into the ground.** A key's translation is held at the mesh's own on every bone — that
+is what keeps a skeleton rigid, and composing it stretches the worst bone 4.29 times — **except on the
+trunk**, the one bone the body hangs off, where it is the creature's own placement and nothing below it
+can be stretched by it. It is still through an idle, a walk and an attack, and runs seven units down as
+The Dread dies. The root above the trunk stays undrawn: it carries the ground the creature covers
+(11.89 over a walk cycle, nothing in a death), which a view that stands it in one place has no use for.
+
+**A swung weapon leaves a ribbon.** `WeaponTrail` is a mechanism apart from the particle systems: the
+weapon record names one in `weaponTrail`, the blade carries the `Anchor1` and `Anchor2` it is strung
+between — 1,895 of the 1,909 trail-bearing weapon meshes have them — and the animation's own `Swipe…`
+and `Swipe…Off` callbacks say when it runs. The blade's two ends are sampled every frame of the stroke
+and joined into a strip that thins away behind the edge, in the record's own colour and over its own
+fade. 85 of 120 armed monsters swing one. [GameData.md](GameData.md#effects) has the engine's path.
+
+**What is still not drawn.** The light an emitter casts (curves 22–25) is drawn by nothing, and the
+three light colours are the one place the centred reading is untested — they share the pattern but a
+negative light colour means nothing, and there is no light to check it against. An `EffectEntity`'s
+`decal` — the dark stain a stomp leaves on the ground, which outlasts the rubble in it — is not read.
+Neither is `particledistort`: 189 systems bend what is behind them, and here they are laid over instead.
+
+An attach point the mesh gives no parent bone — `FXForward`, `HeadFXUP`, `Target` — stands in the model
+rather than on the rig, so an effect hung there holds still while the creature moves. That is what the
+mesh states, but whether the game carries such a point with the entity is unchecked.
+
+**A held weapon may be turned the wrong way, and it is not yet known against what.** Aetherblaze's
+dagger comes out across the chest: its blade sits 89° off the forearm, where that rig's weapon bone has
+`+X` running down the arm. Every weapon mesh is modelled the same way — blade along −Z on 56 of 56 — but
+the bone is not, so there is no one rotation to apply. Settling it needs the same character held up
+against the game.
+
+**An aura is now drawn the size its file states, which is small.** The Dread's `Buffaura Red Selfloop`
+is 1.97 units across on a creature spanning 18, so it reads as a tinge at the chest rather than the
+cloud the squared size used to give it. Nothing in the records scales it — no `EffectEntity` states a
+`scale` — so either the figure is right and the game's aura really is that small, or the birth size is
+read from the wrong slot: `EmitParticle` picks between size modes on the emitter's `integer[0]`, and
+only one of them is curve 15. That switch is the next thing worth reading out of the engine.
+
+And a swipe is a burst of billboards where the game draws one stretched arc, which is a different way of
+drawing rather than a different number.
 
 **A creature is assembled and then posed.** Every part is skinned to a rig merged from all of them — a
 head, a body and a breastplate each carry their own copy of the same bones — so a shoulder moves the
@@ -263,9 +420,9 @@ each plausible in a still. [GameData.md](GameData.md#animations) has them; what 
 that state what a body cannot do — a knee does not bend forwards, a bone does not lengthen, a spine does
 not turn 90° in a thirtieth of a second.
 
-**What is not drawn.** The particles themselves, which are a format of their own, and an effect that names
-a model rather than a particle system. The travel a key carries, so a walk plays on the spot. And nothing
-blends one frame into the next, so a loop restarts rather than easing round.
+**What is not drawn.** The travel a key carries, so a walk plays on the spot. And nothing blends one frame
+into the next, so a loop restarts rather than easing round. The particles are drawn, from the game's own
+emitters — what is left of that is further down.
 
 **A sweep is paid for once.** Anything worked out from the whole record tree — which records are phases
 of one fight, which creature the player is — costs the better part of a second, and the answer holds for
@@ -379,6 +536,27 @@ one's best option with the rest held still, and the price on a missing point of 
 round until nothing is short. Eight runs per goal from different starting points, every goal concurrent.
 Doubling the budget returns the same plans, which is the only evidence there is that it has settled.
 
+**What the answer is, exactly.** A sweep is exact for one move — every option of that coordinate is tried,
+none sampled — so a run settles where no single change to one socket helps. That is blind to two sockets
+that only pay off together, which is the half of a resistance neither can cap alone, so each run finishes
+with a pass over all 325 pairs of coordinates, every pair of their options against each other. A pass
+takes a pair only where no resistance falls further short, so a plan can never lose a cap to one, and it
+goes round again while it keeps finding something.
+
+A second checkbox goes one level further, over all 2,600 trios, exact and with nothing shortlisted out of
+it. `theTrioPassIsExactWhereTheWholeSpaceFitsInATrio` is what settles that it really is exact: cut the
+problem to three sockets whose augments cannot move, count out all 216 combinations, and the pass must
+land on the best of them.
+
+**What each is worth, measured on the reference character.** The pair pass takes a run from 0.12s to
+0.87s and is worth about 1.4% of the score. The trio pass takes a run to 27–102s — a whole search from 8
+seconds to nine minutes — and changed one plan of the three: Defence traded 400 Armor Rating and 42
+Defensive Ability for 2,400 health. On the other two it found nothing the eight starting points had not
+already covered. So it is off by default and labelled with its cost.
+
+None of it is proof of a global best. Four sockets moving together are outside even the trio pass, and
+the objective is the reduced evaluator rather than a built character.
+
 Ranking uses a reduced set of figures rather than a built character, since building one for each of the
 hundreds of thousands of combinations would take days. That makes the arithmetic a second telling of the
 sheet's, so `LoadoutOptimizerTests` pins the two together: read the character's own fittings back through
@@ -390,9 +568,28 @@ so no plan can promise one and none is counted: every figure is the least the pl
 stay at what the character has now, so a fitting granting +1 to a mastery gets no credit for what that
 rank would unlock. Folding that in would mean re-levelling every mastery per combination.
 
-**What "on max" means.** Each resistance targets the character's own maximum as it stands, plus whatever
-overcap is asked for. A fitting that raises a cap costs nothing for doing so, and the plan reports the
-final maximum beside what it reached.
+**What "on max" means.** Every resistance the game caps — all of them but physical — targets the
+character's own maximum as it stands, plus whatever overcap is asked for. A fitting that raises a cap
+costs nothing for doing so, and the plan reports the final maximum beside what it reached.
+
+**A plan is made for a difficulty, not for the save's own.** The game takes resistance off a character
+the deeper it goes — on Ultimate 50% of fire, cold, lightning, pierce and poison and 25% of the rest,
+out of `balancingadjustment_mp+difficulty_players01.dbr` — so a set of fittings that caps on Elite is
+under the cap the moment Ultimate starts. The ask names the difficulty to hold the caps on and defaults
+to Ultimate; the save's own penalty comes back out of the character and the planned one goes in, and the
+plan's sheet is rebuilt on that difficulty too, so what is shown is what will be held. **Ascendant is
+Ultimate here**: every ascendant record in the game adjusts a monster, and none of them touches the
+player, so a character in Ascendant carries Ultimate's penalty and no more.
+
+**Armour can be told to stop counting.** "Armor up to" is a ceiling on what armour is worth to the score,
+not a limit on the plan: past it more armour scores nothing, so a socket that would have bought it buys
+Defensive Ability, absorption or health instead. Armour that rides along with something else worth having
+is kept, and a plan may still land above the figure.
+
+**Two figures are aimed at rather than held.** A least Defensive Ability and a least Armor Absorption
+enter as prices that climb while the plan is under them, the same machinery the caps use — but a plan
+short of either still comes back and says by how much. Neither is asked of the attack plan; both are
+defensive figures, and holding the attack plan to them would only stop it being an attack plan.
 
 ## How the sidebars read
 

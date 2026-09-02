@@ -202,16 +202,11 @@ The `FxMesh` model is rigged and its own animation is what spreads it: `groundch
 spike bones that the animation drives apart.
 
 **Nothing in the records states how big an effect is.** The size and the colour live inside the `.pfx`,
-which is binary: `u32`, a length-prefixed name, `PFX1`, three more words, then the length-prefixed texture
-and shader paths, then a stream of values. The stream is **not aligned to the start of the file** — it
-begins at an odd offset — so reading it as four-byte words from the front yields nonsense. Two effects of
-the same family that differ only by a size word in their names (`_sm_` against `_lg_`) turn out to differ
-in a couple of hundred scattered bytes rather than in one figure, so there is no single scale to lift out;
-the format has to be decoded properly or not at all. Thirty such pairs exist to check a candidate layout
-against. What an
-attach point states is *where*: `FXCentered` (376 records) and `FXUnParentedCenter` (221) wrap the whole
-creature, where `HeadFXUP` (91), `R Hand`, `L Hand` and the rest name a place to hang something off.
-Reading a centred one as a point is what draws an aura as a puff on the chest.
+which [the Effects section](#effects) below takes apart — the engine's own reader gives the layout, and a
+curve of the emitter's gives the size. What an attach point states is *where*: `FXCentered` (376 records)
+and `FXUnParentedCenter` (221) wrap the whole creature, where `HeadFXUP` (91), `R Hand`, `L Hand` and the
+rest name a place to hang something off. Reading a centred one as a point is what draws an aura as a puff
+on the chest.
 
 ### How a monster attacks
 
@@ -408,10 +403,155 @@ idle, and reading the name alone drew Kubacabra holding an ice block while it st
 
 ### Effects
 
-**An effect ends at a picture, three steps down.** The record is an `EffectEntity` whose `effectFile` names
-a particle system under `fx/particlesystems/…`, and the `.pfx` is binary with its texture written into it
-as a length and then a path — the same way a mesh writes a material's. The particles themselves are a
-format of their own and unread, so that texture is what an effect can be drawn as.
+**An effect ends at a particle system, three steps down.** The record is an `EffectEntity` whose
+`effectFile` names one under `fx/particlesystems/…`, and the `.pfx` is that system.
+
+**The `.pfx` layout**, out of `EmitterData::InternalBinaryRead` @ `Engine.dll:0x1800682c0`, which the
+engine exports by name. A version and the emitter's own name, then the magic `PFX1`, then eight bytes the
+reader steps over, then five counted blocks — each a count and that many of one thing:
+
+| block | what it holds |
+| --- | --- |
+| strings | a length and then the bytes. Texture, **shader**, drop decal (on 22 systems; empty on the rest) |
+| flags | one `int32` each, read as a boolean |
+| integers | `int32` |
+| floats | `float32` |
+| curves | `CurveData` @ `0x180184a40`: `domain`, `range`, a key count, then that many `(time, value)` pairs |
+
+All 4,452 of the game's particle systems parse, and 4,444 carry the magic; the eight that do not are what
+the engine sends to its own `OldBinaryRead`. The shape barely varies — 3 strings, 13 or 14 flags,
+**always 2 integers, 4 floats and 26 curves**, in one order. `float[0]` is how long a particle lives.
+
+**What a slot means is not in the file.** `EmitterData` exposes `GetString`, `GetBoolean`, `GetInteger`,
+`GetFloat` and `GetCurve`, and every one takes an index, so a slot's meaning lives in the code that asks
+for it. Curve *n* sits at `EmitterData + 0x90 + n × 0x58`, holding its keys at `+0x20` and the segment
+list the engine evaluates at `+0x38`; a segment is `x0, x1, slope, y0` and reads `(t − x0) × slope + y0`.
+Every one of the 26 was traced to where it is used:
+
+| curve | what it is | where the engine reads it |
+| --- | --- | --- |
+| 0 | particle alpha | `UpdateParticles` @ `0x18006c6c0` → particle `+0x3c` |
+| 1, 2, 3 | particle red, green, blue | `UpdateParticles` → particle `+0x30`, `+0x34`, `+0x38` |
+| 4 ° | spin, degrees a second | added to the particle's angle `+0x08` |
+| 5 | size over life | particle `+0x0c`, times the emitter's scale |
+| 6 | emission rate | `AllocateParticleArray` @ `0x18006da60` sizes the array from its peak |
+| 7 | speed | `EmitParticle` @ `0x180069a00` multiplies the direction it throws by it |
+| 8 ° | gravity | taken off the particle's velocity `+0x28` |
+| 9, 10, 11 ° | the emitter's reach in X, Y, Z | `Update` keeps them at `Emitter +0x40…+0x48` |
+| 12, 13 | **nothing reads them** — and their domains are 3, 10 and 59 where every other curve's is a fraction |
+| 14 | the cone thrown into, degrees | `EmitParticle`, before the speed scales it |
+| 15 | size at birth | `EmitParticle`, times the emitter's scale, floored |
+| 16 ° | swirl — turns the velocity about the upright | `UpdateParticles` |
+| 17 | the particle's second size | particle `+0x10`; nothing in most systems |
+| 18, 19, 20 ° | the emitter's own turn in X, Y, Z | `EmitParticles` → `IncrementXRot` and its two siblings |
+| 21 | drag — what is left of the velocity each frame | `UpdateParticles` |
+| 22, 23, 24 | the light's red, green, blue | `UpdateLight` @ `0x18006b670` → the light's `+0x1e4…+0x1ec` |
+| 25 | the light's radius | `UpdateLight` |
+
+**The nine marked ° run both ways, and their nothing is half their own `range`, not zero.** A curve
+carries a `range` beside its keys, and for these the value stored is where a slider sitting between
+`−range/2` and `+range/2` was left. Counted over the game's 4,631 systems: curve 18 is flat at exactly
+half its range in 99% of them and flat at zero in none, 16 in 94%, 11 in 86%, 9 in 84% — where every
+unsigned slot is the other way about, flat at zero and never at half (21 in 88%, 17 in 45%, 15 in 37%).
+
+The proof is a mirrored pair. The yeti's triple swipe throws `pfx_swipeice_lg01_r` off one claw and
+`…_l` off the other; off their centre they spin against each other at +65 and −70 degrees a second.
+Read straight they are +425 and +290 — both the same way round, which no pair of mirrored claws is.
+
+Read straight, the same swipe is born across eight units of ground, falls at five and turns at three
+degrees a second; read off its centre it is born within a unit, does not fall and does not turn. **An
+emitter is very nearly a point**: its reach comes to half a unit on the median system and to nothing at
+all on a fifth of them, so what spreads a nova over the ground it covers is the speed its particles
+leave at, never the volume they are born in.
+
+The figures come out as such figures should: rates to 500 a second, lifetimes to 16 seconds, the four
+colour curves and the three light colours alone running 0 to 2 where everything else runs far wider.
+The three light colours share the centred pattern — flat at half on 72% of systems — but the light is
+drawn by nothing here, so whether a light colour is really signed is untested.
+
+**A rate curve's domain is not how long it throws for.** The domain is the emitter's own clock; the rate
+is nothing for most of it on anything that bursts. The swipe's runs three tenths of a second and stands
+at zero until 0.106, opens to its full 149 a second, and shuts at 0.124 — three or four particles, nine
+units across. That is a claw swipe.
+
+**The emitter's own code, out of `Engine.dll`.** `EmitterData` holds its flags one byte each from
+`+0x68`, so `flag[n]` is the byte at `0x68 + n`; `integer[0]` is at `+0x78`.
+
+`Emitter::EmitParticle` @ `0x180069a00` builds a direction as elevation `π/2 + spread`, azimuth random
+over the whole circle, with the spread curve read in degrees (`× 0.017453292`). **Elevation starts
+straight up** and the cone tilts it. **`flag[5]` zeroes the vertical**, leaving a burst that radiates
+flat across the ground. The size curve is scaled by the emitter's scale and floored at 0.01.
+
+`Emitter::EmitParticles` @ `0x18006bd90` spreads one frame's particles **along the ground the emitter
+covered**: each is born at `lerp(where it was, where it is, i / count)`. A second mode, chosen by a flag
+on the emitter itself, measures the distance moved instead of the elapsed time and hands the work to
+`EmitAnchoredParticle` @ `0x18006acf0`, which lerps to a *random* point between two positions off a
+history the emitter keeps at `+0xb8`. **Either way, a trail is something the emitter's own motion lays**
+— an emitter that does not move throws every particle onto one spot.
+
+**A swipe's arc is a trail, not particles at all.** `GAME::TrailEffect` and `GAME::WeaponTrail` are a
+mechanism of their own: a ribbon drawn between two anchor points (`TrailEffect::SetAnchorPoints`) that
+follows a point set on the mesh (`WeaponTrail::SetPointSetIndex` — 0 for the left hand, 1 for the right),
+started and stopped by the animation's own `SwipeLeft` / `SwipeRight` callbacks through
+`SkillActivatedWeapon::SwipeAction` @ `0x180505b20`.
+
+The records are `records/fx/fxtrails/*.dbr`, class `WeaponTrail`: a `Texture`, a `Shader`
+(`trailcombine.ssh`), and fade, colour and UV settings. **74 of them**, named by
+`weaponTrail` on 1,990 weapons, `projectileWeaponTrail` on 366 projectiles, `trailEffect` on 78 records
+and `attackTrail` on 6 skills. `Character::SetUnarmedWeaponTrail` gives a shapeshifted player a pair.
+**None of this is read here**, which is why no swing in the app leaves an arc behind it.
+
+**An emitter can be anchored between two points.** `Emitter::SetAnchor1` / `SetAnchor2` @ `0x180069040`
+and `0x180069510` give it a pair, `PickAnchor` @ `0x18006c510` interpolates a spline through four
+control points, and `EmitAnchoredParticle` places a particle at a random point along it —
+`integer[1]` is how many, 16 on most claw swipes. **The anchors come from the mesh**, as `Anchor1` and
+`Anchor2` attachments, and only 43 of the 1,301 creature meshes carry them. Neither The Dread nor the
+yeti does.
+
+**Curve 17 is not a second dimension.** `UpdateParticles` writes curve 5 to particle `+0x0c` scaled by
+the emitter's own scale, and curve 17 to `+0x10` **unscaled** — so whatever the second figure is, it is
+not a length in world units beside the first.
+
+**A callback name resolves to a point on the creature.** `Skill::GetCoordsFromCallback` @ `0x180485dd0`
+matches an animation's callback against a handful of names and returns the coordinates it stands for,
+which puts a blow, and a projectile, at the hand the animation calls out.
+
+**`strings[1]` names the shader, and only two systems in three add their light to the scene.** Counted
+over the same 4,631: `particleadditive.ssh` on 3,013, `particlecombine.ssh` on 1,322,
+`particledistort.ssh` on 189, `particlelit.ssh` on 63, `softparticlecombine.ssh` on 44. The 1,618 that
+are not additive are laid over the scene by the picture's own transparency, and their textures carry a
+real cut-out where an additive one is painted on black. **Anything dark is lost if this is ignored**:
+the rubble the Dread's stomp throws up is `particlelit` over `rockfragment_lg_128_01.tex`, and added to
+the ground it is nothing at all.
+
+**An `EffectEntity` can also drop a decal**, in a `decal` field beside `effectFile` — the Dread's stomp
+names `decals/decal_groundeffect_oildark_xlg01`, which is the dark stain the rubble is left sitting in.
+That is a separate record from the particle system's own `strings[2]`, and neither is read here yet.
+No `EffectEntity` states a `scale`: 0 of the 4,733, so an emitter's own figures are world units as they
+stand.
+
+**Almost no projectile skill says where it leaves from.** Only 9 of the game's 1,325 fill in
+`launchAttachPointName` — six say `FXForward`, and one each `Mouth`, `MouthCast` and `FX_ForwardGround`.
+What knows is the animation: it calls out the limb on the frame the engine lets go, and the vocabulary
+is small — `RightHandHit` on 2,347 of the monsters' animations and `LeftHandHit` on 1,437, against
+`SwipeRight` and `SwipeLeft` for a blow that throws nothing, and `AllowInterrupt`, `PS1Start`/`PS1End`,
+`R Footstep` and `voxSound` for everything else. The meshes name those points `R Hand` and `L Hand`.
+
+**A weapon is modelled along its own −Z**, on 56 of 56 held meshes checked: the blade runs from the grip
+at the origin out to negative Z. **Which way the rig's weapon bone points is not one convention** — of
+60 armed rigs, the axis running down the forearm is `+Y` on 36, `+X` on 18, and `−Y` or `−Z` on 6 — so a
+weapon is hung on that bone as it stands, with no correction that would hold for all of them.
+
+**The emitter's scale defaults to 1**, so a curve's figures are world units. The Dread spans 18 units and
+its claw swipe states 11, which is the size the game draws it at.
+
+**There are two emission modes.** `EmitParticles` either accumulates `rate × dt` — particles a second —
+or `rate × distance`, where the distance is how far the emitter moved since the last frame; and
+`EmitAnchoredParticle` trails one along a sweep. **Which slot picks the mode is not read**, and a rate
+that looks impossible for an emitter standing still usually turns out to be a rate open for a fiftieth
+of a second rather than a rate per unit. The one place the second mode plainly applies is a thing in
+flight: the aether orb's 12 a second strings six sparks out behind a projectile crossing twelve units a
+second, where the same figure read per unit is a trail.
 
 **A skill names its effects in four places**, and only three of them are the creature's. A passive carries
 its aura in `charFxPakSelfNames`, a pack naming both the points of the model to hang effects on
@@ -432,7 +572,18 @@ what a fault line's eruptions are. The skill says the rest: it leaves from the m
 `launchAttachPointName` names, `projectileLaunchNumber` at a time (per rank), fanned across
 `projectileLaunchRotation` degrees — The Dread's ravine is ten across the full circle — and the launch
 happens on the animation's hit callback, which is the frame the engine's attack action fires the skill
-on.
+on. Every one of them is aimed at something rather than fired into the distance, and the record's class
+says whether it goes straight or is thrown in an arc under gravity.
+
+**A skill that buffs holds none of its own look.** Of the 370 monster skills naming a `buffSkillName`,
+not one carries an effect itself and 193 of the buff records they point at do: the aura is on the buff,
+and a skill read without following that pointer shows nothing at all.
+
+**How far a skill is used from is a name, not a number.** `distanceProfile` says `Melee`, `Short`,
+`Moderate`, `Long`, `Maximum` or `Boss`, and `records/game/gameengine.dbr` says how far each of those is
+— `meleeRange` 1.25, `shortRange` 4.75, `moderateRange` 9, `longRange` 15, `maximumRange` 18,
+`bossRange` 32. A skill used at any range writes the whole vocabulary separated by semicolons, which
+says nothing about where it is used.
 
 **A particle texture carries no transparency.** It is painted on black and added to what is behind it, so
 its own brightness is what says where it is see-through — drawn as it is, an effect is a black square with
@@ -521,7 +672,8 @@ one, so a focus that reads oddly in the hand reads that way in the game too.
 `skillTargetRadius` is the ground an area skill covers — 0.1 to 50, on 1,371 skills — and the models are
 in the same units, a creature standing two or three of them tall. A wave states its sweep instead:
 `waveDistance` out, `waveStartWidth` and `waveEndWidth` across, `waveTime` to cross it. Nothing else in
-a skill record says how big what it throws is; the `.pfx` particle systems carry the rest and are not read.
+a skill record says how big what it throws is; the `.pfx` particle systems carry the rest, and
+[the Effects section](#effects) says what they carry and how it is read.
 
 ### Which affixes an item can roll
 

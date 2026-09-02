@@ -13,6 +13,8 @@ what it does; the references below are what you need before changing it.
   devotion record, and whether the engine reads it.
 - [Documentation/Status.md](Documentation/Status.md) — what is done, what the stat engine does not yet
   cover, and what is unverified.
+- [Documentation/History.md](Documentation/History.md) — corrections and what they were. **Anything a
+  comment would say about how the code used to be wrong goes here instead.**
 
 ## Environment
 
@@ -83,6 +85,12 @@ loudly, and re-read a file after formatting it.
 
 **A scroll view starves a SceneKit view.** It offers unbounded height, an `SCNView` asks for none, and the
 model comes out zero pixels tall. Give the model the pane and let only the reading tabs scroll.
+
+**A SceneKit particle is measured from its middle, and every property controller multiplies.**
+`particleSize` of one draws *two* units across, and a controller scales the property rather than
+replacing it — proved by a zero base staying still whatever the controller says. Feeding a stated figure
+to both squares it: an 11-unit swipe drew at 242, and a 65°/s spin turned at 4,157. A curve goes in as a
+share of its own peak. Measure a new particle property against a known base before trusting it.
 
 ## Layout
 

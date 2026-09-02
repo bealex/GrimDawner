@@ -137,8 +137,10 @@ struct ModelRendererTests {
         #expect(Self.pixels(of: armed) != Self.pixels(of: bare))
     }
 
-    /// A pose turns bones; it never lengthens them. Reading a key's translation as an offset to the
-    /// bone's own stretched skeletons by as much as four times, which is what this pins.
+    /// A pose turns limbs; it never lengthens them.
+    ///
+    /// The trunk is left out, and only the trunk: it carries the body's own placement and is the one
+    /// bone an animation may move. Everything below it still has to be rigid.
     @MainActor
     @Test
     func posesWithoutStretchingTheSkeleton() throws {
@@ -161,6 +163,7 @@ struct ModelRendererTests {
                 skeleton.pose(animation, at: frame)
                 for (index, bone) in mesh.bones.enumerated() {
                     guard let parent = parents[index],
+                          bone.name != skeleton.trunk()?.name,
                           let node = skeleton.bones.first(where: { $0.name == bone.name }),
                           let above = skeleton.bones.first(where: { $0.name == mesh.bones[parent].name })
                     else { continue }

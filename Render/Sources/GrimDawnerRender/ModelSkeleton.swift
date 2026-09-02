@@ -26,7 +26,12 @@ final class ModelSkeleton {
 
     init(meshes: [MshFile]) {
         for mesh in meshes { add(mesh) }
+        carrier = trunk().flatMap { node in bones.firstIndex { $0 === node } }
     }
+
+    /// The bone the body hangs from, which is the one whose own travel is drawn. Worked out once,
+    /// since posing asks for it on every key.
+    private var carrier: Int?
 
     var isEmpty: Bool { bones.isEmpty }
 
@@ -133,20 +138,18 @@ final class ModelSkeleton {
         }
     }
 
-    /// Where one key puts one bone.
+    /// Where one key puts one bone: laid over the bind pose, turning it without moving it.
     ///
-    /// A key states how far the bone has turned from where the mesh put it, so it is laid over the bind
-    /// pose rather than replacing it: an animation whose bones barely move is written as identities.
-    ///
-    /// **Its translation is not where the bone is.** A skeleton is rigid — a bone stays the distance from
-    /// its parent that the mesh gives it, whatever it is doing — and taking the key's translation as an
-    /// offset pulls a rhino's pelvis a metre out of its spine. What it carries is the creature's own
-    /// travel, which the game moves the creature by and a model view has no use for, so the bone keeps
-    /// the place the mesh gives it and only turns.
+    /// A skeleton is rigid, so every bone keeps the distance from its parent the mesh gives it — except
+    /// the trunk, which carries the body's own placement and so takes a dying creature into the ground.
+    /// The root above the trunk holds the ground the creature covers, which is not drawn.
     private func posed(_ key: AnmFile.Key, of index: Int) -> simd_float4x4 {
-        var transform = bindTransforms[index] * key.transform
-        transform.columns.3 = bindTransforms[index].columns.3
-        return transform
+        let transform = bindTransforms[index] * key.transform
+        guard index != carrier else { return transform }
+
+        var held = transform
+        held.columns.3 = bindTransforms[index].columns.3
+        return held
     }
 
     /// Holds the rig on one frame of an animation, which is how a still of a pose is taken.
@@ -159,19 +162,8 @@ final class ModelSkeleton {
         }
     }
 
-    /// How far the pose has turned the creature about the vertical, in radians.
-    ///
-    /// An animation is written with the creature facing wherever the game had it facing, which is rarely
-    /// where the mesh's bind pose faces, so a camera that holds still watches it from behind.
-    ///
-    /// **It is the head that is measured**, not the body. A fighting stance twists the hips and turns the
-    /// shoulders half a turn while the head stays on the enemy — follow the shoulders and the face ends
-    /// up pointing away, which is the one thing a model view must not do. A creature with no head bone is
-    /// measured by the single turn that best carries its whole bind skeleton onto the posed one.
-    /// Where the rig stands once it has been posed, which is where the creature actually is.
-    ///
-    /// A bone is a point rather than a volume, so this is the span of the rig and not of the skin over
-    /// it — enough to say where the creature has moved to, which is what a camera has to aim at.
+    /// Where the rig stands once posed — the span of the bones, not of the skin over them, which is
+    /// enough to aim a camera at.
     func posedBounds() -> (minimum: SIMD3<Float>, maximum: SIMD3<Float>) {
         var minimum = SIMD3<Float>(repeating: .greatestFiniteMagnitude)
         var maximum = SIMD3<Float>(repeating: -.greatestFiniteMagnitude)
@@ -184,6 +176,10 @@ final class ModelSkeleton {
         return (minimum, maximum)
     }
 
+    /// How far the pose has turned the creature about the vertical, in radians.
+    ///
+    /// Measured off the head, not the body: a stance twists the hips while the head stays on the enemy.
+    /// A creature with no head bone is measured by the turn that best carries its bind rig onto the posed.
     func turn() -> Float {
         if let head = bones.firstIndex(where: { ($0.name ?? "").lowercased().contains("head") }) {
             return yaw(from: bindWorld[head], to: simd_float4x4(bones[head].worldTransform))

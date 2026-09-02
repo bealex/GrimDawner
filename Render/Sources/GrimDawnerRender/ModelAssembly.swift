@@ -22,11 +22,14 @@ public struct ModelAssembly: Sendable {
         public let texture: String
         /// Set for a weapon, which hangs off that hand's bone instead of standing in the bind pose.
         public let hand: Hand?
+        /// The record it came from, for the fields the model itself does not carry — a weapon's trail.
+        public let record: String
 
-        public init(mesh: String, texture: String, hand: Hand? = nil) {
+        public init(mesh: String, texture: String, hand: Hand? = nil, record: String = "") {
             self.mesh = mesh
             self.texture = texture
             self.hand = hand
+            self.record = record
         }
     }
 
@@ -122,7 +125,12 @@ public struct ModelAssembly: Sendable {
 
             // A two-handed weapon fills both hands, so nothing is drawn in the other one.
             bothHands = weapon.recordClass.hasSuffix("2h")
-            parts.append(Part(mesh: weapon.text("mesh"), texture: weapon.text("baseTexture"), hand: held.hand))
+            parts.append(Part(
+                mesh: weapon.text("mesh"),
+                texture: weapon.text("baseTexture"),
+                hand: held.hand,
+                record: path
+            ))
         }
         return ModelAssembly(parts: parts)
     }

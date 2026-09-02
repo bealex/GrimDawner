@@ -69,18 +69,19 @@ struct MonsterModelView: NSViewRepresentable {
         configuration.background = (0.07, 0.07, 0.08)
         // The view keeps drawing while an animation plays, which is what lets an effect emit.
         configuration.emitsEffects = true
+        // A square to the unit, so how big a creature is and how far it reaches can both be read off it.
+        configuration.showsFloor = true
         let played = animation.flatMap { try? renderer.animation(at: $0.path) }
         // The animation says what to throw and where; only the skill being watched says how far it goes.
         var effects = played.map { renderer.effects(of: $0, in: database, thrownBy: skill) } ?? []
         if let skill, let database {
             var own = renderer.effects(ofSkillAt: skill, in: database)
-            // What the skill fires leaves on the animation's hit callback, which is when the game
-            // itself lets go; a skill watched on a still creature fires from where it stands.
-            let launch = played?.events
-                .first { $0.kind == .callback && $0.name.lowercased().contains("hit") }?.frame
-            // Watching the attack itself, the animation owns the timing: a cast effect it already
-            // calls out is not drawn a second time, and the rest of the skill's own flash at the blow
-            // rather than burning for the whole loop.
+            // The hit callback is when the engine lets go, and its name is which limb it lets go from.
+            let hit = played?.events
+                .first { $0.kind == .callback && $0.name.lowercased().contains("hit") }
+            let launch = hit?.frame
+            // Watching the attack itself, the animation owns the timing: nothing it already calls out
+            // is drawn twice, and the rest flashes at the blow rather than burning for the whole loop.
             if monster.attacks.contains(where: {
                 $0.skill.recordPath == skill && $0.animation?.path == animation?.path
             }) {
@@ -96,22 +97,35 @@ struct MonsterModelView: NSViewRepresentable {
             }
             effects += own
             let level = max(monster.abilities.first { $0.skill.recordPath == skill }?.skill.baseLevel ?? 1, 1)
-            effects += renderer.emitted(bySkillAt: skill, level: level, launchFrame: launch, in: database)
+            effects += renderer.emitted(
+                bySkillAt: skill,
+                level: level,
+                launchFrame: launch,
+                calledOut: hit?.name ?? "",
+                in: database
+            )
         }
+
+        // What a swung weapon leaves behind it, which is a mechanism of its own rather than a particle.
+        let trails =
+            played.flatMap { animation in
+                database.map { renderer.trails(of: animation, wearing: assembly, in: $0) }
+            } ?? []
 
         return ModelScene(configuration: configuration).scene(
             for: models,
             playing: played,
             speed: speed,
-            showing: effects
+            showing: effects,
+            swinging: trails
         )
     }
 }
 
 /// The model, what it is doing, and how fast — with what the animation calls out while it plays.
 ///
-/// A creature's animation table names every move it has, and the ones its attacks ask for by name are
-/// named after those attacks. It opens on the first, which is the combat stance when the creature has one.
+/// Picking a skill plays the animation it asks for and shows what it throws; the animation table names
+/// every other move, and it opens on the combat stance.
 struct MonsterModelPane: View {
     let monster: ResolvedMonster
     let renderer: ModelRenderer?
@@ -130,6 +144,8 @@ struct MonsterModelPane: View {
     private var hands = ModelAssembly.Hands()
     @State
     private var moments = [Moment]()
+    @State
+    private var casts = [Cast]()
 
     /// A frame of the animation the game calls something out on.
     private struct Moment: Identifiable {
@@ -138,6 +154,31 @@ struct MonsterModelPane: View {
         let title: String
         let where_: String
         let isEffect: Bool
+    }
+
+    /// One of the creature's skills as this tab offers it: what it is called, what it plays, and whether
+    /// the game gives it anything to draw. Reading that means opening every record the skill names, so
+    /// it is read once when the monster changes rather than every time the view is laid out.
+    private struct Cast: Identifiable {
+        var id: String { path }
+        let path: String
+        let name: String
+        let detail: String
+        let isPassive: Bool
+        let animation: MonsterAnimation?
+        let draws: Bool
+    }
+
+    /// Picking a skill plays what that skill plays: the creature's own animation for it, where its
+    /// record asks for one by name.
+    private var watching: Binding<String?> {
+        Binding(
+            get: { skill },
+            set: { path in
+                skill = path
+                if let animation = casts.first(where: { $0.path == path })?.animation { chosen = animation }
+            }
+        )
     }
 
     var body: some View {
@@ -150,9 +191,7 @@ struct MonsterModelPane: View {
             skill: skill,
             hands: hands
         )
-        .overlay(alignment: .topLeading) {
-            if !moments.isEmpty { happenings }
-        }
+        .overlay(alignment: .topLeading) { happenings }
         .overlay(alignment: .bottom) {
             VStack(spacing: 0) {
                 weapons
@@ -164,50 +203,43 @@ struct MonsterModelPane: View {
             chosen = monster.animations.first
             skill = nil
             hands = ModelAssembly.Hands()
+            casts = read(monster)
         }
         .task(id: "\(chosen?.path ?? "")|\(skill ?? "")") { moments = read(chosen, firing: skill) }
     }
 
     private var controls: some View {
         HStack(spacing: 8) {
+            Picker("Skill", selection: watching) {
+                Text("No skill").tag(String?.none)
+                Section("Attacks") {
+                    rows(casts.filter { !$0.isPassive && $0.draws })
+                }
+                Section("Passives") {
+                    rows(casts.filter { $0.isPassive && $0.draws })
+                }
+                // Still offered: what the game calls for is worth knowing even where nothing of it can
+                // be drawn, and picking one plays the animation it asks for.
+                Section("Nothing to draw") {
+                    rows(casts.filter { !$0.draws })
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(maxWidth: 240)
+            .help("Any skill of this creature's: what it plays, the aura it carries, what it throws")
+
             Menu {
-                Button("Still") {
-                    chosen = nil
-                    skill = nil
-                }
-                // An attack is the animation it plays and the effects the skill throws, together.
-                if !attacks.isEmpty {
-                    Section("Attacks") {
-                        ForEach(attacks, id: \.path) { attack in
-                            Button(attack.title) {
-                                chosen = attack.animation
-                                skill = attack.path
-                            }
-                        }
-                    }
-                }
-                Section("Animations") {
-                    ForEach(monster.animations) { animation in
-                        Button(animation.title) { chosen = animation }
-                    }
+                Button("Still") { chosen = nil }
+                ForEach(monster.animations) { animation in
+                    Button(animation.title) { chosen = animation }
                 }
             } label: {
                 Text(chosen?.title ?? "Still")
             }
             .menuStyle(.borderlessButton)
-            .frame(maxWidth: 220)
-
-            Picker("Effects", selection: $skill) {
-                Text("No effect").tag(String?.none)
-                Divider()
-                ForEach(showable, id: \.path) { ability in
-                    Text(ability.title).tag(String?.some(ability.path))
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
             .frame(maxWidth: 200)
-            .help("What a skill of this creature's puts on it: the aura a passive carries, or what a cast throws")
+            .help("What the creature is doing, on its own")
 
             Picker("Speed", selection: $speed) {
                 ForEach(Self.rates, id: \.rate) { rate in
@@ -220,6 +252,33 @@ struct MonsterModelPane: View {
             .disabled(chosen == nil)
         }
         .padding(8)
+    }
+
+    private func rows(_ casts: [Cast]) -> some View {
+        ForEach(casts) { cast in
+            Text(cast.name).tag(String?.some(cast.path))
+        }
+    }
+
+    /// Every skill the creature has, named as the rest of the app names it.
+    private func read(_ monster: ResolvedMonster) -> [Cast] {
+        guard let renderer, let database else { return [] }
+
+        var seen = Set<String>()
+        return monster.abilities.compactMap { ability in
+            let path = ability.skill.recordPath
+            guard seen.insert(path.lowercased()).inserted else { return nil }
+
+            return Cast(
+                path: path,
+                name: ability.name,
+                detail: ability.detail,
+                isPassive: ability.role == .passive,
+                animation: ability.animation,
+                draws: !renderer.effects(ofSkillAt: path, in: database).isEmpty
+                    || !renderer.emitted(bySkillAt: path, level: 1, launchFrame: nil, in: database).isEmpty
+            )
+        }
     }
 
     /// What each hand holds. A record names only the tables a weapon is rolled from, so the model opens
@@ -255,37 +314,32 @@ struct MonsterModelPane: View {
         }
     }
 
-    /// The creature's attacks that have an animation of their own, so one pick both plays what it does
-    /// and shows what it throws.
-    private var attacks: [(path: String, title: String, animation: MonsterAnimation)] {
-        var seen = Set<String>()
-        return monster.attacks.compactMap { ability in
-            guard let animation = ability.animation, seen.insert(animation.path).inserted else { return nil }
-
-            return (ability.skill.recordPath, ability.title ?? animation.title, animation)
-        }
-    }
-
-    /// The creature's own skills that put something visible on it.
-    private var showable: [(path: String, title: String)] {
-        guard let renderer, let database else { return [] }
-
-        var seen = Set<String>()
-        return monster.abilities.compactMap { ability in
-            let path = ability.skill.recordPath
-            guard
-                seen.insert(path).inserted,
-                !renderer.effects(ofSkillAt: path, in: database).isEmpty
-                    || !renderer.emitted(bySkillAt: path, level: 1, launchFrame: nil, in: database).isEmpty
-            else { return nil }
-
-            let title = ability.title ?? ability.kind
-            return (path, ability.role == .passive ? "\(title) · passive" : title)
-        }
-    }
-
-    /// What the animation spawns and where, in the order it happens.
+    /// The skill being watched and what the animation spawns, in the order it happens.
+    @ViewBuilder
     private var happenings: some View {
+        let watched = casts.first { $0.path == skill }
+
+        if watched != nil || !moments.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                if let watched {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(watched.name)
+                            .font(.caption.weight(.semibold))
+                        Text(watched.detail)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.bottom, 2)
+                }
+                moments(moments)
+            }
+            .padding(8)
+            .background(.black.opacity(0.35), in: .rect(cornerRadius: 8))
+            .padding(10)
+        }
+    }
+
+    private func moments(_ moments: [Moment]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(moments) { moment in
                 HStack(spacing: 6) {
@@ -305,9 +359,6 @@ struct MonsterModelPane: View {
                 }
             }
         }
-        .padding(8)
-        .background(.black.opacity(0.35), in: .rect(cornerRadius: 8))
-        .padding(10)
     }
 
     /// Everything the animation calls out: the effects it spawns, the frames a blow lands on, and what
